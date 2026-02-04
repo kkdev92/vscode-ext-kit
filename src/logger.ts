@@ -10,6 +10,14 @@ const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
   silent: 5,
 };
 
+const LOG_LEVEL_PREFIX: Record<Exclude<LogLevel, 'silent'>, string> = {
+  trace: 'TRACE',
+  debug: 'DEBUG',
+  info: 'INFO',
+  warn: 'WARN',
+  error: 'ERROR',
+};
+
 function formatArgs(args: unknown[]): string {
   if (args.length === 0) return '';
   return (
@@ -37,7 +45,9 @@ function formatTimestamp(): string {
 }
 
 /**
- * Creates a logger instance using VS Code's LogOutputChannel.
+ * Creates a logger instance using VS Code's OutputChannel.
+ * Log level filtering is handled internally by vscode-ext-kit,
+ * giving full control over which messages are displayed.
  *
  * @param extensionName - Name of the extension (displayed in Output panel)
  * @param opts - Logger options
@@ -60,7 +70,7 @@ export function createLogger(extensionName: string, opts: LoggerOptions = {}): L
     telemetryReporter,
   } = opts;
 
-  const channel = vscode.window.createOutputChannel(extensionName, { log: true });
+  const channel = vscode.window.createOutputChannel(extensionName);
 
   // Read initial level from VSCode config if configSection is provided
   let currentLevel: LogLevel = configSection
@@ -92,25 +102,33 @@ export function createLogger(extensionName: string, opts: LoggerOptions = {}): L
   return {
     trace(message: string, ...args: unknown[]): void {
       if (shouldLog('trace')) {
-        channel.trace(formatMessage(message) + formatArgs(args));
+        channel.appendLine(
+          `[${LOG_LEVEL_PREFIX.trace}] ${formatMessage(message)}${formatArgs(args)}`
+        );
       }
     },
 
     debug(message: string, ...args: unknown[]): void {
       if (shouldLog('debug')) {
-        channel.debug(formatMessage(message) + formatArgs(args));
+        channel.appendLine(
+          `[${LOG_LEVEL_PREFIX.debug}] ${formatMessage(message)}${formatArgs(args)}`
+        );
       }
     },
 
     info(message: string, ...args: unknown[]): void {
       if (shouldLog('info')) {
-        channel.info(formatMessage(message) + formatArgs(args));
+        channel.appendLine(
+          `[${LOG_LEVEL_PREFIX.info}] ${formatMessage(message)}${formatArgs(args)}`
+        );
       }
     },
 
     warn(message: string, ...args: unknown[]): void {
       if (shouldLog('warn')) {
-        channel.warn(formatMessage(message) + formatArgs(args));
+        channel.appendLine(
+          `[${LOG_LEVEL_PREFIX.warn}] ${formatMessage(message)}${formatArgs(args)}`
+        );
       }
     },
 
@@ -118,7 +136,9 @@ export function createLogger(extensionName: string, opts: LoggerOptions = {}): L
       if (shouldLog('error')) {
         const errorMessage = message instanceof Error ? message.message : message;
         const errorArgs = message instanceof Error ? [message, ...args] : args;
-        channel.error(formatMessage(errorMessage) + formatArgs(errorArgs));
+        channel.appendLine(
+          `[${LOG_LEVEL_PREFIX.error}] ${formatMessage(errorMessage)}${formatArgs(errorArgs)}`
+        );
         if (showOnError) {
           channel.show(true);
         }
