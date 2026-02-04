@@ -1,6 +1,7 @@
 # @kkdev92/vscode-ext-kit
 
 [![npm version](https://img.shields.io/npm/v/@kkdev92/vscode-ext-kit)](https://www.npmjs.com/package/@kkdev92/vscode-ext-kit)
+[![npm downloads](https://img.shields.io/npm/dm/@kkdev92/vscode-ext-kit)](https://www.npmjs.com/package/@kkdev92/vscode-ext-kit)
 [![CI](https://github.com/kkdev92/vscode-ext-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/kkdev92/vscode-ext-kit/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
@@ -8,6 +9,18 @@
 A lightweight, type-safe utility library for VS Code extension development. Eliminates boilerplate and provides consistent patterns for common extension tasks.
 
 > **Status:** Active (best-effort maintenance)
+>
+> **Quick Links:** [Installation](#installation) | [Quick Start](#quick-start) | [API Reference](#api-reference) | [Examples](#examples)
+
+---
+
+## What's New in v0.2.0
+
+**Breaking Change**: Logger now uses `OutputChannel` instead of `LogOutputChannel`
+
+This change gives you full control over log level filtering. VS Code's previous internal filtering would block debug/trace messages even when your extension's log level allowed them.
+
+**Migration**: No code changes needed, but log output format now includes `[LEVEL]` prefix (e.g., `[DEBUG] [timestamp] message`).
 
 ---
 
@@ -38,37 +51,40 @@ A lightweight, type-safe utility library for VS Code extension development. Elim
 
 ## Features
 
-- **Logger** - Structured logging with VS Code's LogOutputChannel and telemetry support
+### Core Utilities
+- **Logger** - Structured logging with full log level control and telemetry support
 - **Commands** - Simplified command registration with automatic error handling
-- **safeExecute** - Unified error handling with logging and notifications
-- **Progress** - Progress notifications with step-based tracking and cancellation
+- **Error Handling** - Unified error handling with `safeExecute`
+- **Progress** - Step-based progress tracking with cancellation support
+
+### Configuration & Storage
 - **Config** - Type-safe configuration access with validation
-- **UI Utilities** - QuickPick, InputBox, and multi-step wizard
-- **Notifications** - showInfo/showWarn/showError with action buttons
-- **Status Bar** - Managed status bar items with spinner support
 - **Storage** - Type-safe global/workspace/secret storage wrappers
+
+### UI Components
+- **UI Utilities** - QuickPick, InputBox, and multi-step wizards
+- **Notifications** - Info/warning/error messages with action buttons
+- **Status Bar** - Managed status bar items with spinner support
+
+### Advanced Features
 - **File Watcher** - Debounced file watching with event batching
 - **Editor** - Text editor manipulation utilities
 - **Tree View** - Base TreeDataProvider with caching
 - **WebView** - Managed WebView panels with CSP support
+
+### Developer Tools
 - **Localization** - Translation, pluralization, and locale-aware formatting
 - **Utilities** - retry, debounce, throttle, DisposableCollection
 
+> See [API Reference](#api-reference) below for detailed documentation and code examples.
+
 ## Installation
-
-### 1. Configure npm registry
-
-Create or update `.npmrc` in your project root:
-
-```
-@kkdev92:registry=https://npm.pkg.github.com
-```
-
-### 2. Install the package
 
 ```bash
 npm install @kkdev92/vscode-ext-kit
 ```
+
+> Requires VS Code 1.96.0+ and Node.js 20.0.0+
 
 ## Quick Start
 
@@ -112,11 +128,31 @@ export function activate(context: vscode.ExtensionContext) {
 }
 ```
 
+## Examples
+
+### Real-World Usage
+
+See these projects using `vscode-ext-kit`:
+- More examples coming soon!
+
+### Code Snippets
+
+Common patterns and usage examples are shown throughout the [API Reference](#api-reference) below.
+
+> Want to add your project? [Open a PR](CONTRIBUTING.md)!
+
+---
+
 ## API Reference
+
+> **Note:** This section contains detailed API documentation. For a quick overview, see [Features](#features) above.
 
 ### Logger
 
-Create a structured logger using VS Code's LogOutputChannel.
+> **Note (v0.2.0)**: Changed from `LogOutputChannel` to `OutputChannel` for full log level control.
+> Log format now includes level prefix: `[LEVEL] [timestamp] message`
+
+Create a structured logger using VS Code's OutputChannel.
 
 ```typescript
 import { createLogger } from '@kkdev92/vscode-ext-kit';
@@ -800,6 +836,55 @@ formatRelativeTime(-1, 'day');    // "1 day ago" (en) / "1日前" (ja)
 formatRelativeTime(2, 'hour');    // "in 2 hours"
 formatRelativeTime(-5, 'minute', 'short');  // "5 min. ago"
 ```
+
+## Troubleshooting
+
+### Common Issues
+
+#### Logger not showing debug messages
+
+**Problem**: Debug logs don't appear in Output channel.
+
+**Solution**: Check your log level setting:
+
+```typescript
+// Ensure level is 'debug' or 'trace'
+const logger = createLogger('MyExt', { level: 'debug' });
+```
+
+#### TypeScript errors with imports
+
+**Problem**: `Cannot find module '@kkdev92/vscode-ext-kit'`
+
+**Solution**: Ensure you have the correct version:
+
+```bash
+npm install @kkdev92/vscode-ext-kit@latest
+```
+
+#### Commands not registering
+
+**Problem**: Commands don't appear in Command Palette.
+
+**Solution**: Verify `package.json` includes command declarations:
+
+```json
+{
+  "contributes": {
+    "commands": [
+      { "command": "myExt.commandId", "title": "My Command" }
+    ]
+  }
+}
+```
+
+### Need More Help?
+
+- Check [GitHub Issues](https://github.com/kkdev92/vscode-ext-kit/issues)
+- Review [API Reference](#api-reference) above
+- See [Contributing Guide](CONTRIBUTING.md) to report bugs
+
+---
 
 ## Development
 
