@@ -1,0 +1,9 @@
+{
+  "Executing command: {0}": "Executing command: {0}",
+  "Command {0} completed": "Command {0} completed",
+  "Execute: {0}": "Execute: {0}",
+  "prefix must be a non-empty string": "prefix must be a non-empty string",
+  "key must be a non-empty string": "key must be a non-empty string",
+  "Cannot add to a disposed DisposableCollection": "Cannot add to a disposed DisposableCollection",
+  "maxAttempts must be at least 1": "maxAttempts must be at least 1"
+}
