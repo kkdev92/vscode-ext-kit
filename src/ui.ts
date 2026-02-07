@@ -348,19 +348,20 @@ async function runQuickPickStep<TState, TKey extends keyof TState>(
 
     quickPick.onDidAccept(() => {
       const selected = quickPick.selectedItems;
-      quickPick.dispose();
 
       if (step.canPickMany) {
         resolve(selected.map((item) => item.value) as TState[TKey]);
       } else {
         resolve(selected[0]?.value);
       }
+
+      quickPick.dispose();
     });
 
     quickPick.onDidTriggerButton((button) => {
       if (button === backButton) {
-        quickPick.dispose();
         resolve(Symbol.for('back'));
+        quickPick.dispose();
       }
     });
 
@@ -419,14 +420,14 @@ async function runInputStep<TState, TKey extends keyof TState>(
       }
 
       const value = inputBox.value;
-      inputBox.dispose();
       resolve(value as TState[TKey] extends string ? string : never);
+      inputBox.dispose();
     });
 
     inputBox.onDidTriggerButton((button) => {
       if (button === backButton) {
-        inputBox.dispose();
         resolve(Symbol.for('back'));
+        inputBox.dispose();
       }
     });
 

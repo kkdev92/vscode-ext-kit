@@ -438,6 +438,115 @@ describe('UI', () => {
       expect(result.state.second).toBeUndefined();
     });
 
+    it('should resolve with selected value even when dispose triggers onDidHide synchronously (QuickPick)', async () => {
+      let onDidHideCallback: (() => void) | undefined;
+      let disposing = false;
+
+      const mockQuickPick = {
+        title: '',
+        placeholder: '',
+        canSelectMany: false,
+        items: [] as WizardQuickPickItem<string>[],
+        selectedItems: [] as WizardQuickPickItem<string>[],
+        buttons: [] as unknown[],
+        onDidAccept: vi.fn((cb: () => void) => {
+          setTimeout(() => {
+            mockQuickPick.selectedItems = [{ label: 'Test', value: 'test' }];
+            cb();
+          }, 0);
+          return { dispose: vi.fn() };
+        }),
+        onDidTriggerButton: vi.fn(() => ({ dispose: vi.fn() })),
+        onDidHide: vi.fn((cb: () => void) => {
+          onDidHideCallback = cb;
+          return { dispose: vi.fn() };
+        }),
+        show: vi.fn(),
+        dispose: vi.fn(() => {
+          // Simulate VS Code behavior: dispose() triggers onDidHide synchronously (but not re-entrantly)
+          if (!disposing) {
+            disposing = true;
+            onDidHideCallback?.();
+          }
+        }),
+      };
+      vi.mocked(vscode.window.createQuickPick).mockReturnValue(mockQuickPick as unknown as ReturnType<typeof vscode.window.createQuickPick>);
+
+      interface TestState { choice: string }
+      const options: WizardOptions<TestState> = {
+        title: 'Test Wizard',
+        steps: [
+          {
+            id: 'choice',
+            type: 'quickpick',
+            placeholder: 'Select one',
+            items: [{ label: 'Test', value: 'test' }],
+          },
+        ],
+      };
+
+      const resultPromise = wizard(options);
+      await new Promise((r) => setTimeout(r, 10));
+      const result = await resultPromise;
+
+      expect(result.completed).toBe(true);
+      expect(result.state.choice).toBe('test');
+    });
+
+    it('should resolve with input value even when dispose triggers onDidHide synchronously (InputBox)', async () => {
+      let onDidHideCallback: (() => void) | undefined;
+      let disposing = false;
+
+      const mockInputBox = {
+        title: '',
+        prompt: '',
+        placeholder: '',
+        password: false,
+        value: 'typed value',
+        validationMessage: undefined as string | undefined,
+        buttons: [] as unknown[],
+        onDidAccept: vi.fn((cb: () => void) => {
+          setTimeout(() => cb(), 0);
+          return { dispose: vi.fn() };
+        }),
+        onDidTriggerButton: vi.fn(() => ({ dispose: vi.fn() })),
+        onDidHide: vi.fn((cb: () => void) => {
+          onDidHideCallback = cb;
+          return { dispose: vi.fn() };
+        }),
+        onDidChangeValue: vi.fn(() => ({ dispose: vi.fn() })),
+        show: vi.fn(),
+        dispose: vi.fn(() => {
+          // Simulate VS Code behavior: dispose() triggers onDidHide synchronously (but not re-entrantly)
+          if (!disposing) {
+            disposing = true;
+            onDidHideCallback?.();
+          }
+        }),
+      };
+      vi.mocked(vscode.window.createInputBox).mockReturnValue(mockInputBox as unknown as ReturnType<typeof vscode.window.createInputBox>);
+
+      interface TestState { name: string }
+      const options: WizardOptions<TestState> = {
+        title: 'Test Wizard',
+        steps: [
+          {
+            id: 'name',
+            type: 'input',
+            prompt: 'Enter name',
+            placeholder: 'Name',
+          },
+        ],
+      };
+
+      const resultPromise = wizard(options);
+      await new Promise((r) => setTimeout(r, 10));
+      const result = await resultPromise;
+
+      expect(result.completed).toBe(true);
+      expect(result.state.name).toBe('typed value');
+    });
+
     it('should handle empty steps array', async () => {
       type TestState = Record<string, unknown>;
       const options: WizardOptions<TestState> = {
