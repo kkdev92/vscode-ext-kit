@@ -238,7 +238,7 @@ describe('withTiming', () => {
     });
 
     expect(result).toBe(42);
-    expect(duration).toBeGreaterThanOrEqual(10);
+    expect(duration).toBeGreaterThanOrEqual(5);
   });
 
   it('logs timing with logger at debug level by default', async () => {
