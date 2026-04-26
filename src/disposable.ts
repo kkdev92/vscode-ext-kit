@@ -66,6 +66,10 @@ export class DisposableCollection implements vscode.Disposable {
   /**
    * Disposes all disposables in the collection.
    * After calling this method, no more disposables can be added.
+   *
+   * If individual `dispose()` calls throw, all remaining disposables are still
+   * disposed. Collected errors are then rethrown as a single error (or
+   * `AggregateError` if multiple), so partial cleanup never silently succeeds.
    */
   dispose(): void {
     if (this.isDisposed) {
@@ -74,9 +78,22 @@ export class DisposableCollection implements vscode.Disposable {
     this.isDisposed = true;
     // Dispose in reverse order (LIFO) to properly handle dependencies
     const toDispose = [...this.disposables].reverse();
-    for (const disposable of toDispose) {
-      disposable.dispose();
-    }
     this.disposables = [];
+
+    const errors: unknown[] = [];
+    for (const disposable of toDispose) {
+      try {
+        disposable.dispose();
+      } catch (err) {
+        errors.push(err);
+      }
+    }
+
+    if (errors.length === 1) {
+      throw errors[0];
+    }
+    if (errors.length > 1) {
+      throw new AggregateError(errors, 'DisposableCollection: errors during dispose');
+    }
   }
 }

@@ -8,6 +8,7 @@ import type { Logger } from '../src/types.js';
  */
 export function createMockLogger(): Logger {
   return {
+    trace: vi.fn(),
     debug: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),

@@ -163,4 +163,83 @@ describe('DisposableCollection', () => {
       expect(d1.dispose).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('error handling during dispose', () => {
+    it('should dispose remaining items when one throws', () => {
+      const error = new Error('boom');
+      const d1 = { dispose: vi.fn() };
+      const d2 = {
+        dispose: vi.fn(() => {
+          throw error;
+        }),
+      };
+      const d3 = { dispose: vi.fn() };
+      collection.push(d1, d2, d3);
+
+      expect(() => collection.dispose()).toThrow(error);
+
+      // All disposables called despite the middle one throwing (LIFO: d3, d2, d1)
+      expect(d1.dispose).toHaveBeenCalledTimes(1);
+      expect(d2.dispose).toHaveBeenCalledTimes(1);
+      expect(d3.dispose).toHaveBeenCalledTimes(1);
+    });
+
+    it('should rethrow a single error directly', () => {
+      const error = new Error('single failure');
+      collection.push({
+        dispose: vi.fn(() => {
+          throw error;
+        }),
+      });
+
+      expect(() => collection.dispose()).toThrow(error);
+    });
+
+    it('should aggregate multiple errors into AggregateError', () => {
+      const e1 = new Error('first');
+      const e2 = new Error('second');
+      collection.push(
+        {
+          dispose: vi.fn(() => {
+            throw e1;
+          }),
+        },
+        {
+          dispose: vi.fn(() => {
+            throw e2;
+          }),
+        }
+      );
+
+      let caught: unknown;
+      try {
+        collection.dispose();
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AggregateError);
+      const aggregate = caught as AggregateError;
+      // LIFO order means e2 was thrown first
+      expect(aggregate.errors).toContain(e1);
+      expect(aggregate.errors).toContain(e2);
+      expect(aggregate.errors).toHaveLength(2);
+    });
+
+    it('should mark collection as disposed even if errors occur', () => {
+      collection.push({
+        dispose: vi.fn(() => {
+          throw new Error('fail');
+        }),
+      });
+
+      expect(() => collection.dispose()).toThrow();
+
+      // Subsequent add should throw because collection is marked disposed
+      expect(() => collection.add({ dispose: vi.fn() })).toThrow(
+        'Cannot add to a disposed DisposableCollection'
+      );
+      expect(collection.size).toBe(0);
+    });
+  });
 });

@@ -215,13 +215,22 @@ function createTypedStorage<T>(
     }
 
     // Migration needed
+    let migrated = false;
     if (migrate && storedVersion < version) {
       value = migrate(value, storedVersion);
+      migrated = true;
     }
 
     // Validation
     if (validate && !validate(value)) {
       return defaultValue;
+    }
+
+    // Persist migrated value so migrate() doesn't run on every get().
+    // Done after validation to avoid persisting an invalid migration result.
+    if (migrated) {
+      void memento.update(key, value);
+      void memento.update(versionKey, version);
     }
 
     return value as T;
