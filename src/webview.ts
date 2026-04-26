@@ -250,6 +250,27 @@ export interface CSPOptions {
   fontSrc?: string[];
   /** Additional connect sources (for fetch/XHR) */
   connectSrc?: string[];
+  /**
+   * Whether to allow `'unsafe-inline'` in style-src.
+   *
+   * Browsers treat `'unsafe-inline'` as overriding any nonce in the same
+   * directive, so when this is `true` the nonce in style-src is effectively
+   * ignored. Set to `false` for stricter CSP — when a `nonce` is provided
+   * it will be used for nonced inline styles instead.
+   *
+   * @default true (preserves historical behaviour)
+   */
+  allowInlineStyles?: boolean;
+  /**
+   * Whether to allow images from any HTTPS origin (`https:`) in img-src.
+   *
+   * Set to `false` to restrict images to the webview's `cspSource`, `data:`
+   * URIs, and the explicit `imgSrc` list. Recommended when the webview only
+   * loads images from a known set of origins.
+   *
+   * @default true (preserves historical behaviour)
+   */
+  allowAnyHttpsImages?: boolean;
 }
 
 /**
@@ -274,13 +295,22 @@ export function generateCSP(webview: vscode.Webview, options: CSPOptions = {}): 
     imgSrc = [],
     fontSrc = [],
     connectSrc = [],
+    allowInlineStyles = true,
+    allowAnyHttpsImages = true,
   } = options;
 
   const cspSource = webview.cspSource;
 
+  // Image source
+  const imgParts = [cspSource, 'data:'];
+  if (allowAnyHttpsImages) {
+    imgParts.push('https:');
+  }
+  imgParts.push(...imgSrc);
+
   const policies: string[] = [
     "default-src 'none'",
-    `img-src ${cspSource} https: data: ${imgSrc.join(' ')}`.trim(),
+    `img-src ${imgParts.join(' ')}`,
     `font-src ${cspSource} ${fontSrc.join(' ')}`.trim(),
   ];
 
@@ -292,7 +322,15 @@ export function generateCSP(webview: vscode.Webview, options: CSPOptions = {}): 
   policies.push(`script-src ${scriptParts.join(' ')}`);
 
   // Style source
-  const styleParts = [cspSource, "'unsafe-inline'", ...styleSrc];
+  const styleParts = [cspSource, ...styleSrc];
+  if (allowInlineStyles) {
+    // Historical default. Browsers treat 'unsafe-inline' as overriding any
+    // nonce in the same directive, so we don't add the nonce here.
+    styleParts.push("'unsafe-inline'");
+  } else if (nonce) {
+    // Strict mode: rely on nonce for inline styles (if any are needed).
+    styleParts.push(`'nonce-${nonce}'`);
+  }
   policies.push(`style-src ${styleParts.join(' ')}`);
 
   // Connect source (for fetch/XHR)

@@ -236,6 +236,56 @@ describe('webview', () => {
 
       expect(csp).not.toContain('connect-src');
     });
+
+    it('omits unsafe-inline from style-src when allowInlineStyles is false', () => {
+      const webview = createMockWebview();
+
+      const csp = generateCSP(webview as never, { allowInlineStyles: false });
+
+      const styleSrc = csp.split(';').find((p) => p.trim().startsWith('style-src'));
+      expect(styleSrc).toBeDefined();
+      expect(styleSrc).not.toContain("'unsafe-inline'");
+    });
+
+    it('uses nonce in style-src when allowInlineStyles is false and nonce is provided', () => {
+      const webview = createMockWebview();
+
+      const csp = generateCSP(webview as never, {
+        allowInlineStyles: false,
+        nonce: 'abc123',
+      });
+
+      const styleSrc = csp.split(';').find((p) => p.trim().startsWith('style-src'));
+      expect(styleSrc).toContain("'nonce-abc123'");
+      expect(styleSrc).not.toContain("'unsafe-inline'");
+    });
+
+    it('omits https: from img-src when allowAnyHttpsImages is false', () => {
+      const webview = createMockWebview();
+
+      const csp = generateCSP(webview as never, { allowAnyHttpsImages: false });
+
+      const imgSrc = csp.split(';').find((p) => p.trim().startsWith('img-src'));
+      expect(imgSrc).toBeDefined();
+      // The standalone `https:` token must not be present (cspSource itself
+      // is an https:// URL so we tokenise to avoid matching that prefix).
+      const tokens = imgSrc!.trim().split(/\s+/);
+      expect(tokens).not.toContain('https:');
+      // Still allows cspSource and data:
+      expect(tokens).toContain('data:');
+    });
+
+    it('keeps backward-compatible defaults (unsafe-inline + https: img)', () => {
+      const webview = createMockWebview();
+
+      const csp = generateCSP(webview as never);
+
+      const styleSrc = csp.split(';').find((p) => p.trim().startsWith('style-src'));
+      const imgSrc = csp.split(';').find((p) => p.trim().startsWith('img-src'));
+      expect(styleSrc).toContain("'unsafe-inline'");
+      const imgTokens = imgSrc!.trim().split(/\s+/);
+      expect(imgTokens).toContain('https:');
+    });
   });
 
   // ============================================
