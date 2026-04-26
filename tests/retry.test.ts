@@ -225,4 +225,111 @@ describe('retry', () => {
       expect(fn).toHaveBeenCalledTimes(3);
     });
   });
+
+  describe('maxDelay', () => {
+    it('caps exponential backoff at maxDelay', async () => {
+      const fn = vi.fn().mockRejectedValue(new Error('fail'));
+      const onRetry = vi.fn();
+
+      const resultPromise = retry(fn, {
+        maxAttempts: 4,
+        delay: 1000,
+        backoff: 'exponential',
+        maxDelay: 1500,
+        onRetry,
+      });
+      const catchPromise = resultPromise.catch((e) => e);
+
+      await vi.runAllTimersAsync();
+      await catchPromise;
+
+      // Without cap: 1000, 2000, 4000. With cap=1500: 1000, 1500, 1500.
+      expect(onRetry).toHaveBeenNthCalledWith(1, expect.any(Error), 1, 1000);
+      expect(onRetry).toHaveBeenNthCalledWith(2, expect.any(Error), 2, 1500);
+      expect(onRetry).toHaveBeenNthCalledWith(3, expect.any(Error), 3, 1500);
+    });
+
+    it('does not cap if maxDelay is greater than computed delay', async () => {
+      const fn = vi.fn().mockRejectedValue(new Error('fail'));
+      const onRetry = vi.fn();
+
+      const resultPromise = retry(fn, {
+        maxAttempts: 2,
+        delay: 1000,
+        backoff: 'linear',
+        maxDelay: 10_000,
+        onRetry,
+      });
+      const catchPromise = resultPromise.catch((e) => e);
+
+      await vi.runAllTimersAsync();
+      await catchPromise;
+
+      expect(onRetry).toHaveBeenCalledWith(expect.any(Error), 1, 1000);
+    });
+  });
+
+  describe('jitter', () => {
+    it('full: scales delay by Math.random()', async () => {
+      vi.spyOn(Math, 'random').mockReturnValue(0.5);
+
+      const fn = vi.fn().mockRejectedValue(new Error('fail'));
+      const onRetry = vi.fn();
+
+      const resultPromise = retry(fn, {
+        maxAttempts: 2,
+        delay: 1000,
+        backoff: 'linear',
+        jitter: 'full',
+        onRetry,
+      });
+      const catchPromise = resultPromise.catch((e) => e);
+
+      await vi.runAllTimersAsync();
+      await catchPromise;
+
+      // 1000 * 0.5 = 500
+      expect(onRetry).toHaveBeenCalledWith(expect.any(Error), 1, 500);
+    });
+
+    it('equal: yields delay/2 + random*(delay/2)', async () => {
+      vi.spyOn(Math, 'random').mockReturnValue(0.5);
+
+      const fn = vi.fn().mockRejectedValue(new Error('fail'));
+      const onRetry = vi.fn();
+
+      const resultPromise = retry(fn, {
+        maxAttempts: 2,
+        delay: 1000,
+        backoff: 'linear',
+        jitter: 'equal',
+        onRetry,
+      });
+      const catchPromise = resultPromise.catch((e) => e);
+
+      await vi.runAllTimersAsync();
+      await catchPromise;
+
+      // 500 + 0.5 * 500 = 750
+      expect(onRetry).toHaveBeenCalledWith(expect.any(Error), 1, 750);
+    });
+
+    it('none (default): leaves delay unchanged', async () => {
+      const fn = vi.fn().mockRejectedValue(new Error('fail'));
+      const onRetry = vi.fn();
+
+      const resultPromise = retry(fn, {
+        maxAttempts: 2,
+        delay: 1234,
+        backoff: 'linear',
+        onRetry,
+      });
+      const catchPromise = resultPromise.catch((e) => e);
+
+      await vi.runAllTimersAsync();
+      await catchPromise;
+
+      expect(onRetry).toHaveBeenCalledWith(expect.any(Error), 1, 1234);
+    });
+  });
 });

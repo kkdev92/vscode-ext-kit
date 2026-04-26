@@ -59,7 +59,7 @@ export type {
   TelemetryReporter,
 } from './types.js';
 
-export type { RetryOptions } from './retry.js';
+export type { RetryOptions, RetryJitter } from './retry.js';
 export type {
   DebouncedFunction,
   ThrottledFunction,

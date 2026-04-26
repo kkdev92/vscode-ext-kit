@@ -1,4 +1,16 @@
 /**
+ * Jitter strategies for randomising delays.
+ *
+ * - `'none'`: no jitter, delay used as-is
+ * - `'full'`: random value in [0, delay]
+ * - `'equal'`: random value in [delay/2, delay]
+ *
+ * `'full'` and `'equal'` are described in
+ * [AWS — Exponential Backoff and Jitter](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/).
+ */
+export type RetryJitter = 'none' | 'full' | 'equal';
+
+/**
  * Options for retry behavior.
  */
 export interface RetryOptions {
@@ -23,6 +35,20 @@ export interface RetryOptions {
   backoff?: 'linear' | 'exponential';
 
   /**
+   * Upper bound for the computed delay (after backoff, before jitter).
+   * Useful with exponential backoff to prevent runaway waits when
+   * `maxAttempts` is large. Has no effect if undefined.
+   */
+  maxDelay?: number;
+
+  /**
+   * Jitter strategy applied to the (capped) delay before each retry.
+   * Recommended for distributed clients to avoid thundering-herd retries.
+   * @default 'none'
+   */
+  jitter?: RetryJitter;
+
+  /**
    * Function to determine if an error should trigger a retry.
    * Return true to retry, false to stop.
    * @default () => true (retry all errors)
@@ -30,9 +56,22 @@ export interface RetryOptions {
   retryIf?: (error: unknown, attempt: number) => boolean;
 
   /**
-   * Called before each retry attempt.
+   * Called before each retry attempt. The `delay` argument reflects the
+   * actual wait that will happen, including `maxDelay` and `jitter`.
    */
   onRetry?: (error: unknown, attempt: number, delay: number) => void;
+}
+
+function applyJitter(delay: number, mode: RetryJitter): number {
+  switch (mode) {
+    case 'full':
+      return Math.random() * delay;
+    case 'equal':
+      return delay / 2 + Math.random() * (delay / 2);
+    case 'none':
+    default:
+      return delay;
+  }
 }
 
 /**
@@ -75,6 +114,8 @@ export async function retry<T>(fn: () => Promise<T>, options: RetryOptions = {})
     maxAttempts = 3,
     delay = 1000,
     backoff = 'exponential',
+    maxDelay,
+    jitter = 'none',
     retryIf = () => true,
     onRetry,
   } = options;
@@ -96,8 +137,10 @@ export async function retry<T>(fn: () => Promise<T>, options: RetryOptions = {})
         throw error;
       }
 
-      // Calculate delay for this retry
-      const currentDelay = backoff === 'exponential' ? delay * Math.pow(2, attempt - 1) : delay;
+      // Calculate delay for this retry: backoff -> cap -> jitter
+      const baseDelay = backoff === 'exponential' ? delay * Math.pow(2, attempt - 1) : delay;
+      const cappedDelay = maxDelay !== undefined ? Math.min(baseDelay, maxDelay) : baseDelay;
+      const currentDelay = applyJitter(cappedDelay, jitter);
 
       // Call onRetry callback if provided
       onRetry?.(error, attempt, currentDelay);
