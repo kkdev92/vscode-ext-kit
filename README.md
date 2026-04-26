@@ -160,9 +160,11 @@ import { createLogger } from '@kkdev92/vscode-ext-kit';
 const logger = createLogger('MyExtension', {
   level: 'debug',           // 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'silent'
   showOnError: true,        // Show output channel on error
+  showOnErrorThrottleMs: 5000, // Suppress repeated channel.show() within this window
   timestamp: true,          // Include timestamp in messages
   configSection: 'myExt.logLevel',  // Watch config for level changes
   telemetryReporter: reporter,      // Optional telemetry integration
+  redactStackPaths: true,   // Replace os.homedir() with `~` in telemetry
 });
 
 // Logging methods
@@ -251,10 +253,10 @@ const result = await trySafeExecute(logger, 'Operation', async () => {
   return await riskyOperation();
 });
 
-if (result.success) {
+if (result.ok) {
   console.log(result.value);
 } else {
-  console.log(result.error);
+  console.log(result.error.message);
 }
 ```
 
@@ -475,8 +477,11 @@ await showInfo('Operation completed');
 await showWarn('This action is deprecated');
 await showError('Failed to save file');
 
-// Confirmation dialog
-const confirmed = await confirm('Delete this file?', 'Delete', 'Cancel');
+// Confirmation dialog (modal by default; customise button text via options)
+const confirmed = await confirm('Delete this file?', {
+  yesText: 'Delete',
+  noText: 'Cancel',
+});
 if (confirmed) {
   await deleteFile();
 }
@@ -486,9 +491,9 @@ const action = await showWithActions(
   'info',
   'New version available',
   [
-    { label: 'Update Now', value: 'update' },
-    { label: 'Later', value: 'later' },
-    { label: 'Never', value: 'never' },
+    { title: 'Update Now', value: 'update' },
+    { title: 'Later', value: 'later' },
+    { title: 'Never', value: 'never', isCloseAffordance: true },
   ]
 );
 ```
@@ -501,8 +506,7 @@ Managed status bar items.
 import { createStatusBarItem, showStatusMessage } from '@kkdev92/vscode-ext-kit';
 
 // Create managed status bar item
-const statusItem = createStatusBarItem({
-  id: 'myExt.status',
+const statusItem = createStatusBarItem('myExt.status', {
   text: 'Ready',
   tooltip: 'Extension status',
   command: 'myExt.showStatus',
@@ -510,12 +514,12 @@ const statusItem = createStatusBarItem({
   priority: 100,
 });
 
-// Update status
-statusItem.setText('Processing...');
-statusItem.showSpinner();
+// Update text (and optionally tooltip)
+statusItem.update('Processing...');
+statusItem.showSpinner('Processing...');
 // ... do work ...
 statusItem.hideSpinner();
-statusItem.setText('Ready');
+statusItem.update('Ready', 'Last sync: just now');
 
 // Temporary status message
 const disposable = showStatusMessage('Saved!', 3000);
@@ -585,16 +589,21 @@ const watcher = createFileWatcher({
   debounceDelay: 300,
   events: ['create', 'change', 'delete'],
   workspaceFolder: vscode.workspace.workspaceFolders?.[0],  // Use RelativePattern
-}, {
-  onCreate: (uri) => console.log('Created:', uri.fsPath),
-  onChange: (uri) => console.log('Changed:', uri.fsPath),
-  onDelete: (uri) => console.log('Deleted:', uri.fsPath),
+});
+
+// Events are batched per debounce window — the listener receives all the
+// events that occurred during the window in a single array.
+watcher.onDidChange((events) => {
+  for (const event of events) {
+    console.log(`${event.type}:`, event.uri.fsPath);
+  }
 });
 
 context.subscriptions.push(watcher);
 
-// Simple single-file watcher
-const configWatcher = watchFile('**/.myconfig', (uri) => {
+// Simple single-file watcher (takes a vscode.Uri, not a glob)
+const configUri = vscode.Uri.file('/path/to/.myconfig');
+const configWatcher = watchFile(configUri, () => {
   reloadConfig();
 });
 ```
@@ -641,46 +650,48 @@ selectRange(editor, new vscode.Range(0, 0, 10, 0));
 Base class for tree data providers.
 
 ```typescript
-import { BaseTreeDataProvider, createTreeView } from '@kkdev92/vscode-ext-kit';
+import { BaseTreeDataProvider, createTreeView, type TreeItemData } from '@kkdev92/vscode-ext-kit';
 
-interface FileItem {
-  name: string;
-  path: string;
-  isDirectory: boolean;
-}
+interface FileItem extends TreeItemData<{ path: string; isDirectory: boolean }> {}
 
 class FileTreeProvider extends BaseTreeDataProvider<FileItem> {
-  async fetchRoots(): Promise<FileItem[]> {
-    return await this.loadDirectory('/');
+  async getRoots(): Promise<FileItem[]> {
+    return this.toItems(await this.loadDirectory('/'));
   }
 
-  async fetchChildren(item: FileItem): Promise<FileItem[]> {
-    if (!item.isDirectory) return [];
-    return await this.loadDirectory(item.path);
+  async getChildrenOf(element: FileItem): Promise<FileItem[]> {
+    if (!element.data?.isDirectory) return [];
+    return this.toItems(await this.loadDirectory(element.data.path));
   }
 
-  createTreeItem(item: FileItem): vscode.TreeItem {
-    const treeItem = new vscode.TreeItem(
-      item.name,
-      item.isDirectory
+  // getTreeItem already has a sensible default implementation that maps the
+  // TreeItemData fields onto a vscode.TreeItem. Override it only to customise
+  // the rendering (icons, contextValue, etc.).
+  override getTreeItem(element: FileItem): vscode.TreeItem {
+    const item = super.getTreeItem(element);
+    item.contextValue = element.data?.isDirectory ? 'directory' : 'file';
+    return item;
+  }
+
+  private toItems(entries: { name: string; path: string; isDirectory: boolean }[]): FileItem[] {
+    return entries.map((entry) => ({
+      id: entry.path,
+      label: entry.name,
+      collapsibleState: entry.isDirectory
         ? vscode.TreeItemCollapsibleState.Collapsed
-        : vscode.TreeItemCollapsibleState.None
-    );
-    treeItem.contextValue = item.isDirectory ? 'directory' : 'file';
-    return treeItem;
-  }
-
-  getItemId(item: FileItem): string {
-    return item.path;
+        : vscode.TreeItemCollapsibleState.None,
+      data: { path: entry.path, isDirectory: entry.isDirectory },
+    }));
   }
 }
 
 const provider = new FileTreeProvider();
-const treeView = createTreeView('myExtension.fileTree', provider, {
+const treeView = createTreeView(context, 'myExtension.fileTree', provider, {
   showCollapseAll: true,
 });
 
-context.subscriptions.push(treeView);
+// `createTreeView` already pushes the view (and the provider, if disposable)
+// onto context.subscriptions for you.
 ```
 
 ### WebView
@@ -688,45 +699,64 @@ context.subscriptions.push(treeView);
 Managed WebView panels with CSP support.
 
 ```typescript
-import { createWebViewPanel, generateCSP, createWebViewHtml } from '@kkdev92/vscode-ext-kit';
+import {
+  createWebViewPanel,
+  generateCSP,
+  generateNonce,
+  createWebViewHtml,
+} from '@kkdev92/vscode-ext-kit';
 
-const panel = createWebViewPanel({
+interface InMsg { type: 'save'; payload: { content: string } }
+interface OutMsg { type: 'update'; payload: { data: unknown } }
+
+const panel = createWebViewPanel<InMsg, OutMsg>(context, {
   viewType: 'myExt.preview',
   title: 'Preview',
   column: vscode.ViewColumn.Beside,
   enableScripts: true,
-  retainContextWhenHidden: true,
+  retainContext: true, // option name on this kit; maps to retainContextWhenHidden internally
   localResourceRoots: [context.extensionUri],
 });
 
-// Generate CSP
-const csp = generateCSP({
-  nonce: panel.nonce,
-  webview: panel.webview,
-  allowUnsafeInline: false,
+// Generate CSP — webview is positional, options come second
+const nonce = generateNonce();
+const csp = generateCSP(panel.native.webview, {
+  nonce,
+  // Opt in to a stricter policy than the historical defaults:
+  allowInlineStyles: false,
+  allowAnyHttpsImages: false,
 });
 
-// Set HTML content
-panel.webview.html = createWebViewHtml({
-  webview: panel.webview,
-  extensionUri: context.extensionUri,
-  title: 'Preview',
-  body: '<div id="app"></div>',
-  scripts: ['dist/webview.js'],
-  styles: ['dist/webview.css'],
-});
+// Build HTML using webview-resolved URIs for scripts/styles
+const scriptUri = panel.asWebviewUri(
+  vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview.js')
+);
+const styleUri = panel.asWebviewUri(
+  vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview.css')
+);
 
-// Handle messages from webview
+panel.setHtml(
+  createWebViewHtml({
+    title: 'Preview',
+    csp,
+    nonce,
+    scripts: [scriptUri.toString()],
+    styles: [styleUri.toString()],
+    body: '<div id="app"></div>',
+  })
+);
+
+// Handle messages from webview — WebViewMessage has { type, payload }
 panel.onMessage((message) => {
-  if (message.command === 'save') {
-    saveData(message.data);
+  if (message.type === 'save') {
+    saveData(message.payload.content);
   }
 });
 
 // Send messages to webview
-panel.postMessage({ command: 'update', data: newData });
+await panel.postMessage({ type: 'update', payload: { data: newData } });
 
-context.subscriptions.push(panel);
+// `createWebViewPanel` already pushes the panel onto context.subscriptions.
 ```
 
 ### Utilities
@@ -761,7 +791,9 @@ const data = await retry(
     maxAttempts: 5,
     delay: 1000,
     backoff: 'exponential',
-    retryIf: (error) => error.code === 'ETIMEDOUT',
+    maxDelay: 30_000,        // Cap each wait so exponential growth stays bounded
+    jitter: 'equal',         // 'none' (default) | 'full' | 'equal' — randomise delays
+    retryIf: (error) => (error as { code?: string }).code === 'ETIMEDOUT',
     onRetry: (error, attempt, delay) => {
       logger.warn(`Retry ${attempt} after ${delay}ms`, error);
     },
