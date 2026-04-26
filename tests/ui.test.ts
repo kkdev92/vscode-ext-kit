@@ -559,5 +559,57 @@ describe('UI', () => {
       expect(result.completed).toBe(true);
       expect(result.state).toEqual({});
     });
+
+    it('accepts input step on a state interface that extends Record<string, unknown>', async () => {
+      // Regression for v0.3.0: when a user state interface extends
+      // Record<string, unknown> (the documented v0.2.x pattern to satisfy
+      // the wizard's TState constraint), keyof widens to `string` and
+      // TState[string] becomes `unknown`. The input step type must still
+      // be accepted in that environment so the typed step array compiles.
+      interface S extends Record<string, unknown> {
+        format: string;
+        customFormat: string;
+      }
+
+      const mockInputBox = {
+        title: '',
+        prompt: '',
+        placeholder: '',
+        password: false,
+        value: 'YYYY-MM-DD',
+        validationMessage: undefined as string | undefined,
+        buttons: [] as unknown[],
+        onDidAccept: vi.fn((cb: () => void) => {
+          setTimeout(() => cb(), 0);
+          return { dispose: vi.fn() };
+        }),
+        onDidTriggerButton: vi.fn(() => ({ dispose: vi.fn() })),
+        onDidHide: vi.fn(() => ({ dispose: vi.fn() })),
+        onDidChangeValue: vi.fn(() => ({ dispose: vi.fn() })),
+        show: vi.fn(),
+        dispose: vi.fn(),
+      };
+      vi.mocked(vscode.window.createInputBox).mockReturnValue(
+        mockInputBox as unknown as ReturnType<typeof vscode.window.createInputBox>
+      );
+
+      const options: WizardOptions<S> = {
+        title: 'Date Wizard',
+        steps: [
+          {
+            id: 'customFormat',
+            type: 'input',
+            prompt: 'Enter format',
+          },
+        ],
+      };
+
+      const resultPromise = wizard(options);
+      await new Promise((r) => setTimeout(r, 10));
+      const result = await resultPromise;
+
+      expect(result.completed).toBe(true);
+      expect(result.state.customFormat).toBe('YYYY-MM-DD');
+    });
   });
 });

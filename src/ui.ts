@@ -178,11 +178,18 @@ export type WizardQuickPickStep<TState, TKey extends keyof TState> =
   | WizardQuickPickStepMulti<TState, TKey>;
 
 /**
- * Input step definition. Only valid when `TState[TKey]` is `string`; for
- * non-string state fields the type collapses to `never`, so the step is
- * rejected at compile time instead of producing a runtime type mismatch.
+ * Input step definition. Valid when `TState[TKey]` is `string` or `unknown`
+ * (the latter covers state types that extend `Record<string, unknown>`,
+ * which forces `keyof` to widen to `string` and the indexed access to
+ * `unknown`). Non-string state fields like `number` collapse the type to
+ * `never`, so the step is rejected at compile time.
+ *
+ * `string extends TState[TKey]` rather than the reverse so:
+ *  - literal `string` fields satisfy it,
+ *  - `unknown` (Record-style index access) satisfies it,
+ *  - `number` / `boolean` / etc. do not.
  */
-export type WizardInputStep<TState, TKey extends keyof TState> = TState[TKey] extends string
+export type WizardInputStep<TState, TKey extends keyof TState> = string extends TState[TKey]
   ? WizardInputStepValid<TState, TKey>
   : never;
 
