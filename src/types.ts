@@ -33,10 +33,26 @@ export interface LoggerOptions {
   configSection?: string;
   /** Show output channel on error (default: true) */
   showOnError?: boolean;
+  /**
+   * Minimum interval between successive `channel.show()` calls when
+   * `showOnError` is true. Suppresses repeated panel popups during error
+   * storms. `0` (default) preserves the historical behaviour of showing
+   * on every error.
+   * @default 0
+   */
+  showOnErrorThrottleMs?: number;
   /** Include timestamp in log messages (default: true) */
   timestamp?: boolean;
   /** Optional telemetry reporter for error tracking */
   telemetryReporter?: TelemetryReporter;
+  /**
+   * When true, redact the current OS user's home directory path from
+   * `errorStack` and `errorMessage` properties before sending them via
+   * `telemetryReporter`. Useful for reducing PII exposure when stack
+   * traces include developer-machine paths like `C:\Users\alice\...`.
+   * @default false
+   */
+  redactStackPaths?: boolean;
 }
 
 export interface Logger extends vscode.Disposable {
