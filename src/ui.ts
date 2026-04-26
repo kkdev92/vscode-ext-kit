@@ -127,11 +127,16 @@ interface WizardStepBase<TState, TKey extends keyof TState> {
 /**
  * QuickPick step (single selection). Inferred when `canPickMany` is omitted
  * or `false`. Items must carry values matching `TState[TKey]`.
+ *
+ * Kept internal — callers compose `WizardQuickPickStep` directly and rely on
+ * TypeScript narrowing via `canPickMany`. Exporting the variants would only
+ * widen the public API surface without giving consumers anything they don't
+ * already get from the discriminated union.
  */
-export interface WizardQuickPickStepSingle<
+interface WizardQuickPickStepSingle<TState, TKey extends keyof TState> extends WizardStepBase<
   TState,
-  TKey extends keyof TState,
-> extends WizardStepBase<TState, TKey> {
+  TKey
+> {
   type: 'quickpick';
   /** Placeholder text */
   placeholder?: string;
@@ -147,8 +152,10 @@ export interface WizardQuickPickStepSingle<
  * QuickPick step (multi selection). Only valid when `TState[TKey]` is itself
  * an array — otherwise the type collapses to `never`, surfacing the
  * `canPickMany: true` + non-array state mismatch at compile time.
+ *
+ * Kept internal for the same reason as `WizardQuickPickStepSingle`.
  */
-export interface WizardQuickPickStepMulti<TState, TKey extends keyof TState> extends WizardStepBase<
+interface WizardQuickPickStepMulti<TState, TKey extends keyof TState> extends WizardStepBase<
   TState,
   TKey
 > {
