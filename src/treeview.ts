@@ -213,10 +213,14 @@ export class SimpleTreeDataProvider<
   T extends TreeItemData & { children?: T[] },
 > extends BaseTreeDataProvider<T> {
   private _roots: T[];
+  private _itemsById = new Map<string, T>();
+  private _normalizedRoots: T[] = [];
+  private _normalizedChildrenById = new Map<string, T[]>();
 
   constructor(items: T[] = []) {
     super();
     this._roots = items;
+    this._rebuildIndex();
   }
 
   /**
@@ -226,6 +230,7 @@ export class SimpleTreeDataProvider<
    */
   setItems(items: T[]): void {
     this._roots = items;
+    this._rebuildIndex();
     this.refresh();
   }
 
@@ -236,6 +241,7 @@ export class SimpleTreeDataProvider<
    */
   addItem(item: T): void {
     this._roots.push(item);
+    this._rebuildIndex();
     this.refresh();
   }
 
@@ -246,54 +252,57 @@ export class SimpleTreeDataProvider<
    */
   removeItem(id: string): void {
     this._roots = this._roots.filter((item) => item.id !== id);
+    this._rebuildIndex();
     this.refresh();
   }
 
   /**
-   * Finds an item by id recursively.
+   * Finds an item by id.
    *
    * @param id - Item id
+   * @returns The original item (with its `children`) or undefined.
    */
   findItem(id: string): T | undefined {
-    const find = (items: T[]): T | undefined => {
-      for (const item of items) {
-        if (item.id === id) {
-          return item;
-        }
-        if (item.children) {
-          const found = find(item.children);
-          if (found) {
-            return found;
-          }
-        }
-      }
-      return undefined;
-    };
-    return find(this._roots);
+    return this._itemsById.get(id);
   }
 
   getRoots(): T[] {
-    return this._roots.map((item) => ({
+    return this._normalizedRoots;
+  }
+
+  getChildrenOf(element: T): T[] {
+    return this._normalizedChildrenById.get(element.id) ?? [];
+  }
+
+  /**
+   * Walks the tree once and pre-computes:
+   * - `_itemsById`: O(1) findItem lookup
+   * - `_normalizedRoots` / `_normalizedChildrenById`: stable arrays returned
+   *   to VS Code so the same reference is handed back across calls when the
+   *   underlying data has not changed.
+   */
+  private _rebuildIndex(): void {
+    this._itemsById.clear();
+    this._normalizedChildrenById.clear();
+
+    const normalize = (item: T): T => ({
       ...item,
       collapsibleState:
         item.children && item.children.length > 0
           ? vscode.TreeItemCollapsibleState.Collapsed
           : vscode.TreeItemCollapsibleState.None,
-    }));
-  }
+    });
 
-  getChildrenOf(element: T): T[] {
-    const item = this.findItem(element.id);
-    if (!item?.children) {
-      return [];
-    }
-    return item.children.map((child) => ({
-      ...child,
-      collapsibleState:
-        child.children && child.children.length > 0
-          ? vscode.TreeItemCollapsibleState.Collapsed
-          : vscode.TreeItemCollapsibleState.None,
-    }));
+    const walk = (items: T[]): T[] =>
+      items.map((item) => {
+        this._itemsById.set(item.id, item);
+        if (item.children && item.children.length > 0) {
+          this._normalizedChildrenById.set(item.id, walk(item.children));
+        }
+        return normalize(item);
+      });
+
+    this._normalizedRoots = walk(this._roots);
   }
 }
 
