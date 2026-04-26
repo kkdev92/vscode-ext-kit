@@ -303,6 +303,22 @@ describe('withTiming', () => {
     expect(logger.debug).toHaveBeenCalled();
   });
 
+  it('respects logLevel: info on failure', async () => {
+    const logger = createMockLogger();
+
+    await expect(
+      withTiming('failingOp', () => {
+        throw new Error('boom');
+      }, { logger, logLevel: 'info' })
+    ).rejects.toThrow('boom');
+
+    expect(logger.info).toHaveBeenCalled();
+    expect(logger.debug).not.toHaveBeenCalled();
+    const message = (logger.info as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(message).toContain('failingOp');
+    expect(message).toContain('failed after');
+  });
+
   it('works without logger', async () => {
     const { result } = await withTiming('noLogger', () => 'value');
 

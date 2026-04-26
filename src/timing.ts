@@ -219,7 +219,13 @@ export async function withTiming<T>(
     const duration = performance.now() - start;
 
     if (logger) {
-      logger.debug(`${name} failed after ${duration.toFixed(2)}ms`);
+      const message = `${name} failed after ${duration.toFixed(2)}ms`;
+
+      if (logLevel === 'info') {
+        logger.info(message);
+      } else {
+        logger.debug(message);
+      }
     }
 
     throw error;
