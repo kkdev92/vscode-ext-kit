@@ -192,6 +192,44 @@ describe('storage', () => {
         expect(context.globalState.get('config')).toEqual({ name: 'test', enabled: true });
         expect(context.globalState.get('config__version')).toBe(2);
       });
+
+      it('does not surface unhandledRejection when persistence write fails', async () => {
+        await context.globalState.update('config', { v: 1 });
+        await context.globalState.update('config__version', 1);
+
+        // Simulate a flaky memento that rejects on update().
+        const failure = new Error('disk full');
+        const updateSpy = vi
+          .spyOn(context.globalState, 'update')
+          .mockRejectedValue(failure);
+
+        // Track unhandled rejections for the duration of the test.
+        const unhandled: unknown[] = [];
+        const onUnhandled = (reason: unknown): void => {
+          unhandled.push(reason);
+        };
+        process.on('unhandledRejection', onUnhandled);
+
+        try {
+          const storage = createGlobalStorage<{ v: number }>(context as never, 'config', {
+            defaultValue: { v: 0 },
+            version: 2,
+            migrate: (old) => ({ v: (old as { v: number }).v + 1 }),
+          });
+
+          // Triggers two best-effort update() calls that will reject.
+          expect(storage.get()).toEqual({ v: 2 });
+
+          // Let microtasks drain so any unhandled rejection would surface.
+          await new Promise((r) => setImmediate(r));
+
+          expect(updateSpy).toHaveBeenCalled();
+          expect(unhandled).toHaveLength(0);
+        } finally {
+          process.off('unhandledRejection', onUnhandled);
+          updateSpy.mockRestore();
+        }
+      });
     });
   });
 

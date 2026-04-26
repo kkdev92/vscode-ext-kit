@@ -228,9 +228,12 @@ function createTypedStorage<T>(
 
     // Persist migrated value so migrate() doesn't run on every get().
     // Done after validation to avoid persisting an invalid migration result.
+    // Best-effort: if the underlying memento rejects (disk error etc.), swallow
+    // the rejection so it doesn't surface as `unhandledRejection`. The next
+    // get() will simply re-run the migration.
     if (migrated) {
-      void memento.update(key, value);
-      void memento.update(versionKey, version);
+      memento.update(key, value).then(undefined, () => undefined);
+      memento.update(versionKey, version).then(undefined, () => undefined);
     }
 
     return value as T;
