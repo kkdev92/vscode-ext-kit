@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import * as fs from 'fs/promises';
 import * as vscode from 'vscode';
 import { createMockExtensionContext, createMockWebview, ViewColumn } from './mocks/vscode.js';
 import {
@@ -7,12 +8,15 @@ import {
   generateNonce,
   createWebViewHtml,
   escapeHtml,
+  loadHtmlTemplate,
 } from '../src/webview.js';
 
 // Mock fs/promises
 vi.mock('fs/promises', () => ({
   readFile: vi.fn().mockResolvedValue('<html>{{title}}</html>'),
 }));
+
+const mockedReadFile = vi.mocked(fs.readFile);
 
 describe('webview', () => {
   beforeEach(() => {
@@ -333,6 +337,74 @@ describe('webview', () => {
 
       expect(html).not.toContain('<script>alert');
       expect(html).toContain('&lt;script&gt;');
+    });
+  });
+
+  // ============================================
+  // loadHtmlTemplate
+  // ============================================
+
+  describe('loadHtmlTemplate', () => {
+    it('substitutes variables with HTML escaping by default', async () => {
+      mockedReadFile.mockResolvedValueOnce('<title>{{title}}</title>');
+      const context = createMockExtensionContext();
+      const webview = createMockWebview();
+
+      const html = await loadHtmlTemplate(context as never, 'media/x.html', webview as never, {
+        title: '<script>alert(1)</script>',
+      });
+
+      expect(html).toBe('<title>&lt;script&gt;alert(1)&lt;/script&gt;</title>');
+    });
+
+    it('emits raw values for {{raw:key}} placeholders', async () => {
+      mockedReadFile.mockResolvedValueOnce('<div>{{raw:body}}</div>');
+      const context = createMockExtensionContext();
+      const webview = createMockWebview();
+
+      const html = await loadHtmlTemplate(context as never, 'media/x.html', webview as never, {
+        body: '<p>hi</p>',
+      });
+
+      expect(html).toBe('<div><p>hi</p></div>');
+    });
+
+    it('rewrites {{webviewUri:path}} to webview URIs', async () => {
+      mockedReadFile.mockResolvedValueOnce('<script src="{{webviewUri:dist/app.js}}"></script>');
+      const context = createMockExtensionContext();
+      const webview = createMockWebview();
+
+      const html = await loadHtmlTemplate(context as never, 'media/x.html', webview as never);
+
+      expect(html).toContain('vscode-webview://mock/');
+      expect(html).toContain('app.js');
+    });
+
+    it('does not transitively expand placeholders that appear inside variable values', async () => {
+      mockedReadFile.mockResolvedValueOnce('{{raw:a}}');
+      const context = createMockExtensionContext();
+      const webview = createMockWebview();
+
+      // Value of `a` literally contains "{{b}}", which must NOT be re-expanded
+      // even though `b` is also a defined variable. This locks the single-pass
+      // substitution behaviour and prevents template injection.
+      const html = await loadHtmlTemplate(context as never, 'media/x.html', webview as never, {
+        a: '{{b}}',
+        b: 'should-not-appear',
+      });
+
+      expect(html).toBe('{{b}}');
+      expect(html).not.toContain('should-not-appear');
+    });
+
+    it('leaves placeholders untouched when the variable is not provided', async () => {
+      mockedReadFile.mockResolvedValueOnce('hello {{missing}}');
+      const context = createMockExtensionContext();
+      const webview = createMockWebview();
+
+      const html = await loadHtmlTemplate(context as never, 'media/x.html', webview as never);
+
+      expect(html).toBe('hello {{missing}}');
     });
   });
 

@@ -364,23 +364,18 @@ export async function loadHtmlTemplate(
     return webview.asWebviewUri(uri).toString();
   });
 
-  // Replace variable placeholders (escaped and raw)
-  for (const [key, value] of Object.entries(variables)) {
-    const escapedKey = escapeRegExp(key);
-    // Raw (unescaped) replacement: {{raw:key}}
-    html = html.replace(new RegExp(`\\{\\{raw:${escapedKey}\\}\\}`, 'g'), value);
-    // Default (escaped) replacement: {{key}}
-    html = html.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'g'), escapeHtml(value));
-  }
+  // Replace variable placeholders in a single pass so values cannot contain
+  // other placeholders that get expanded transitively (which would be both
+  // order-dependent across Object.entries and an injection vector).
+  html = html.replace(/\{\{(raw:)?([^}]+)\}\}/g, (match, raw: string | undefined, key: string) => {
+    const value = variables[key.trim()];
+    if (value === undefined) {
+      return match;
+    }
+    return raw ? value : escapeHtml(value);
+  });
 
   return html;
-}
-
-/**
- * Escapes special characters for use in a regular expression.
- */
-function escapeRegExp(string: string): string {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // ============================================
