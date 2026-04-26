@@ -165,6 +165,33 @@ describe('storage', () => {
 
         expect(context.globalState.get('data__version')).toBe(3);
       });
+
+      it('persists migrated value so migrate runs only once', async () => {
+        await context.globalState.update('config', { name: 'test' });
+        await context.globalState.update('config__version', 1);
+
+        const migrate = vi.fn((old) => ({ ...(old as object), enabled: true }));
+
+        const storage = createGlobalStorage<{ name: string; enabled: boolean }>(
+          context as never,
+          'config',
+          {
+            defaultValue: { name: '', enabled: false },
+            version: 2,
+            migrate,
+          }
+        );
+
+        // First get triggers migration and writes the result back.
+        storage.get();
+        // Subsequent gets must not re-run migrate.
+        storage.get();
+        storage.get();
+
+        expect(migrate).toHaveBeenCalledTimes(1);
+        expect(context.globalState.get('config')).toEqual({ name: 'test', enabled: true });
+        expect(context.globalState.get('config__version')).toBe(2);
+      });
     });
   });
 
