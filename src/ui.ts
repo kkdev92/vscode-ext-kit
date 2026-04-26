@@ -125,12 +125,13 @@ interface WizardStepBase<TState, TKey extends keyof TState> {
 }
 
 /**
- * QuickPick step definition.
+ * QuickPick step (single selection). Inferred when `canPickMany` is omitted
+ * or `false`. Items must carry values matching `TState[TKey]`.
  */
-export interface WizardQuickPickStep<TState, TKey extends keyof TState> extends WizardStepBase<
+export interface WizardQuickPickStepSingle<
   TState,
-  TKey
-> {
+  TKey extends keyof TState,
+> extends WizardStepBase<TState, TKey> {
   type: 'quickpick';
   /** Placeholder text */
   placeholder?: string;
@@ -139,13 +140,46 @@ export interface WizardQuickPickStep<TState, TKey extends keyof TState> extends 
     | WizardQuickPickItem<TState[TKey]>[]
     | ((state: Partial<TState>) => WizardQuickPickItem<TState[TKey]>[]);
   /** Allow multiple selections */
-  canPickMany?: boolean;
+  canPickMany?: false;
 }
 
 /**
- * Input step definition.
+ * QuickPick step (multi selection). Only valid when `TState[TKey]` is itself
+ * an array — otherwise the type collapses to `never`, surfacing the
+ * `canPickMany: true` + non-array state mismatch at compile time.
  */
-export interface WizardInputStep<TState, TKey extends keyof TState> extends WizardStepBase<
+export interface WizardQuickPickStepMulti<TState, TKey extends keyof TState> extends WizardStepBase<
+  TState,
+  TKey
+> {
+  type: 'quickpick';
+  /** Placeholder text */
+  placeholder?: string;
+  /** Items to choose from (can be dynamic based on state) */
+  items: TState[TKey] extends readonly (infer U)[]
+    ? WizardQuickPickItem<U>[] | ((state: Partial<TState>) => WizardQuickPickItem<U>[])
+    : never;
+  /** Multiple selections enabled */
+  canPickMany: true;
+}
+
+/**
+ * QuickPick step definition (single or multi).
+ */
+export type WizardQuickPickStep<TState, TKey extends keyof TState> =
+  | WizardQuickPickStepSingle<TState, TKey>
+  | WizardQuickPickStepMulti<TState, TKey>;
+
+/**
+ * Input step definition. Only valid when `TState[TKey]` is `string`; for
+ * non-string state fields the type collapses to `never`, so the step is
+ * rejected at compile time instead of producing a runtime type mismatch.
+ */
+export type WizardInputStep<TState, TKey extends keyof TState> = TState[TKey] extends string
+  ? WizardInputStepValid<TState, TKey>
+  : never;
+
+interface WizardInputStepValid<TState, TKey extends keyof TState> extends WizardStepBase<
   TState,
   TKey
 > {
@@ -254,6 +288,14 @@ export interface WizardResult<TState> {
  * }
  * ```
  */
+/**
+ * Internal tagged result returned by step runners.
+ * Public API still surfaces only `WizardResult` — this union just keeps
+ * the wizard control flow type-safe instead of relying on a sentinel
+ * value that can clash with user values like `undefined`.
+ */
+type StepResult<T> = { kind: 'value'; value: T } | { kind: 'back' } | { kind: 'cancel' };
+
 export async function wizard<TState extends Record<string, unknown>>(
   options: WizardOptions<TState>
 ): Promise<WizardResult<TState>> {
@@ -284,7 +326,7 @@ export async function wizard<TState extends Record<string, unknown>>(
       tooltip: 'Back',
     };
 
-    let result: unknown;
+    let result: StepResult<unknown>;
 
     if (step.type === 'quickpick') {
       result = await runQuickPickStep(
@@ -302,19 +344,17 @@ export async function wizard<TState extends Record<string, unknown>>(
       );
     }
 
-    // Handle back navigation
-    if (result === Symbol.for('back')) {
+    if (result.kind === 'back') {
       currentIndex = Math.max(0, currentIndex - 1);
       continue;
     }
 
-    // Handle cancellation
-    if (result === undefined) {
+    if (result.kind === 'cancel') {
       return { completed: false, state };
     }
 
     // Store result and move to next step
-    (state as Record<string, unknown>)[step.id as string] = result;
+    (state as Record<string, unknown>)[step.id as string] = result.value;
     currentIndex++;
   }
 
@@ -329,17 +369,20 @@ async function runQuickPickStep<TState, TKey extends keyof TState>(
   state: Partial<TState>,
   title: string,
   backButton?: vscode.QuickInputButton
-): Promise<TState[TKey] | symbol | undefined> {
+): Promise<StepResult<TState[TKey]>> {
   return new Promise((resolve) => {
-    const quickPick = vscode.window.createQuickPick<WizardQuickPickItem<TState[TKey]>>();
+    // The public `WizardQuickPickStep` union has different `items` types for
+    // single (value: TState[TKey]) and multi (value: array element). Use a
+    // permissive value type internally and reapply the right type on resolve.
+    type AnyItem = WizardQuickPickItem<unknown>;
+    const quickPick = vscode.window.createQuickPick<AnyItem>();
 
     quickPick.title = title;
     quickPick.placeholder = step.placeholder;
     quickPick.canSelectMany = step.canPickMany ?? false;
 
-    // Get items (static or dynamic)
-    const items = typeof step.items === 'function' ? step.items(state) : step.items;
-    quickPick.items = items;
+    const rawItems = typeof step.items === 'function' ? step.items(state) : step.items;
+    quickPick.items = rawItems as AnyItem[];
 
     // Add back button if available
     if (backButton) {
@@ -350,9 +393,17 @@ async function runQuickPickStep<TState, TKey extends keyof TState>(
       const selected = quickPick.selectedItems;
 
       if (step.canPickMany) {
-        resolve(selected.map((item) => item.value) as TState[TKey]);
+        resolve({
+          kind: 'value',
+          value: selected.map((item) => item.value) as TState[TKey],
+        });
+      } else if (selected[0]) {
+        resolve({ kind: 'value', value: selected[0].value as TState[TKey] });
       } else {
-        resolve(selected[0]?.value);
+        // Accept fired with no selection — treat as cancel for consistency
+        // with the historical behaviour where `selected[0]?.value` produced
+        // an undefined result that the wizard interpreted as cancellation.
+        resolve({ kind: 'cancel' });
       }
 
       quickPick.dispose();
@@ -360,14 +411,14 @@ async function runQuickPickStep<TState, TKey extends keyof TState>(
 
     quickPick.onDidTriggerButton((button) => {
       if (button === backButton) {
-        resolve(Symbol.for('back'));
+        resolve({ kind: 'back' });
         quickPick.dispose();
       }
     });
 
     quickPick.onDidHide(() => {
       quickPick.dispose();
-      resolve(undefined);
+      resolve({ kind: 'cancel' });
     });
 
     quickPick.show();
@@ -382,7 +433,7 @@ async function runInputStep<TState, TKey extends keyof TState>(
   state: Partial<TState>,
   title: string,
   backButton?: vscode.QuickInputButton
-): Promise<string | symbol | undefined> {
+): Promise<StepResult<TState[TKey]>> {
   return new Promise((resolve) => {
     const inputBox = vscode.window.createInputBox();
 
@@ -419,21 +470,22 @@ async function runInputStep<TState, TKey extends keyof TState>(
         }
       }
 
-      const value = inputBox.value;
-      resolve(value as TState[TKey] extends string ? string : never);
+      // WizardInputStep is constrained to keys whose state value is a string,
+      // so the cast below is safe at runtime — see the type declaration.
+      resolve({ kind: 'value', value: inputBox.value as TState[TKey] });
       inputBox.dispose();
     });
 
     inputBox.onDidTriggerButton((button) => {
       if (button === backButton) {
-        resolve(Symbol.for('back'));
+        resolve({ kind: 'back' });
         inputBox.dispose();
       }
     });
 
     inputBox.onDidHide(() => {
       inputBox.dispose();
-      resolve(undefined);
+      resolve({ kind: 'cancel' });
     });
 
     inputBox.show();

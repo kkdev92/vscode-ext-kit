@@ -1,3 +1,4 @@
+import * as os from 'node:os';
 import * as vscode from 'vscode';
 import type { Logger, LoggerOptions, LogLevel } from './types.js';
 
@@ -44,6 +45,15 @@ function formatTimestamp(): string {
   return new Date().toISOString();
 }
 
+function safeHomedir(): string {
+  try {
+    return os.homedir() ?? '';
+  } catch {
+    // homedir() can throw if HOME / USERPROFILE is unset.
+    return '';
+  }
+}
+
 /**
  * Creates a logger instance using VS Code's OutputChannel.
  * Log level filtering is handled internally by vscode-ext-kit,
@@ -66,9 +76,16 @@ export function createLogger(extensionName: string, opts: LoggerOptions = {}): L
     level: initialLevel = 'info',
     configSection,
     showOnError = true,
+    showOnErrorThrottleMs = 0,
     timestamp = true,
     telemetryReporter,
+    redactStackPaths = false,
   } = opts;
+
+  let lastShownAt = Number.NEGATIVE_INFINITY;
+  const homeDir = redactStackPaths ? safeHomedir() : '';
+  const redact = (text: string): string =>
+    homeDir && text.includes(homeDir) ? text.split(homeDir).join('~') : text;
 
   const channel = vscode.window.createOutputChannel(extensionName);
 
@@ -140,20 +157,24 @@ export function createLogger(extensionName: string, opts: LoggerOptions = {}): L
           `[${LOG_LEVEL_PREFIX.error}] ${formatMessage(errorMessage)}${formatArgs(errorArgs)}`
         );
         if (showOnError) {
-          channel.show(true);
+          const now = Date.now();
+          if (showOnErrorThrottleMs <= 0 || now - lastShownAt >= showOnErrorThrottleMs) {
+            channel.show(true);
+            lastShownAt = now;
+          }
         }
         // Send telemetry if reporter is configured
         if (telemetryReporter) {
           const properties: Record<string, string> = {
-            message: errorMessage,
+            message: redact(errorMessage),
           };
           const firstError =
             message instanceof Error ? message : args.find((a) => a instanceof Error);
           if (firstError instanceof Error) {
-            properties['errorMessage'] = firstError.message;
+            properties['errorMessage'] = redact(firstError.message);
             properties['errorName'] = firstError.name;
             if (firstError.stack) {
-              properties['errorStack'] = firstError.stack;
+              properties['errorStack'] = redact(firstError.stack);
             }
           }
           telemetryReporter.sendTelemetryErrorEvent('error', properties);

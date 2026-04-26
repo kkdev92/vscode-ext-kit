@@ -83,6 +83,19 @@ describe('editor', () => {
 
       expect(texts).toEqual(['hello', 'foo']);
     });
+
+    it('skips empty selections when mixed with non-empty ones', () => {
+      const editor = createMockTextEditor('hello world');
+      editor.selections = [
+        new Selection(0, 0, 0, 5),
+        new Selection(0, 6, 0, 6), // empty
+        new Selection(0, 6, 0, 11),
+      ];
+
+      const texts = getAllSelectedText(editor as never);
+
+      expect(texts).toEqual(['hello', 'world']);
+    });
   });
 
   describe('insertAtCursor', () => {

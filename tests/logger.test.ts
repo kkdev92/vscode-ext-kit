@@ -1,3 +1,4 @@
+import * as os from 'node:os';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
 import { createLogger } from '../src/logger.js';
@@ -366,6 +367,100 @@ describe('Logger', () => {
 
       expect(mockDispose).toHaveBeenCalled();
       expect(mockChannel.dispose).toHaveBeenCalled();
+    });
+  });
+
+  describe('showOnErrorThrottleMs', () => {
+    it('throttles channel.show within the configured window', () => {
+      const mockChannel = vscode.window.createOutputChannel('Test');
+      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
+
+      const dateNowSpy = vi.spyOn(Date, 'now');
+
+      const logger = createLogger('TestExtension', { showOnErrorThrottleMs: 5000 });
+
+      dateNowSpy.mockReturnValue(1_000);
+      logger.error('first');
+      dateNowSpy.mockReturnValue(2_000);
+      logger.error('second'); // 1s later, should be throttled
+      dateNowSpy.mockReturnValue(4_999);
+      logger.error('third'); // still inside the 5s window
+
+      expect(mockChannel.show).toHaveBeenCalledTimes(1);
+
+      dateNowSpy.mockReturnValue(7_000); // 6s after first → outside window
+      logger.error('fourth');
+
+      expect(mockChannel.show).toHaveBeenCalledTimes(2);
+
+      dateNowSpy.mockRestore();
+    });
+
+    it('shows on every error when throttle is 0 (default)', () => {
+      const mockChannel = vscode.window.createOutputChannel('Test');
+      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
+
+      const logger = createLogger('TestExtension');
+
+      logger.error('a');
+      logger.error('b');
+      logger.error('c');
+
+      expect(mockChannel.show).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe('redactStackPaths', () => {
+    it('redacts the OS home directory from telemetry stack/message', () => {
+      const mockChannel = vscode.window.createOutputChannel('Test');
+      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
+
+      const homedir = os.homedir();
+      // Skip on the unlikely environment where homedir() returns ''.
+      if (!homedir) return;
+
+      const reporter = {
+        sendTelemetryEvent: vi.fn(),
+        sendTelemetryErrorEvent: vi.fn(),
+      };
+
+      const error = new Error(`failed reading ${homedir}/secret.txt`);
+      error.stack = `Error: boom\n    at fn (${homedir}/code/file.ts:10:5)`;
+
+      const logger = createLogger('TestExtension', {
+        telemetryReporter: reporter,
+        redactStackPaths: true,
+      });
+      logger.error(error);
+
+      expect(reporter.sendTelemetryErrorEvent).toHaveBeenCalledTimes(1);
+      const props = reporter.sendTelemetryErrorEvent.mock.calls[0]![1];
+      expect(props.errorStack).toContain('~/code/file.ts');
+      expect(props.errorStack).not.toContain(homedir);
+      expect(props.errorMessage).toContain('~/secret.txt');
+      expect(props.errorMessage).not.toContain(homedir);
+    });
+
+    it('leaves telemetry properties untouched when redactStackPaths is false', () => {
+      const mockChannel = vscode.window.createOutputChannel('Test');
+      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
+
+      const homedir = os.homedir();
+      if (!homedir) return;
+
+      const reporter = {
+        sendTelemetryEvent: vi.fn(),
+        sendTelemetryErrorEvent: vi.fn(),
+      };
+
+      const error = new Error('boom');
+      error.stack = `Error: boom\n    at fn (${homedir}/code/file.ts:10:5)`;
+
+      const logger = createLogger('TestExtension', { telemetryReporter: reporter });
+      logger.error(error);
+
+      const props = reporter.sendTelemetryErrorEvent.mock.calls[0]![1];
+      expect(props.errorStack).toContain(homedir);
     });
   });
 });

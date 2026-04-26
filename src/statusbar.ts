@@ -223,7 +223,11 @@ function applyOptions(item: vscode.StatusBarItem, options: Partial<StatusBarItem
  * ```
  */
 export function showStatusMessage(text: string, timeout: number = 5000): vscode.Disposable {
-  const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, -1000);
+  const item = vscode.window.createStatusBarItem(
+    'vscode-ext-kit.statusMessage',
+    vscode.StatusBarAlignment.Left,
+    -1000
+  );
   item.text = text;
   item.show();
 
