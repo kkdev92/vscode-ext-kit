@@ -14,16 +14,6 @@ A lightweight, type-safe utility library for VS Code extension development. Elim
 
 ---
 
-## What's New in v0.2.0
-
-**Breaking Change**: Logger now uses `OutputChannel` instead of `LogOutputChannel`
-
-This change gives you full control over log level filtering. VS Code's previous internal filtering would block debug/trace messages even when your extension's log level allowed them.
-
-**Migration**: No code changes needed, but log output format now includes `[LEVEL]` prefix (e.g., `[DEBUG] [timestamp] message`).
-
----
-
 ## Table of Contents
 
 - [Features](#features)
@@ -148,9 +138,6 @@ Common patterns and usage examples are shown throughout the [API Reference](#api
 > **Note:** This section contains detailed API documentation. For a quick overview, see [Features](#features) above.
 
 ### Logger
-
-> **Note (v0.2.0)**: Changed from `LogOutputChannel` to `OutputChannel` for full log level control.
-> Log format now includes level prefix: `[LEVEL] [timestamp] message`
 
 Create a structured logger using VS Code's OutputChannel.
 
