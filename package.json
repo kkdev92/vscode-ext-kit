@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kkdev92/vscode-ext-kit.git"
+    "url": "git+https://github.com/kkdev92/vscode-ext-kit.git"
   },
   "bugs": {
     "url": "https://github.com/kkdev92/vscode-ext-kit/issues"
