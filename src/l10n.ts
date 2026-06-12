@@ -62,6 +62,34 @@ export type RelativeTimeUnit =
   | 'minute'
   | 'second';
 
+// Intl constructors are expensive (locale data lookup); cache instances per
+// language + options. The caches are tiny in practice — the language is fixed
+// for a session and extensions use a handful of option sets — but cap them
+// defensively so unbounded option permutations can't grow memory.
+const FORMATTER_CACHE_LIMIT = 100;
+const pluralRulesCache = new Map<string, Intl.PluralRules>();
+const numberFormatCache = new Map<string, Intl.NumberFormat>();
+const dateTimeFormatCache = new Map<string, Intl.DateTimeFormat>();
+const relativeTimeFormatCache = new Map<string, Intl.RelativeTimeFormat>();
+
+function getCachedFormatter<T>(
+  cache: Map<string, T>,
+  language: string,
+  options: unknown,
+  create: (language: string) => T
+): T {
+  const key = options === undefined ? language : `${language}|${JSON.stringify(options)}`;
+  let formatter = cache.get(key);
+  if (formatter === undefined) {
+    if (cache.size >= FORMATTER_CACHE_LIMIT) {
+      cache.clear();
+    }
+    formatter = create(language);
+    cache.set(key, formatter);
+  }
+  return formatter;
+}
+
 /**
  * Translates a message string using VS Code's localization API.
  * This is a convenience wrapper around `vscode.l10n.t`.
@@ -153,7 +181,12 @@ export function isLanguage(locale: string): boolean {
  * ```
  */
 export function plural(count: number, forms: PluralForms): string {
-  const rules = new Intl.PluralRules(vscode.env.language);
+  const rules = getCachedFormatter(
+    pluralRulesCache,
+    vscode.env.language,
+    undefined,
+    (lang) => new Intl.PluralRules(lang)
+  );
   const rule = rules.select(count);
 
   // Special case for zero if provided
@@ -202,7 +235,12 @@ function interpolateCount(template: string, count: number): string {
  * ```
  */
 export function formatNumber(value: number, options: NumberFormatOptions = {}): string {
-  const formatter = new Intl.NumberFormat(vscode.env.language, options);
+  const formatter = getCachedFormatter(
+    numberFormatCache,
+    vscode.env.language,
+    options,
+    (lang) => new Intl.NumberFormat(lang, options)
+  );
   return formatter.format(value);
 }
 
@@ -233,7 +271,12 @@ export function formatNumber(value: number, options: NumberFormatOptions = {}): 
  * ```
  */
 export function formatDate(date: Date, options: DateFormatOptions = {}): string {
-  const formatter = new Intl.DateTimeFormat(vscode.env.language, options);
+  const formatter = getCachedFormatter(
+    dateTimeFormatCache,
+    vscode.env.language,
+    options,
+    (lang) => new Intl.DateTimeFormat(lang, options)
+  );
   return formatter.format(date);
 }
 
@@ -267,6 +310,11 @@ export function formatRelativeTime(
   unit: RelativeTimeUnit,
   style: 'long' | 'short' | 'narrow' = 'long'
 ): string {
-  const formatter = new Intl.RelativeTimeFormat(vscode.env.language, { style });
+  const formatter = getCachedFormatter(
+    relativeTimeFormatCache,
+    vscode.env.language,
+    style,
+    (lang) => new Intl.RelativeTimeFormat(lang, { style })
+  );
   return formatter.format(value, unit);
 }

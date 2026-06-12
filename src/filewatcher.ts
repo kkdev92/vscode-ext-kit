@@ -112,29 +112,33 @@ export function createFileWatcher(options: FileWatcherOptions): ManagedFileWatch
     }
   }, debounceDelay);
 
+  // Compile ignore patterns once at creation — building a RegExp per pattern
+  // on every event is wasteful, and regex metacharacters in patterns
+  // (e.g. the dot in `*.log`) must be matched literally.
+  const ignoreMatchers: ((filePath: string) => boolean)[] = ignorePatterns.map((pattern) => {
+    // Simple glob matching for common patterns
+    if (pattern.includes('*')) {
+      // Use placeholder to avoid replacing * inside .* from ** conversion
+      const PLACEHOLDER = '<<<GLOBSTAR>>>';
+      // Order matters: separators must be rewritten before single * expands
+      // to a character class containing `/`, or that class gets corrupted.
+      const regex = new RegExp(
+        pattern
+          .replace(/[.+^${}()|[\]\\?]/g, '\\$&') // Escape regex specials (not * and /)
+          .replace(/\*\*/g, PLACEHOLDER) // Protect ** with placeholder
+          .replace(/\//g, '[/\\\\]') // Match both separator styles
+          .replace(/\*/g, '[^/\\\\]*') // Replace single *
+          .replace(new RegExp(PLACEHOLDER, 'g'), '.*') // Restore ** as .*
+      );
+      return (filePath) => regex.test(filePath);
+    }
+    return (filePath) => filePath.includes(pattern);
+  });
+
   // Check if a path should be ignored
   function shouldIgnore(uri: vscode.Uri): boolean {
     const filePath = uri.fsPath;
-    for (const pattern of ignorePatterns) {
-      // Simple glob matching for common patterns
-      if (pattern.includes('**') || pattern.includes('*')) {
-        // Use placeholder to avoid replacing * inside .* from ** conversion
-        const PLACEHOLDER = '<<<GLOBSTAR>>>';
-        const regex = new RegExp(
-          pattern
-            .replace(/\*\*/g, PLACEHOLDER) // Protect ** with placeholder
-            .replace(/\*/g, '[^/\\\\]*') // Replace single *
-            .replace(new RegExp(PLACEHOLDER, 'g'), '.*') // Restore ** as .*
-            .replace(/\//g, '[/\\\\]')
-        );
-        if (regex.test(filePath)) {
-          return true;
-        }
-      } else if (filePath.includes(pattern)) {
-        return true;
-      }
-    }
-    return false;
+    return ignoreMatchers.some((matches) => matches(filePath));
   }
 
   // Add event to pending queue

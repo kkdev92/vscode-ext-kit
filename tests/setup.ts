@@ -466,6 +466,9 @@ vi.mock('vscode', () => {
       })),
       onDidChangeConfiguration: vi.fn(() => ({ dispose: vi.fn() })),
       createFileSystemWatcher: vi.fn(() => createMockFileSystemWatcher()),
+      fs: {
+        readFile: vi.fn().mockResolvedValue(new Uint8Array()),
+      },
     },
     env: {
       language: 'en',

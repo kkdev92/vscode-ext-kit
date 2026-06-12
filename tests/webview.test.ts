@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as fs from 'fs/promises';
 import * as vscode from 'vscode';
 import { createMockExtensionContext, createMockWebview, ViewColumn } from './mocks/vscode.js';
 import {
@@ -11,12 +10,9 @@ import {
   loadHtmlTemplate,
 } from '../src/webview.js';
 
-// Mock fs/promises
-vi.mock('fs/promises', () => ({
-  readFile: vi.fn().mockResolvedValue('<html>{{title}}</html>'),
-}));
-
-const mockedReadFile = vi.mocked(fs.readFile);
+// loadHtmlTemplate reads templates through vscode.workspace.fs (mocked in setup.ts)
+const mockedReadFile = vi.mocked(vscode.workspace.fs.readFile);
+const asBytes = (text: string): Uint8Array => new TextEncoder().encode(text);
 
 describe('webview', () => {
   beforeEach(() => {
@@ -396,7 +392,7 @@ describe('webview', () => {
 
   describe('loadHtmlTemplate', () => {
     it('substitutes variables with HTML escaping by default', async () => {
-      mockedReadFile.mockResolvedValueOnce('<title>{{title}}</title>');
+      mockedReadFile.mockResolvedValueOnce(asBytes('<title>{{title}}</title>'));
       const context = createMockExtensionContext();
       const webview = createMockWebview();
 
@@ -408,7 +404,7 @@ describe('webview', () => {
     });
 
     it('emits raw values for {{raw:key}} placeholders', async () => {
-      mockedReadFile.mockResolvedValueOnce('<div>{{raw:body}}</div>');
+      mockedReadFile.mockResolvedValueOnce(asBytes('<div>{{raw:body}}</div>'));
       const context = createMockExtensionContext();
       const webview = createMockWebview();
 
@@ -420,7 +416,7 @@ describe('webview', () => {
     });
 
     it('rewrites {{webviewUri:path}} to webview URIs', async () => {
-      mockedReadFile.mockResolvedValueOnce('<script src="{{webviewUri:dist/app.js}}"></script>');
+      mockedReadFile.mockResolvedValueOnce(asBytes('<script src="{{webviewUri:dist/app.js}}"></script>'));
       const context = createMockExtensionContext();
       const webview = createMockWebview();
 
@@ -431,7 +427,7 @@ describe('webview', () => {
     });
 
     it('does not transitively expand placeholders that appear inside variable values', async () => {
-      mockedReadFile.mockResolvedValueOnce('{{raw:a}}');
+      mockedReadFile.mockResolvedValueOnce(asBytes('{{raw:a}}'));
       const context = createMockExtensionContext();
       const webview = createMockWebview();
 
@@ -448,7 +444,7 @@ describe('webview', () => {
     });
 
     it('leaves placeholders untouched when the variable is not provided', async () => {
-      mockedReadFile.mockResolvedValueOnce('hello {{missing}}');
+      mockedReadFile.mockResolvedValueOnce(asBytes('hello {{missing}}'));
       const context = createMockExtensionContext();
       const webview = createMockWebview();
 

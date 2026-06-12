@@ -1,6 +1,4 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs/promises';
-import * as crypto from 'crypto';
 
 // ============================================
 // Types
@@ -354,7 +352,15 @@ export function generateCSP(webview: vscode.Webview, options: CSPOptions = {}): 
  * ```
  */
 export function generateNonce(): string {
-  return crypto.randomBytes(24).toString('base64url');
+  // Web Crypto instead of node:crypto so this module stays usable in web
+  // extension hosts (available globally in Node 20+ and browsers).
+  const bytes = new Uint8Array(24);
+  globalThis.crypto.getRandomValues(bytes);
+  let binary = '';
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 // ============================================
@@ -393,8 +399,11 @@ export async function loadHtmlTemplate(
   webview: vscode.Webview,
   variables: Record<string, string> = {}
 ): Promise<string> {
+  // vscode.workspace.fs instead of node:fs so templates load in remote and
+  // web extension hosts as well.
   const templateUri = vscode.Uri.joinPath(context.extensionUri, templatePath);
-  let html = await fs.readFile(templateUri.fsPath, 'utf-8');
+  const bytes = await vscode.workspace.fs.readFile(templateUri);
+  let html = new TextDecoder().decode(bytes);
 
   // Replace webview URI placeholders
   html = html.replace(/\{\{webviewUri:([^}]+)\}\}/g, (_, filePath: string) => {

@@ -194,13 +194,17 @@ export async function withSteps<T extends readonly ProgressStep<unknown>[]>(
  * ```
  */
 export function toAbortSignal(token: vscode.CancellationToken): AbortSignal {
-  const controller = new AbortController();
-
   if (token.isCancellationRequested) {
-    controller.abort();
-  } else {
-    token.onCancellationRequested(() => controller.abort());
+    return AbortSignal.abort();
   }
+
+  const controller = new AbortController();
+  // Dispose the event subscription once it fires, so repeated calls against
+  // a long-lived token don't accumulate listeners.
+  const subscription = token.onCancellationRequested(() => {
+    subscription.dispose();
+    controller.abort();
+  });
 
   return controller.signal;
 }

@@ -4,7 +4,7 @@
  *
  * This library provides common utilities for building VS Code extensions:
  *
- * - **Logger** - Structured logging with VS Code's LogOutputChannel
+ * - **Logger** - Structured logging via OutputChannel with dynamic log levels
  * - **safeExecute** - Unified error handling with logging and notifications
  * - **registerCommands** - Batch command registration with error handling
  * - **Config utilities** - Type-safe configuration access
