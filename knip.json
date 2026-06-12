@@ -1,6 +1,4 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
-  "project": ["src/**/*.ts"],
-  "ignore": ["tests/**"],
-  "ignoreDependencies": ["lint-staged"]
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "project": ["src/**/*.ts"]
 }
