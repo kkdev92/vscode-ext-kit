@@ -70,7 +70,10 @@ export async function safeExecute<T>(
 
     if (!silent) {
       const displayMessage = userMessage ?? `${actionName} failed: ${errorMessage}`;
-      await vscode.window.showErrorMessage(displayMessage);
+      // Fire-and-forget: the notification thenable only settles when the
+      // toast is dismissed, and awaiting it would hold the caller (e.g. a
+      // wrapped command) open for that long.
+      void vscode.window.showErrorMessage(displayMessage);
     }
 
     if (rethrow) {
@@ -127,7 +130,8 @@ export async function trySafeExecute<T>(
 
     if (!silent) {
       const displayMessage = userMessage ?? `${actionName} failed: ${errorMessage}`;
-      await vscode.window.showErrorMessage(displayMessage);
+      // Fire-and-forget — see safeExecute above.
+      void vscode.window.showErrorMessage(displayMessage);
     }
 
     const normalizedError = error instanceof Error ? error : new Error(String(error));
