@@ -102,6 +102,29 @@ describe('treeview', () => {
       expect(getChildrenOfSpy).toHaveBeenCalledTimes(1);
     });
 
+    it('evicts cached descendants when refreshing an element', async () => {
+      const provider = new TestProvider();
+      const parent: TestItem = { id: '1', label: 'Parent' };
+      const child: TestItem = { id: '1.1', label: 'Child' };
+      provider.setRoots([parent]);
+      provider.setChildren('1', [child]);
+      provider.setChildren('1.1', [{ id: '1.1.1', label: 'Grandchild' }]);
+
+      // Populate cache for both levels
+      await provider.getChildren(parent);
+      await provider.getChildren(child);
+
+      provider.refresh(parent);
+
+      // VS Code re-requests the whole subtree after the event fires; the
+      // grandchildren must not be served from the stale cache.
+      const getChildrenOfSpy = vi.spyOn(provider, 'getChildrenOf');
+      await provider.getChildren(parent);
+      await provider.getChildren(child);
+
+      expect(getChildrenOfSpy).toHaveBeenCalledTimes(2);
+    });
+
     it('refreshes entire tree', async () => {
       const provider = new TestProvider();
       const item1: TestItem = { id: '1', label: 'Item 1' };

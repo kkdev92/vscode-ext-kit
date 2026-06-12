@@ -277,5 +277,23 @@ describe('Progress', () => {
 
       expect(onCancellationRequested).not.toHaveBeenCalled();
     });
+
+    it('should abort and dispose the subscription when the token is cancelled', () => {
+      let capturedListener: (() => void) | undefined;
+      const dispose = vi.fn();
+      const token: vscode.CancellationToken = {
+        isCancellationRequested: false,
+        onCancellationRequested: vi.fn((listener: () => void) => {
+          capturedListener = listener;
+          return { dispose };
+        }) as unknown as vscode.CancellationToken['onCancellationRequested'],
+      };
+
+      const signal = toAbortSignal(token);
+      capturedListener?.();
+
+      expect(signal.aborted).toBe(true);
+      expect(dispose).toHaveBeenCalledTimes(1);
+    });
   });
 });

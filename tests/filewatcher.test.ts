@@ -171,6 +171,30 @@ describe('filewatcher', () => {
       watcher.dispose();
     });
 
+    it('matches dots in ignore patterns literally', () => {
+      const watcher = createFileWatcher({
+        patterns: '**/*',
+        ignorePatterns: ['*.log'],
+        debounceDelay: 50,
+      });
+
+      const listener = vi.fn();
+      watcher.onDidChange(listener);
+
+      // The dot must not act as a regex wildcard: "axlog" must NOT be ignored
+      mockWatcher._fireChange({ fsPath: '/test/axlog', path: '/test/axlog' });
+      mockWatcher._fireChange({ fsPath: '/test/app.log', path: '/test/app.log' });
+
+      vi.advanceTimersByTime(50);
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      const events = listener.mock.calls[0][0];
+      expect(events).toHaveLength(1);
+      expect(events[0].uri.fsPath).toBe('/test/axlog');
+
+      watcher.dispose();
+    });
+
     it('deduplicates same file events', () => {
       const watcher = createFileWatcher({
         patterns: '**/*.ts',

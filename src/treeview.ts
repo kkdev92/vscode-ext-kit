@@ -105,11 +105,31 @@ export abstract class BaseTreeDataProvider<T extends TreeItemData>
    */
   refresh(element?: T): void {
     if (element) {
-      this._cache.delete(element.id);
+      this._evictCachedSubtree(element.id);
     } else {
       this._cache.clear();
     }
     this._onDidChangeTreeData.fire(element);
+  }
+
+  /**
+   * Evicts an element's cached children and, transitively, every cached
+   * descendant. Evicting only the element itself would let VS Code re-render
+   * the subtree with stale grandchildren served from cache.
+   */
+  private _evictCachedSubtree(id: string, seen: Set<string> = new Set()): void {
+    if (seen.has(id)) {
+      return;
+    }
+    seen.add(id);
+
+    const children = this._cache.get(id);
+    this._cache.delete(id);
+    if (children) {
+      for (const child of children) {
+        this._evictCachedSubtree(child.id, seen);
+      }
+    }
   }
 
   /**
