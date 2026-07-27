@@ -36,6 +36,9 @@ Thumbs.db
 work/
 mkdocs/
 
+# Screenshots
+.clipshot/
+
 # CLAUDE.md
 CLAUDE.md
 
