@@ -33,7 +33,9 @@ describe('notification', () => {
     it('shows information message with modal option', async () => {
       await showInfo('Test message', { modal: true });
 
-      expect(mockedWindow.showInformationMessage).toHaveBeenCalledWith('Test message', { modal: true });
+      expect(mockedWindow.showInformationMessage).toHaveBeenCalledWith('Test message', {
+        modal: true,
+      });
     });
 
     it('shows information message with actions', async () => {
@@ -85,7 +87,9 @@ describe('notification', () => {
     it('shows warning message with modal option', async () => {
       await showWarn('Warning message', { modal: true });
 
-      expect(mockedWindow.showWarningMessage).toHaveBeenCalledWith('Warning message', { modal: true });
+      expect(mockedWindow.showWarningMessage).toHaveBeenCalledWith('Warning message', {
+        modal: true,
+      });
     });
 
     it('shows warning message with actions', async () => {
@@ -119,7 +123,9 @@ describe('notification', () => {
     it('shows error message without actions', async () => {
       await showError('Error occurred');
 
-      expect(mockedWindow.showErrorMessage).toHaveBeenCalledWith('Error occurred', { modal: undefined });
+      expect(mockedWindow.showErrorMessage).toHaveBeenCalledWith('Error occurred', {
+        modal: undefined,
+      });
     });
 
     it('shows error message with modal option', async () => {
@@ -305,12 +311,10 @@ describe('notification', () => {
     it('supports modal option', async () => {
       mockedWindow.showInformationMessage.mockResolvedValue({ title: 'OK' });
 
-      await showWithActions(
-        'info',
-        'Test',
-        [{ title: 'OK', value: 'ok' }],
-        { modal: true, detail: 'Details' }
-      );
+      await showWithActions('info', 'Test', [{ title: 'OK', value: 'ok' }], {
+        modal: true,
+        detail: 'Details',
+      });
 
       expect(mockedWindow.showInformationMessage).toHaveBeenCalledWith(
         'Test',

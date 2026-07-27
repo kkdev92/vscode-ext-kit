@@ -176,7 +176,7 @@ export class TreeItem {
 export class ThemeIcon {
   constructor(
     public readonly id: string,
-    public readonly color?: unknown
+    public readonly color?: import('vscode').ThemeColor
   ) {}
 }
 
@@ -278,10 +278,18 @@ export function createMockQuickPick<T extends { label: string }>() {
     title: '',
     placeholder: '',
     canSelectMany: false,
-    get items() { return items; },
-    set items(value: T[]) { items = value; },
-    get selectedItems() { return selectedItems; },
-    set selectedItems(value: T[]) { selectedItems = value; },
+    get items() {
+      return items;
+    },
+    set items(value: T[]) {
+      items = value;
+    },
+    get selectedItems() {
+      return selectedItems;
+    },
+    set selectedItems(value: T[]) {
+      selectedItems = value;
+    },
     buttons: [] as unknown[],
     onDidAccept: vi.fn((listener: () => void) => {
       onDidAcceptListeners.push(listener);
@@ -327,8 +335,12 @@ export function createMockInputBox() {
     prompt: '',
     placeholder: '',
     password: false,
-    get value() { return value; },
-    set value(v: string) { value = v; },
+    get value() {
+      return value;
+    },
+    set value(v: string) {
+      value = v;
+    },
     validationMessage: undefined as string | undefined,
     buttons: [] as unknown[],
     onDidAccept: vi.fn((listener: () => void) => {
@@ -596,12 +608,48 @@ export class Position {
     return this.line > other.line || (this.line === other.line && this.character > other.character);
   }
 
-  translate(lineDelta?: number, characterDelta?: number): Position {
-    return new Position(this.line + (lineDelta || 0), this.character + (characterDelta || 0));
+  isBeforeOrEqual(other: Position): boolean {
+    return this.isBefore(other) || this.isEqual(other);
   }
 
-  with(line?: number, character?: number): Position {
-    return new Position(line ?? this.line, character ?? this.character);
+  isAfterOrEqual(other: Position): boolean {
+    return this.isAfter(other) || this.isEqual(other);
+  }
+
+  compareTo(other: Position): number {
+    if (this.isBefore(other)) return -1;
+    if (this.isAfter(other)) return 1;
+    return 0;
+  }
+
+  translate(lineDelta?: number, characterDelta?: number): Position;
+  translate(change: { lineDelta?: number; characterDelta?: number }): Position;
+  translate(
+    lineDeltaOrChange?: number | { lineDelta?: number; characterDelta?: number },
+    characterDelta?: number
+  ): Position {
+    if (typeof lineDeltaOrChange === 'object') {
+      return new Position(
+        this.line + (lineDeltaOrChange.lineDelta ?? 0),
+        this.character + (lineDeltaOrChange.characterDelta ?? 0)
+      );
+    }
+    return new Position(
+      this.line + (lineDeltaOrChange ?? 0),
+      this.character + (characterDelta ?? 0)
+    );
+  }
+
+  with(line?: number, character?: number): Position;
+  with(change: { line?: number; character?: number }): Position;
+  with(
+    lineOrChange?: number | { line?: number; character?: number },
+    character?: number
+  ): Position {
+    if (typeof lineOrChange === 'object') {
+      return new Position(lineOrChange.line ?? this.line, lineOrChange.character ?? this.character);
+    }
+    return new Position(lineOrChange ?? this.line, character ?? this.character);
   }
 }
 
@@ -646,8 +694,26 @@ export class Range {
     return this.start.isEqual(other.start) && this.end.isEqual(other.end);
   }
 
-  with(start?: Position, end?: Position): Range {
-    return new Range(start ?? this.start, end ?? this.end);
+  intersection(range: Range): Range | undefined {
+    const start = this.start.isAfter(range.start) ? this.start : range.start;
+    const end = this.end.isBefore(range.end) ? this.end : range.end;
+    if (start.isAfter(end)) return undefined;
+    return new Range(start, end);
+  }
+
+  union(other: Range): Range {
+    const start = this.start.isBefore(other.start) ? this.start : other.start;
+    const end = this.end.isAfter(other.end) ? this.end : other.end;
+    return new Range(start, end);
+  }
+
+  with(start?: Position, end?: Position): Range;
+  with(change: { start?: Position; end?: Position }): Range;
+  with(startOrChange?: Position | { start?: Position; end?: Position }, end?: Position): Range {
+    if (startOrChange && !(startOrChange instanceof Position)) {
+      return new Range(startOrChange.start ?? this.start, startOrChange.end ?? this.end);
+    }
+    return new Range(startOrChange ?? this.start, end ?? this.end);
   }
 }
 
@@ -657,7 +723,12 @@ export class Selection extends Range {
   readonly active: Position;
 
   constructor(anchor: Position, active: Position);
-  constructor(anchorLine: number, anchorCharacter: number, activeLine: number, activeCharacter: number);
+  constructor(
+    anchorLine: number,
+    anchorCharacter: number,
+    activeLine: number,
+    activeCharacter: number
+  );
   constructor(
     anchorOrAnchorLine: Position | number,
     activeOrAnchorCharacter: Position | number,
@@ -732,7 +803,8 @@ export function createMockTextDocument(content: string = '', languageId: string 
         text,
         range: new Range(lineNumber, 0, lineNumber, text.length),
         rangeIncludingLineBreak: new Range(lineNumber, 0, lineNumber + 1, 0),
-        firstNonWhitespaceCharacterIndex: text.search(/\S/) === -1 ? text.length : text.search(/\S/),
+        firstNonWhitespaceCharacterIndex:
+          text.search(/\S/) === -1 ? text.length : text.search(/\S/),
         isEmptyOrWhitespace: text.trim().length === 0,
       };
     }),
@@ -759,8 +831,16 @@ export function createMockTextDocument(content: string = '', languageId: string 
       const wordPattern = /\w+/g;
       let match;
       while ((match = wordPattern.exec(line)) !== null) {
-        if (match.index <= position.character && match.index + match[0].length >= position.character) {
-          return new Range(position.line, match.index, position.line, match.index + match[0].length);
+        if (
+          match.index <= position.character &&
+          match.index + match[0].length >= position.character
+        ) {
+          return new Range(
+            position.line,
+            match.index,
+            position.line,
+            match.index + match[0].length
+          );
         }
       }
       return undefined;
@@ -800,20 +880,27 @@ export function createMockTextEditor(content: string = '', languageId: string = 
       insertSpaces: true,
     },
     viewColumn: 1,
-    edit: vi.fn(async (callback: (editBuilder: {
-      replace: (range: Range, text: string) => void;
-      insert: (position: Position, text: string) => void;
-      delete: (range: Range) => void;
-    }) => void) => {
-      const operations: { type: string; range?: Range; position?: Position; text?: string }[] = [];
-      const editBuilder = {
-        replace: (range: Range, text: string) => operations.push({ type: 'replace', range, text }),
-        insert: (position: Position, text: string) => operations.push({ type: 'insert', position, text }),
-        delete: (range: Range) => operations.push({ type: 'delete', range }),
-      };
-      callback(editBuilder);
-      return true;
-    }),
+    edit: vi.fn(
+      async (
+        callback: (editBuilder: {
+          replace: (range: Range, text: string) => void;
+          insert: (position: Position, text: string) => void;
+          delete: (range: Range) => void;
+        }) => void
+      ) => {
+        const operations: { type: string; range?: Range; position?: Position; text?: string }[] =
+          [];
+        const editBuilder = {
+          replace: (range: Range, text: string) =>
+            operations.push({ type: 'replace', range, text }),
+          insert: (position: Position, text: string) =>
+            operations.push({ type: 'insert', position, text }),
+          delete: (range: Range) => operations.push({ type: 'delete', range }),
+        };
+        callback(editBuilder);
+        return true;
+      }
+    ),
     insertSnippet: vi.fn().mockResolvedValue(true),
     setDecorations: vi.fn(),
     revealRange: vi.fn(),

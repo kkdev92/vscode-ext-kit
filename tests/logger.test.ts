@@ -124,7 +124,9 @@ describe('Logger', () => {
       logger.info('Test message');
 
       expect(mockChannel.appendLine).toHaveBeenCalledWith(
-        expect.stringMatching(/\[INFO\] \[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z\] Test message/)
+        expect.stringMatching(
+          /\[INFO\] \[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z\] Test message/
+        )
       );
     });
 
@@ -147,7 +149,9 @@ describe('Logger', () => {
       logger.error('Operation failed', error);
 
       expect(mockChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('[ERROR]'));
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Operation failed'));
+      expect(mockChannel.appendLine).toHaveBeenCalledWith(
+        expect.stringContaining('Operation failed')
+      );
       expect(mockChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Test error'));
     });
 
@@ -160,7 +164,9 @@ describe('Logger', () => {
       logger.info('Test message', meta);
 
       expect(mockChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('[INFO]'));
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('"key": "value"'));
+      expect(mockChannel.appendLine).toHaveBeenCalledWith(
+        expect.stringContaining('"key": "value"')
+      );
     });
 
     it('should handle multiple arguments', () => {
@@ -248,7 +254,9 @@ describe('Logger', () => {
         inspect: vi.fn(),
         update: vi.fn(),
       };
-      vi.mocked(vscode.workspace.getConfiguration).mockReturnValue(mockConfig as unknown as vscode.WorkspaceConfiguration);
+      vi.mocked(vscode.workspace.getConfiguration).mockReturnValue(
+        mockConfig as unknown as vscode.WorkspaceConfiguration
+      );
 
       const logger = createLogger('TestExtension', {
         level: 'info', // fallback
@@ -273,7 +281,9 @@ describe('Logger', () => {
         inspect: vi.fn(),
         update: vi.fn(),
       };
-      vi.mocked(vscode.workspace.getConfiguration).mockReturnValue(mockConfig as unknown as vscode.WorkspaceConfiguration);
+      vi.mocked(vscode.workspace.getConfiguration).mockReturnValue(
+        mockConfig as unknown as vscode.WorkspaceConfiguration
+      );
 
       const logger = createLogger('TestExtension', {
         level: 'info', // fallback
@@ -319,7 +329,9 @@ describe('Logger', () => {
         inspect: vi.fn(),
         update: vi.fn(),
       };
-      vi.mocked(vscode.workspace.getConfiguration).mockReturnValue(mockConfig as unknown as vscode.WorkspaceConfiguration);
+      vi.mocked(vscode.workspace.getConfiguration).mockReturnValue(
+        mockConfig as unknown as vscode.WorkspaceConfiguration
+      );
 
       // Capture the config change callback
       let configChangeCallback: ((e: vscode.ConfigurationChangeEvent) => void) | undefined;

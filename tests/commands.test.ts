@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
-import { registerCommands, registerTextEditorCommands, executeCommand } from '../src/core/commands.js';
+import {
+  registerCommands,
+  registerTextEditorCommands,
+  executeCommand,
+} from '../src/core/commands.js';
 import type { Logger } from '../src/core/types.js';
 import { createMockLogger, createMockExtensionContext } from './factories.js';
 

@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
-import { withProgress, withSteps, toAbortSignal, type ProgressReporter, type ProgressStep } from '../src/ui/progress.js';
+import {
+  withProgress,
+  withSteps,
+  toAbortSignal,
+  type ProgressReporter,
+  type ProgressStep,
+} from '../src/ui/progress.js';
 
 describe('Progress', () => {
   beforeEach(() => {
@@ -128,9 +134,27 @@ describe('Progress', () => {
       const executionOrder: number[] = [];
 
       const steps: ProgressStep<number>[] = [
-        { label: 'Step 1', task: async () => { executionOrder.push(1); return 1; } },
-        { label: 'Step 2', task: async () => { executionOrder.push(2); return 2; } },
-        { label: 'Step 3', task: async () => { executionOrder.push(3); return 3; } },
+        {
+          label: 'Step 1',
+          task: async () => {
+            executionOrder.push(1);
+            return 1;
+          },
+        },
+        {
+          label: 'Step 2',
+          task: async () => {
+            executionOrder.push(2);
+            return 2;
+          },
+        },
+        {
+          label: 'Step 3',
+          task: async () => {
+            executionOrder.push(3);
+            return 3;
+          },
+        },
       ];
 
       const result = await withSteps('Test', steps);
@@ -181,7 +205,12 @@ describe('Progress', () => {
       let receivedToken: vscode.CancellationToken | undefined;
 
       const steps: ProgressStep<void>[] = [
-        { label: 'Check Token', task: (token) => { receivedToken = token; } },
+        {
+          label: 'Check Token',
+          task: (token) => {
+            receivedToken = token;
+          },
+        },
       ];
 
       await withSteps('Test', steps);
@@ -199,7 +228,10 @@ describe('Progress', () => {
     });
 
     it('should call vscode.window.withProgress with correct options', async () => {
-      await withSteps('Processing', [], { location: vscode.ProgressLocation.Window, cancellable: true });
+      await withSteps('Processing', [], {
+        location: vscode.ProgressLocation.Window,
+        cancellable: true,
+      });
 
       expect(vscode.window.withProgress).toHaveBeenCalledWith(
         {
@@ -213,7 +245,12 @@ describe('Progress', () => {
 
     it('should propagate errors from steps', async () => {
       const steps: ProgressStep<void>[] = [
-        { label: 'Failing Step', task: async () => { throw new Error('Step failed'); } },
+        {
+          label: 'Failing Step',
+          task: async () => {
+            throw new Error('Step failed');
+          },
+        },
       ];
 
       await expect(withSteps('Test', steps)).rejects.toThrow('Step failed');

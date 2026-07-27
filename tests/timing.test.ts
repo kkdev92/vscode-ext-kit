@@ -215,6 +215,7 @@ describe('throttle', () => {
 describe('withTiming', () => {
   function createMockLogger(): Logger {
     return {
+      trace: vi.fn(),
       debug: vi.fn(),
       info: vi.fn(),
       warn: vi.fn(),
@@ -248,7 +249,7 @@ describe('withTiming', () => {
 
     expect(logger.debug).toHaveBeenCalled();
     expect(logger.info).not.toHaveBeenCalled();
-    const message = (logger.debug as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const message = (logger.debug as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(message).toContain('testOp');
     expect(message).toContain('completed in');
     expect(message).toContain('ms');
@@ -271,7 +272,7 @@ describe('withTiming', () => {
       formatMessage: (name, duration) => `[${name}] took ${Math.round(duration)}ms`,
     });
 
-    const message = (logger.debug as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const message = (logger.debug as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(message).toMatch(/\[myOperation\] took \d+ms/);
   });
 
@@ -280,13 +281,17 @@ describe('withTiming', () => {
     const error = new Error('Test error');
 
     await expect(
-      withTiming('failingOp', () => {
-        throw error;
-      }, { logger })
+      withTiming(
+        'failingOp',
+        () => {
+          throw error;
+        },
+        { logger }
+      )
     ).rejects.toThrow('Test error');
 
     expect(logger.debug).toHaveBeenCalled();
-    const message = (logger.debug as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const message = (logger.debug as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(message).toContain('failingOp');
     expect(message).toContain('failed after');
   });
@@ -295,9 +300,13 @@ describe('withTiming', () => {
     const logger = createMockLogger();
 
     await expect(
-      withTiming('asyncFail', async () => {
-        throw new Error('Async error');
-      }, { logger })
+      withTiming(
+        'asyncFail',
+        async () => {
+          throw new Error('Async error');
+        },
+        { logger }
+      )
     ).rejects.toThrow('Async error');
 
     expect(logger.debug).toHaveBeenCalled();
@@ -307,14 +316,18 @@ describe('withTiming', () => {
     const logger = createMockLogger();
 
     await expect(
-      withTiming('failingOp', () => {
-        throw new Error('boom');
-      }, { logger, logLevel: 'info' })
+      withTiming(
+        'failingOp',
+        () => {
+          throw new Error('boom');
+        },
+        { logger, logLevel: 'info' }
+      )
     ).rejects.toThrow('boom');
 
     expect(logger.info).toHaveBeenCalled();
     expect(logger.debug).not.toHaveBeenCalled();
-    const message = (logger.info as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const message = (logger.info as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(message).toContain('failingOp');
     expect(message).toContain('failed after');
   });
@@ -333,6 +346,7 @@ describe('withTiming', () => {
 describe('measureTime', () => {
   function createMockLogger(): Logger {
     return {
+      trace: vi.fn(),
       debug: vi.fn(),
       info: vi.fn(),
       warn: vi.fn(),

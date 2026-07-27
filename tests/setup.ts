@@ -121,10 +121,18 @@ vi.mock('vscode', () => {
       title: '',
       placeholder: '',
       canSelectMany: false,
-      get items() { return items; },
-      set items(value: T[]) { items = value; },
-      get selectedItems() { return selectedItems; },
-      set selectedItems(value: T[]) { selectedItems = value; },
+      get items() {
+        return items;
+      },
+      set items(value: T[]) {
+        items = value;
+      },
+      get selectedItems() {
+        return selectedItems;
+      },
+      set selectedItems(value: T[]) {
+        selectedItems = value;
+      },
       buttons: [] as unknown[],
       onDidAccept: vi.fn((listener: () => void) => {
         onDidAcceptListeners.push(listener);
@@ -166,8 +174,12 @@ vi.mock('vscode', () => {
       prompt: '',
       placeholder: '',
       password: false,
-      get value() { return value; },
-      set value(v: string) { value = v; },
+      get value() {
+        return value;
+      },
+      set value(v: string) {
+        value = v;
+      },
       validationMessage: undefined as string | undefined,
       buttons: [] as unknown[],
       onDidAccept: vi.fn((listener: () => void) => {
@@ -263,10 +275,14 @@ vi.mock('vscode', () => {
       return this.line === other.line && this.character === other.character;
     }
     isBefore(other: Position): boolean {
-      return this.line < other.line || (this.line === other.line && this.character < other.character);
+      return (
+        this.line < other.line || (this.line === other.line && this.character < other.character)
+      );
     }
     isAfter(other: Position): boolean {
-      return this.line > other.line || (this.line === other.line && this.character > other.character);
+      return (
+        this.line > other.line || (this.line === other.line && this.character > other.character)
+      );
     }
   }
 

@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createMockExtensionContext } from './mocks/vscode.js';
-import { createGlobalStorage, createWorkspaceStorage, createSecretStorage } from '../src/storage/index.js';
+import {
+  createGlobalStorage,
+  createWorkspaceStorage,
+  createSecretStorage,
+} from '../src/storage/index.js';
 
 describe('storage', () => {
   let context: ReturnType<typeof createMockExtensionContext>;
@@ -170,7 +174,7 @@ describe('storage', () => {
         await context.globalState.update('config', { name: 'test' });
         await context.globalState.update('config__version', 1);
 
-        const migrate = vi.fn((old) => ({ ...(old as object), enabled: true }));
+        const migrate = vi.fn((old) => ({ ...(old as { name: string }), enabled: true }));
 
         const storage = createGlobalStorage<{ name: string; enabled: boolean }>(
           context as never,
@@ -199,9 +203,7 @@ describe('storage', () => {
 
         // Simulate a flaky memento that rejects on update().
         const failure = new Error('disk full');
-        const updateSpy = vi
-          .spyOn(context.globalState, 'update')
-          .mockRejectedValue(failure);
+        const updateSpy = vi.spyOn(context.globalState, 'update').mockRejectedValue(failure);
 
         // Track unhandled rejections for the duration of the test.
         const unhandled: unknown[] = [];
@@ -239,7 +241,7 @@ describe('storage', () => {
 
   describe('createWorkspaceStorage', () => {
     it('uses workspace state', async () => {
-      const storage = createWorkspaceStorage(context as never, 'wsData', {
+      const storage = createWorkspaceStorage<string[]>(context as never, 'wsData', {
         defaultValue: [],
       });
 

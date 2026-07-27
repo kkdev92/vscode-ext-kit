@@ -1,6 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
-import { t, getLanguage, isLanguage, plural, formatNumber, formatDate, formatRelativeTime } from '../src/l10n/index.js';
+import {
+  t,
+  getLanguage,
+  isLanguage,
+  plural,
+  formatNumber,
+  formatDate,
+  formatRelativeTime,
+} from '../src/l10n/index.js';
 
 describe('l10n', () => {
   beforeEach(() => {
@@ -118,7 +126,11 @@ describe('l10n', () => {
     });
 
     it('should handle zero form with count interpolation', () => {
-      const result = plural(0, { zero: '{count} items (empty)', one: '{count} item', other: '{count} items' });
+      const result = plural(0, {
+        zero: '{count} items (empty)',
+        one: '{count} item',
+        other: '{count} items',
+      });
       expect(result).toBe('0 items (empty)');
     });
 

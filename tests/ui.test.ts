@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
-import { pickOne, pickMany, inputText, wizard, type WizardQuickPickItem, type WizardOptions } from '../src/ui/index.js';
+import {
+  pickOne,
+  pickMany,
+  inputText,
+  wizard,
+  type WizardQuickPickItem,
+  type WizardOptions,
+} from '../src/ui/index.js';
 
 describe('UI', () => {
   beforeEach(() => {
@@ -82,7 +89,7 @@ describe('UI', () => {
 
     it('should return array of selected items', async () => {
       const items = [{ label: 'Item 1' }, { label: 'Item 2' }, { label: 'Item 3' }];
-      vi.mocked(vscode.window.showQuickPick).mockResolvedValue([items[0], items[2]]);
+      vi.mocked(vscode.window.showQuickPick).mockResolvedValue([items[0], items[2]] as never);
 
       const result = await pickMany(items);
 
@@ -98,7 +105,7 @@ describe('UI', () => {
     });
 
     it('should return empty array when nothing selected', async () => {
-      vi.mocked(vscode.window.showQuickPick).mockResolvedValue([]);
+      vi.mocked(vscode.window.showQuickPick).mockResolvedValue([] as never);
 
       const result = await pickMany([{ label: 'Item 1' }]);
 
@@ -199,9 +206,13 @@ describe('UI', () => {
         show: vi.fn(),
         dispose: vi.fn(),
       };
-      vi.mocked(vscode.window.createQuickPick).mockReturnValue(mockQuickPick as unknown as ReturnType<typeof vscode.window.createQuickPick>);
+      vi.mocked(vscode.window.createQuickPick).mockReturnValue(
+        mockQuickPick as unknown as ReturnType<typeof vscode.window.createQuickPick>
+      );
 
-      interface TestState { choice: string }
+      interface TestState {
+        choice: string;
+      }
       const options: WizardOptions<TestState> = {
         title: 'Test Wizard',
         steps: [
@@ -242,9 +253,13 @@ describe('UI', () => {
         show: vi.fn(),
         dispose: vi.fn(),
       };
-      vi.mocked(vscode.window.createInputBox).mockReturnValue(mockInputBox as unknown as ReturnType<typeof vscode.window.createInputBox>);
+      vi.mocked(vscode.window.createInputBox).mockReturnValue(
+        mockInputBox as unknown as ReturnType<typeof vscode.window.createInputBox>
+      );
 
-      interface TestState { name: string }
+      interface TestState {
+        name: string;
+      }
       const options: WizardOptions<TestState> = {
         title: 'Test Wizard',
         steps: [
@@ -283,9 +298,13 @@ describe('UI', () => {
         show: vi.fn(),
         dispose: vi.fn(),
       };
-      vi.mocked(vscode.window.createQuickPick).mockReturnValue(mockQuickPick as unknown as ReturnType<typeof vscode.window.createQuickPick>);
+      vi.mocked(vscode.window.createQuickPick).mockReturnValue(
+        mockQuickPick as unknown as ReturnType<typeof vscode.window.createQuickPick>
+      );
 
-      interface TestState { choice: string }
+      interface TestState {
+        choice: string;
+      }
       const options: WizardOptions<TestState> = {
         title: 'Test Wizard',
         steps: [
@@ -325,9 +344,13 @@ describe('UI', () => {
         show: vi.fn(),
         dispose: vi.fn(),
       };
-      vi.mocked(vscode.window.createQuickPick).mockReturnValue(mockQuickPick as unknown as ReturnType<typeof vscode.window.createQuickPick>);
+      vi.mocked(vscode.window.createQuickPick).mockReturnValue(
+        mockQuickPick as unknown as ReturnType<typeof vscode.window.createQuickPick>
+      );
 
-      interface TestState { choice: string }
+      interface TestState {
+        choice: string;
+      }
       const options: WizardOptions<TestState> = {
         title: 'My Wizard',
         showStepNumbers: true,
@@ -366,9 +389,14 @@ describe('UI', () => {
         show: vi.fn(),
         dispose: vi.fn(),
       };
-      vi.mocked(vscode.window.createInputBox).mockReturnValue(mockInputBox as unknown as ReturnType<typeof vscode.window.createInputBox>);
+      vi.mocked(vscode.window.createInputBox).mockReturnValue(
+        mockInputBox as unknown as ReturnType<typeof vscode.window.createInputBox>
+      );
 
-      interface TestState { name: string; email: string }
+      interface TestState {
+        name: string;
+        email: string;
+      }
       const options: WizardOptions<TestState> = {
         title: 'Test Wizard',
         initialState: { email: 'initial@test.com' },
@@ -409,9 +437,14 @@ describe('UI', () => {
         show: vi.fn(),
         dispose: vi.fn(),
       };
-      vi.mocked(vscode.window.createInputBox).mockReturnValue(mockInputBox as unknown as ReturnType<typeof vscode.window.createInputBox>);
+      vi.mocked(vscode.window.createInputBox).mockReturnValue(
+        mockInputBox as unknown as ReturnType<typeof vscode.window.createInputBox>
+      );
 
-      interface TestState { first: string; second: string }
+      interface TestState {
+        first: string;
+        second: string;
+      }
       const options: WizardOptions<TestState> = {
         title: 'Test Wizard',
         steps: [
@@ -470,9 +503,13 @@ describe('UI', () => {
           }
         }),
       };
-      vi.mocked(vscode.window.createQuickPick).mockReturnValue(mockQuickPick as unknown as ReturnType<typeof vscode.window.createQuickPick>);
+      vi.mocked(vscode.window.createQuickPick).mockReturnValue(
+        mockQuickPick as unknown as ReturnType<typeof vscode.window.createQuickPick>
+      );
 
-      interface TestState { choice: string }
+      interface TestState {
+        choice: string;
+      }
       const options: WizardOptions<TestState> = {
         title: 'Test Wizard',
         steps: [
@@ -524,9 +561,13 @@ describe('UI', () => {
           }
         }),
       };
-      vi.mocked(vscode.window.createInputBox).mockReturnValue(mockInputBox as unknown as ReturnType<typeof vscode.window.createInputBox>);
+      vi.mocked(vscode.window.createInputBox).mockReturnValue(
+        mockInputBox as unknown as ReturnType<typeof vscode.window.createInputBox>
+      );
 
-      interface TestState { name: string }
+      interface TestState {
+        name: string;
+      }
       const options: WizardOptions<TestState> = {
         title: 'Test Wizard',
         steps: [

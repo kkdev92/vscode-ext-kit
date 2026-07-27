@@ -416,7 +416,9 @@ describe('webview', () => {
     });
 
     it('rewrites {{webviewUri:path}} to webview URIs', async () => {
-      mockedReadFile.mockResolvedValueOnce(asBytes('<script src="{{webviewUri:dist/app.js}}"></script>'));
+      mockedReadFile.mockResolvedValueOnce(
+        asBytes('<script src="{{webviewUri:dist/app.js}}"></script>')
+      );
       const context = createMockExtensionContext();
       const webview = createMockWebview();
 

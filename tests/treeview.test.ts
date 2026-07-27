@@ -1,9 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  createMockExtensionContext,
-  TreeItemCollapsibleState,
-  ThemeIcon,
-} from './mocks/vscode.js';
+import { createMockExtensionContext, TreeItemCollapsibleState, ThemeIcon } from './mocks/vscode.js';
 import {
   BaseTreeDataProvider,
   SimpleTreeDataProvider,
@@ -54,8 +50,8 @@ describe('treeview', () => {
       const roots = await provider.getChildren();
 
       expect(roots).toHaveLength(2);
-      expect(roots[0].label).toBe('Item 1');
-      expect(roots[1].label).toBe('Item 2');
+      expect(roots[0]!.label).toBe('Item 1');
+      expect(roots[1]!.label).toBe('Item 2');
     });
 
     it('provides child elements', async () => {
@@ -70,7 +66,7 @@ describe('treeview', () => {
       const children = await provider.getChildren(parent);
 
       expect(children).toHaveLength(2);
-      expect(children[0].label).toBe('Child 1');
+      expect(children[0]!.label).toBe('Child 1');
     });
 
     it('caches children', async () => {
@@ -253,7 +249,7 @@ describe('treeview', () => {
       const children = await provider.getChildren(roots[0]);
 
       expect(children).toHaveLength(2);
-      expect(children[0].label).toBe('Child 1');
+      expect(children[0]!.label).toBe('Child 1');
     });
 
     it('sets collapsible state for items with children', async () => {
@@ -268,8 +264,8 @@ describe('treeview', () => {
 
       const roots = await provider.getChildren();
 
-      expect(roots[0].collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
-      expect(roots[1].collapsibleState).toBe(TreeItemCollapsibleState.None);
+      expect(roots[0]!.collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
+      expect(roots[1]!.collapsibleState).toBe(TreeItemCollapsibleState.None);
     });
 
     it('sets items', async () => {
@@ -279,7 +275,7 @@ describe('treeview', () => {
       const roots = await provider.getChildren();
 
       expect(roots).toHaveLength(1);
-      expect(roots[0].label).toBe('New Item');
+      expect(roots[0]!.label).toBe('New Item');
     });
 
     it('adds item', async () => {
@@ -301,7 +297,7 @@ describe('treeview', () => {
       const roots = await provider.getChildren();
 
       expect(roots).toHaveLength(1);
-      expect(roots[0].id).toBe('2');
+      expect(roots[0]!.id).toBe('2');
     });
 
     it('finds item by id', () => {

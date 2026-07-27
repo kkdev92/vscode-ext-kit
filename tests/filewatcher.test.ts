@@ -94,7 +94,7 @@ describe('filewatcher', () => {
       vi.advanceTimersByTime(100);
 
       expect(listener).toHaveBeenCalledTimes(1);
-      expect(listener.mock.calls[0][0]).toHaveLength(2);
+      expect(listener.mock.calls[0]![0]).toHaveLength(2);
 
       watcher.dispose();
     });
@@ -115,7 +115,7 @@ describe('filewatcher', () => {
       vi.advanceTimersByTime(50);
 
       expect(listener).toHaveBeenCalledTimes(1);
-      const events = listener.mock.calls[0][0];
+      const events = listener.mock.calls[0]![0];
       expect(events).toHaveLength(3);
       expect(events[0].type).toBe('create');
       expect(events[1].type).toBe('change');
@@ -141,7 +141,7 @@ describe('filewatcher', () => {
       vi.advanceTimersByTime(50);
 
       expect(listener).toHaveBeenCalledTimes(1);
-      const events = listener.mock.calls[0][0];
+      const events = listener.mock.calls[0]![0];
       expect(events).toHaveLength(1);
       expect(events[0].type).toBe('change');
 
@@ -158,13 +158,16 @@ describe('filewatcher', () => {
       const listener = vi.fn();
       watcher.onDidChange(listener);
 
-      mockWatcher._fireChange({ fsPath: '/test/node_modules/pkg/index.ts', path: '/test/node_modules/pkg/index.ts' });
+      mockWatcher._fireChange({
+        fsPath: '/test/node_modules/pkg/index.ts',
+        path: '/test/node_modules/pkg/index.ts',
+      });
       mockWatcher._fireChange({ fsPath: '/test/src/app.ts', path: '/test/src/app.ts' });
 
       vi.advanceTimersByTime(50);
 
       expect(listener).toHaveBeenCalledTimes(1);
-      const events = listener.mock.calls[0][0];
+      const events = listener.mock.calls[0]![0];
       expect(events).toHaveLength(1);
       expect(events[0].uri.fsPath).toBe('/test/src/app.ts');
 
@@ -188,7 +191,7 @@ describe('filewatcher', () => {
       vi.advanceTimersByTime(50);
 
       expect(listener).toHaveBeenCalledTimes(1);
-      const events = listener.mock.calls[0][0];
+      const events = listener.mock.calls[0]![0];
       expect(events).toHaveLength(1);
       expect(events[0].uri.fsPath).toBe('/test/axlog');
 
@@ -212,7 +215,7 @@ describe('filewatcher', () => {
       vi.advanceTimersByTime(100);
 
       expect(listener).toHaveBeenCalledTimes(1);
-      expect(listener.mock.calls[0][0]).toHaveLength(1);
+      expect(listener.mock.calls[0]![0]).toHaveLength(1);
 
       watcher.dispose();
     });

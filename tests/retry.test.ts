@@ -42,11 +42,11 @@ describe('retry', () => {
       const resultPromise = retry(fn, { maxAttempts: 3 });
 
       // Attach error handler immediately to prevent unhandled rejection
-      const catchPromise = resultPromise.catch((e) => e);
+      const catchPromise = resultPromise.catch((e): Error => e as Error);
 
       await vi.runAllTimersAsync();
 
-      const caughtError = await catchPromise;
+      const caughtError = (await catchPromise) as Error;
       expect(caughtError).toBeInstanceOf(Error);
       expect(caughtError.message).toBe('persistent failure');
       expect(fn).toHaveBeenCalledTimes(3);
@@ -56,11 +56,11 @@ describe('retry', () => {
       const fn = vi.fn().mockRejectedValue(new Error('fail'));
 
       const resultPromise = retry(fn, { maxAttempts: 5 });
-      const catchPromise = resultPromise.catch((e) => e);
+      const catchPromise = resultPromise.catch((e): Error => e as Error);
 
       await vi.runAllTimersAsync();
 
-      const caughtError = await catchPromise;
+      const caughtError = (await catchPromise) as Error;
       expect(caughtError).toBeInstanceOf(Error);
       expect(fn).toHaveBeenCalledTimes(5);
     });
@@ -128,11 +128,11 @@ describe('retry', () => {
       const retryIf = vi.fn().mockReturnValue(false);
 
       const resultPromise = retry(fn, { retryIf });
-      const catchPromise = resultPromise.catch((e) => e);
+      const catchPromise = resultPromise.catch((e): Error => e as Error);
 
       await vi.runAllTimersAsync();
 
-      const caughtError = await catchPromise;
+      const caughtError = (await catchPromise) as Error;
       expect(caughtError.message).toBe('permanent error');
       expect(fn).toHaveBeenCalledTimes(1);
       expect(retryIf).toHaveBeenCalledWith(expect.any(Error), 1);
@@ -144,7 +144,7 @@ describe('retry', () => {
       const retryIf = vi.fn().mockReturnValue(true);
 
       const resultPromise = retry(fn, { maxAttempts: 3, retryIf });
-      const catchPromise = resultPromise.catch((e) => e);
+      const catchPromise = resultPromise.catch((e): Error => e as Error);
 
       await vi.runAllTimersAsync();
 
@@ -165,11 +165,11 @@ describe('retry', () => {
       const resultPromise = retry(fn, {
         retryIf: (error) => error instanceof RetryableError,
       });
-      const catchPromise = resultPromise.catch((e) => e);
+      const catchPromise = resultPromise.catch((e): Error => e as Error);
 
       await vi.runAllTimersAsync();
 
-      const caughtError = await catchPromise;
+      const caughtError = (await catchPromise) as Error;
       expect(caughtError.message).toBe('stop here');
       expect(fn).toHaveBeenCalledTimes(2);
     });
@@ -187,7 +187,7 @@ describe('retry', () => {
         backoff: 'exponential',
         onRetry,
       });
-      const catchPromise = resultPromise.catch((e) => e);
+      const catchPromise = resultPromise.catch((e): Error => e as Error);
 
       await vi.runAllTimersAsync();
 
@@ -238,7 +238,7 @@ describe('retry', () => {
         maxDelay: 1500,
         onRetry,
       });
-      const catchPromise = resultPromise.catch((e) => e);
+      const catchPromise = resultPromise.catch((e): Error => e as Error);
 
       await vi.runAllTimersAsync();
       await catchPromise;
@@ -260,7 +260,7 @@ describe('retry', () => {
         maxDelay: 10_000,
         onRetry,
       });
-      const catchPromise = resultPromise.catch((e) => e);
+      const catchPromise = resultPromise.catch((e): Error => e as Error);
 
       await vi.runAllTimersAsync();
       await catchPromise;
@@ -283,7 +283,7 @@ describe('retry', () => {
         jitter: 'full',
         onRetry,
       });
-      const catchPromise = resultPromise.catch((e) => e);
+      const catchPromise = resultPromise.catch((e): Error => e as Error);
 
       await vi.runAllTimersAsync();
       await catchPromise;
@@ -305,7 +305,7 @@ describe('retry', () => {
         jitter: 'equal',
         onRetry,
       });
-      const catchPromise = resultPromise.catch((e) => e);
+      const catchPromise = resultPromise.catch((e): Error => e as Error);
 
       await vi.runAllTimersAsync();
       await catchPromise;
@@ -324,7 +324,7 @@ describe('retry', () => {
         backoff: 'linear',
         onRetry,
       });
-      const catchPromise = resultPromise.catch((e) => e);
+      const catchPromise = resultPromise.catch((e): Error => e as Error);
 
       await vi.runAllTimersAsync();
       await catchPromise;

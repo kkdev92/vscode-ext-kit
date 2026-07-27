@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  createMockTextEditor,
-  Selection,
-  Position,
-  Range,
-} from './mocks/vscode.js';
+import { createMockTextEditor, Selection, Position, Range } from './mocks/vscode.js';
 import {
   replaceText,
   getSelectedText,

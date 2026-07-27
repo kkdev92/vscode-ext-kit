@@ -82,7 +82,7 @@
     "typescript"
   ],
   "lint-staged": {
-    "src/**/*.ts": [
+    "{src,tests}/**/*.ts": [
       "prettier --write",
       "eslint --fix"
     ]
