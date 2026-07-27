@@ -952,7 +952,11 @@ See [CHANGELOG.md](CHANGELOG.md) for the release history.
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-For security concerns, please see [SECURITY.md](SECURITY.md).
+---
+
+## Security
+
+To report a vulnerability, please see [SECURITY.md](SECURITY.md).
 
 ---
 
