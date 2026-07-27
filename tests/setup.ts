@@ -115,12 +115,37 @@ vi.mock('vscode', () => {
     let selectedItems: T[] = [];
     const onDidAcceptListeners: (() => void)[] = [];
     const onDidTriggerButtonListeners: ((button: unknown) => void)[] = [];
+    const onDidTriggerItemButtonListeners: ((e: unknown) => void)[] = [];
     const onDidHideListeners: (() => void)[] = [];
+    const onDidChangeValueListeners: ((value: string) => void)[] = [];
 
     return {
       title: '',
       placeholder: '',
+      prompt: undefined as string | undefined,
       canSelectMany: false,
+      step: undefined as number | undefined,
+      totalSteps: undefined as number | undefined,
+      busy: false,
+      ignoreFocusOut: false,
+      value: '',
+      activeItems: [] as T[],
+      matchOnDescription: false,
+      matchOnDetail: false,
+      onDidChangeValue: vi.fn((listener: (value: string) => void) => {
+        onDidChangeValueListeners.push(listener);
+        return { dispose: vi.fn() };
+      }),
+      onDidTriggerItemButton: vi.fn((listener: (e: unknown) => void) => {
+        onDidTriggerItemButtonListeners.push(listener);
+        return { dispose: vi.fn() };
+      }),
+      _setValue: (v: string) => {
+        onDidChangeValueListeners.forEach((l) => l(v));
+      },
+      _triggerItemButton: (e: unknown) => {
+        onDidTriggerItemButtonListeners.forEach((l) => l(e));
+      },
       get items() {
         return items;
       },
@@ -174,6 +199,11 @@ vi.mock('vscode', () => {
       prompt: '',
       placeholder: '',
       password: false,
+      step: undefined as number | undefined,
+      totalSteps: undefined as number | undefined,
+      busy: false,
+      ignoreFocusOut: false,
+      valueSelection: undefined as readonly [number, number] | undefined,
       get value() {
         return value;
       },
@@ -366,6 +396,50 @@ vi.mock('vscode', () => {
     }),
   };
 
+  // MarkdownString class
+  class MarkdownString {
+    isTrusted?: boolean;
+    supportThemeIcons?: boolean;
+    supportHtml?: boolean;
+    constructor(public value: string = '') {}
+    appendText(text: string): MarkdownString {
+      this.value += text;
+      return this;
+    }
+    appendMarkdown(text: string): MarkdownString {
+      this.value += text;
+      return this;
+    }
+  }
+
+  // DataTransferItem / DataTransfer classes (tree drag & drop)
+  class DataTransferItem {
+    constructor(public readonly value: unknown) {}
+    asString(): Promise<string> {
+      return Promise.resolve(
+        typeof this.value === 'string' ? this.value : JSON.stringify(this.value)
+      );
+    }
+    asFile(): undefined {
+      return undefined;
+    }
+  }
+  class DataTransfer {
+    private readonly items = new Map<string, DataTransferItem>();
+    get(mimeType: string): DataTransferItem | undefined {
+      return this.items.get(mimeType);
+    }
+    set(mimeType: string, value: DataTransferItem): void {
+      this.items.set(mimeType, value);
+    }
+    forEach(callback: (item: DataTransferItem, mimeType: string) => void): void {
+      this.items.forEach(callback);
+    }
+    *[Symbol.iterator](): IterableIterator<[string, DataTransferItem]> {
+      yield* this.items;
+    }
+  }
+
   // CancellationError class (name is 'Canceled', matching the real API)
   class CancellationError extends Error {
     constructor() {
@@ -418,6 +492,22 @@ vi.mock('vscode', () => {
       Collapsed: 1,
       Expanded: 2,
     },
+    TreeItemCheckboxState: {
+      Unchecked: 0,
+      Checked: 1,
+    },
+    QuickPickItemKind: {
+      Separator: -1,
+      Default: 0,
+    },
+    QuickInputButtons: {
+      Back: { iconPath: { id: 'arrow-left' }, tooltip: 'Back' },
+    },
+    LanguageStatusSeverity: {
+      Information: 0,
+      Warning: 1,
+      Error: 2,
+    },
     ViewColumn: {
       Active: -1,
       Beside: -2,
@@ -427,6 +517,9 @@ vi.mock('vscode', () => {
     },
     CancellationError,
     EventEmitter,
+    MarkdownString,
+    DataTransfer,
+    DataTransferItem,
     TreeItem,
     ThemeIcon,
     ThemeColor,
@@ -450,6 +543,8 @@ vi.mock('vscode', () => {
       showErrorMessage: vi.fn().mockResolvedValue(undefined),
       showQuickPick: vi.fn().mockResolvedValue(undefined),
       showInputBox: vi.fn().mockResolvedValue(undefined),
+      registerWebviewViewProvider: vi.fn(() => ({ dispose: vi.fn() })),
+      registerWebviewPanelSerializer: vi.fn(() => ({ dispose: vi.fn() })),
       withProgress: vi
         .fn()
         .mockImplementation(
@@ -494,6 +589,20 @@ vi.mock('vscode', () => {
       fs: {
         readFile: vi.fn().mockResolvedValue(new Uint8Array()),
       },
+    },
+    languages: {
+      createLanguageStatusItem: vi.fn(() => ({
+        id: '',
+        name: undefined,
+        selector: undefined,
+        severity: 0,
+        text: '',
+        detail: undefined,
+        busy: false,
+        command: undefined,
+        accessibilityInformation: undefined,
+        dispose: vi.fn(),
+      })),
     },
     env: {
       language: 'en',
