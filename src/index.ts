@@ -46,18 +46,18 @@
 // Types
 // ============================================
 export type {
-  Result,
   LogLevel,
   LoggerOptions,
   Logger,
-  SafeExecuteOptions,
   CommandHandler,
   TextEditorCommandHandler,
   RegisterCommandsOptions,
   ProgressOptions,
   InputTextOptions,
-  TelemetryReporter,
 } from './core/types.js';
+
+export type { Result } from './core/result.js';
+export { ok, err, unwrap, unwrapOr, mapResult, mapResultErr } from './core/result.js';
 
 export type { RetryOptions, RetryJitter } from './std/retry.js';
 export type {
@@ -89,9 +89,16 @@ export type {
 export { createLogger } from './core/logger.js';
 
 // ============================================
-// SafeExecute
+// Run (unified error handling)
 // ============================================
-export { safeExecute, trySafeExecute } from './core/safeExecute.js';
+export { run, tryRun, isCancellation } from './core/run.js';
+export type { RunOptions } from './core/run.js';
+
+// ============================================
+// Extension Kit
+// ============================================
+export { createExtensionKit } from './core/kit.js';
+export type { ExtensionKit, ExtensionKitOptions } from './core/kit.js';
 
 // ============================================
 // Commands
@@ -130,7 +137,7 @@ export type {
 // ============================================
 // Disposable
 // ============================================
-export { DisposableCollection } from './core/disposable.js';
+export { DisposableCollection, createScope } from './core/disposable.js';
 
 // ============================================
 // Retry

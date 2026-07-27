@@ -64,7 +64,7 @@
     "format:check": "prettier --check \"src/**/*.ts\"",
     "lint": "eslint src tests",
     "lint:fix": "eslint src tests --fix",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.tests.json",
     "knip": "knip",
     "prepublishOnly": "npm run clean && npm run lint && npm run typecheck && npm run knip && npm run test && npm run build"
   },

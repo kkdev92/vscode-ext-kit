@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { debounce, throttle, withTiming, measureTime } from '../src/std/timing.js';
-import type { Logger } from '../src/core/types.js';
+import { createMockLogger } from './factories.js';
 
 describe('debounce', () => {
   beforeEach(() => {
@@ -213,18 +213,6 @@ describe('throttle', () => {
 // ============================================
 
 describe('withTiming', () => {
-  function createMockLogger(): Logger {
-    return {
-      trace: vi.fn(),
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-      setLevel: vi.fn(),
-      dispose: vi.fn(),
-    };
-  }
-
   it('returns result and duration', async () => {
     const { result, duration } = await withTiming('test', () => 'hello');
 
@@ -344,18 +332,6 @@ describe('withTiming', () => {
 // ============================================
 
 describe('measureTime', () => {
-  function createMockLogger(): Logger {
-    return {
-      trace: vi.fn(),
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-      setLevel: vi.fn(),
-      dispose: vi.fn(),
-    };
-  }
-
   it('wraps a function and returns timing result', async () => {
     const fn = (x: number, y: number) => x + y;
     const timed = measureTime('add', fn);

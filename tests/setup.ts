@@ -366,6 +366,14 @@ vi.mock('vscode', () => {
     }),
   };
 
+  // CancellationError class (name is 'Canceled', matching the real API)
+  class CancellationError extends Error {
+    constructor() {
+      super('Canceled');
+      this.name = 'Canceled';
+    }
+  }
+
   // Disposable class
   class Disposable {
     private _callOnDispose: () => void;
@@ -417,6 +425,7 @@ vi.mock('vscode', () => {
       Two: 2,
       Three: 3,
     },
+    CancellationError,
     EventEmitter,
     TreeItem,
     ThemeIcon,
@@ -488,6 +497,14 @@ vi.mock('vscode', () => {
     },
     env: {
       language: 'en',
+      createTelemetryLogger: vi.fn(() => ({
+        logUsage: vi.fn(),
+        logError: vi.fn(),
+        dispose: vi.fn(),
+        onDidChangeEnableStates: vi.fn(() => ({ dispose: vi.fn() })),
+        isUsageEnabled: true,
+        isErrorsEnabled: true,
+      })),
     },
     l10n: {
       t: vi.fn((message: string, ..._args: unknown[]) => message),

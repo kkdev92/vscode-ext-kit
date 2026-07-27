@@ -1,98 +1,92 @@
 import type * as vscode from 'vscode';
 
 // ============================================
-// Result type
-// ============================================
-
-/**
- * Result type for operations that may fail.
- * Provides explicit success/failure distinction, unlike `T | undefined`.
- *
- * @example
- * ```typescript
- * const result = await trySafeExecute(logger, 'Fetch data', fetchData);
- * if (result.ok) {
- *   console.log(result.value); // T - success value
- * } else {
- *   console.error(result.error); // E - error object
- * }
- * ```
- */
-export type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E };
-
-// ============================================
 // Logger types
 // ============================================
 
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'silent';
 
 export interface LoggerOptions {
-  /** Log level threshold (default: 'info') */
+  /**
+   * Log level threshold applied by this library on top of the channel.
+   *
+   * Defaults: `'trace'` in `'log'` channel mode (the Output panel already
+   * filters by the user-selected level, so the library passes everything
+   * through), `'info'` in `'plain'` mode (the gate is the only filter).
+   */
   level?: LogLevel;
-  /** VSCode config section to read log level from (e.g., 'myExtension.logLevel') */
+  /** VS Code config section to read the log level from (e.g. 'myExtension.logLevel') */
   configSection?: string;
-  /** Show output channel on error (default: true) */
+  /**
+   * `'log'` (default): use a {@link vscode.LogOutputChannel}. Timestamps,
+   * level colors, the Output panel level dropdown and the
+   * `Developer: Set Log Level` command all work natively. Note that the
+   * panel-side level is user-controlled, so `trace`/`debug` lines may be
+   * hidden until the user raises their log level.
+   *
+   * `'plain'`: format lines manually into a regular OutputChannel. The
+   * `level` option is then the only filter, guaranteeing that forced
+   * verbose logging (e.g. a diagnostics command) is always visible.
+   */
+  channelMode?: 'log' | 'plain';
+  /** Show the output channel on error (default: true) */
   showOnError?: boolean;
   /**
    * Minimum interval between successive `channel.show()` calls when
    * `showOnError` is true. Suppresses repeated panel popups during error
-   * storms. `0` (default) preserves the historical behaviour of showing
-   * on every error.
-   * @default 0
+   * storms. `0` (default) shows on every error.
    */
   showOnErrorThrottleMs?: number;
-  /** Include timestamp in log messages (default: true) */
-  timestamp?: boolean;
-  /** Optional telemetry reporter for error tracking */
-  telemetryReporter?: TelemetryReporter;
   /**
-   * When true, redact the current OS user's home directory path from
-   * `errorStack` and `errorMessage` properties before sending them via
-   * `telemetryReporter`. Useful for reducing PII exposure when stack
-   * traces include developer-machine paths like `C:\Users\alice\...`.
-   * @default false
+   * Native telemetry sender. Wrapped with `vscode.env.createTelemetryLogger`,
+   * which applies VS Code's built-in PII scrubbing (paths, emails, tokens)
+   * and respects the user's telemetry settings automatically.
    */
-  redactStackPaths?: boolean;
+  telemetry?: vscode.TelemetrySender;
 }
 
 export interface Logger extends vscode.Disposable {
-  trace(message: string, ...args: unknown[]): void;
-  debug(message: string, ...args: unknown[]): void;
-  info(message: string, ...args: unknown[]): void;
-  warn(message: string, ...args: unknown[]): void;
-  error(message: string | Error, ...args: unknown[]): void;
+  trace(message: string, fields?: Record<string, unknown>): void;
+  debug(message: string, fields?: Record<string, unknown>): void;
+  info(message: string, fields?: Record<string, unknown>): void;
+  warn(message: string, fields?: Record<string, unknown>): void;
+  error(error: string | Error, fields?: Record<string, unknown>): void;
+  /**
+   * Creates a child logger that shares this logger's channel, level and
+   * telemetry, prefixing every message with `[scope]`. Nested children
+   * compose scopes with `:`. Disposing a child is a no-op — the root
+   * logger owns the channel lifecycle.
+   */
+  child(scope: string): Logger;
   setLevel(level: LogLevel): void;
-}
-
-// ============================================
-// SafeExecute types
-// ============================================
-
-export interface SafeExecuteOptions {
-  /** Custom user-facing error message */
-  userMessage?: string;
-  /** Rethrow the error after logging (default: false) */
-  rethrow?: boolean;
-  /** Suppress notification, log only (default: false) */
-  silent?: boolean;
+  readonly level: LogLevel;
+  [Symbol.dispose](): void;
 }
 
 // ============================================
 // Commands types
 // ============================================
 
-export type CommandHandler = (...args: unknown[]) => unknown | Promise<unknown>;
+/**
+ * Command handler. Uses `any[]` on purpose: `vscode.commands.registerCommand`
+ * itself types callback arguments as `any[]`, and a stricter `unknown[]`
+ * would reject precisely-typed handlers like `(uri: vscode.Uri) => void`
+ * that the raw API accepts.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type CommandHandler = (...args: any[]) => unknown;
 
 export type TextEditorCommandHandler = (
   editor: vscode.TextEditor,
   edit: vscode.TextEditorEdit,
-  ...args: unknown[]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ...args: any[]
 ) => void | Promise<void>;
 
 export interface RegisterCommandsOptions {
-  /** Wrap handlers with safeExecute (default: true) */
-  wrapWithSafeExecute?: boolean;
-  /** Custom error message generator */
+  /** Wrap handlers with run() error handling (default: true) */
+  wrap?: boolean;
+  /** Custom user-facing action name per command (used in error messages) */
   commandErrorMessage?: (commandId: string) => string;
 }
 
@@ -122,40 +116,4 @@ export interface InputTextOptions {
   password?: boolean;
   /** Validation function */
   validate?: (value: string) => string | undefined | Promise<string | undefined>;
-}
-
-// ============================================
-// Telemetry types
-// ============================================
-
-/**
- * Interface for telemetry reporting.
- * Compatible with vscode-extension-telemetry or custom implementations.
- */
-export interface TelemetryReporter {
-  /**
-   * Sends a telemetry event.
-   *
-   * @param eventName - Name of the event
-   * @param properties - Optional string properties
-   * @param measurements - Optional numeric measurements
-   */
-  sendTelemetryEvent(
-    eventName: string,
-    properties?: Record<string, string>,
-    measurements?: Record<string, number>
-  ): void;
-
-  /**
-   * Sends a telemetry error event.
-   *
-   * @param eventName - Name of the error event
-   * @param properties - Optional string properties
-   * @param measurements - Optional numeric measurements
-   */
-  sendTelemetryErrorEvent(
-    eventName: string,
-    properties?: Record<string, string>,
-    measurements?: Record<string, number>
-  ): void;
 }

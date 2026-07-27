@@ -2,13 +2,15 @@ import type * as vscode from 'vscode';
 
 /**
  * A collection of disposables that can be disposed together.
- * Useful for managing multiple subscriptions and resources.
+ *
+ * Supports TC39 Explicit Resource Management: `using scope = new
+ * DisposableCollection()` disposes everything when the block exits, even on
+ * exceptions.
  *
  * @example
  * ```typescript
  * const disposables = new DisposableCollection();
  *
- * // Add disposables
  * disposables.push(
  *   vscode.workspace.onDidChangeConfiguration(() => {}),
  *   vscode.window.onDidChangeActiveTextEditor(() => {})
@@ -19,7 +21,6 @@ import type * as vscode from 'vscode';
  *   vscode.workspace.createFileSystemWatcher('**\/*.ts')
  * );
  *
- * // Dispose all at once
  * disposables.dispose();
  * ```
  */
@@ -29,31 +30,31 @@ export class DisposableCollection implements vscode.Disposable {
 
   /**
    * Adds a disposable to the collection and returns it.
-   * Useful when you need to keep a reference to the disposable.
+   *
+   * If the collection is already disposed, the disposable is disposed
+   * immediately instead of leaking (mirroring VS Code's internal
+   * DisposableStore behavior) — no error is thrown.
    *
    * @param disposable - The disposable to add
    * @returns The same disposable for chaining
-   * @throws Error if the collection has already been disposed
    */
   add<T extends vscode.Disposable>(disposable: T): T {
     if (this.isDisposed) {
-      throw new Error('Cannot add to a disposed DisposableCollection');
+      disposable.dispose();
+      return disposable;
     }
     this.disposables.push(disposable);
     return disposable;
   }
 
   /**
-   * Adds one or more disposables to the collection.
-   *
-   * @param disposables - The disposables to add
-   * @throws Error if the collection has already been disposed
+   * Adds one or more disposables to the collection. Like {@link add},
+   * disposes them immediately if the collection is already disposed.
    */
   push(...disposables: vscode.Disposable[]): void {
-    if (this.isDisposed) {
-      throw new Error('Cannot add to a disposed DisposableCollection');
+    for (const disposable of disposables) {
+      this.add(disposable);
     }
-    this.disposables.push(...disposables);
   }
 
   /**
@@ -65,7 +66,7 @@ export class DisposableCollection implements vscode.Disposable {
 
   /**
    * Disposes all disposables in the collection.
-   * After calling this method, no more disposables can be added.
+   * After calling this method, added disposables are disposed immediately.
    *
    * If individual `dispose()` calls throw, all remaining disposables are still
    * disposed. Collected errors are then rethrown as a single error (or
@@ -96,4 +97,31 @@ export class DisposableCollection implements vscode.Disposable {
       throw new AggregateError(errors, 'DisposableCollection: errors during dispose');
     }
   }
+
+  /** TC39 Explicit Resource Management (`using`) support. */
+  [Symbol.dispose](): void {
+    this.dispose();
+  }
+}
+
+/**
+ * Creates a {@link DisposableCollection} that is automatically disposed when
+ * the extension deactivates (it registers itself in `context.subscriptions`).
+ *
+ * Useful for grouping the disposables of one feature so they can also be
+ * torn down together ahead of deactivation:
+ *
+ * @example
+ * ```typescript
+ * const scope = createScope(context);
+ * scope.add(createStatusBarItem({ text: 'hi' }));
+ * scope.add(createFileWatcher({ patterns: '**\/*.md' }));
+ * // ...later, when the feature is turned off:
+ * scope.dispose();
+ * ```
+ */
+export function createScope(context: vscode.ExtensionContext): DisposableCollection {
+  const scope = new DisposableCollection();
+  context.subscriptions.push(scope);
+  return scope;
 }
