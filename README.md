@@ -34,6 +34,7 @@ A lightweight, type-safe utility library for VS Code extension development. Elim
   - [Tree View](#tree-view)
   - [WebView](#webview)
   - [Utilities](#utilities)
+- [Testing Your Extension](#testing-your-extension)
 - [Development](#development)
 - [Changelog](#changelog)
 - [Contributing](#contributing)
@@ -903,6 +904,77 @@ npm install @kkdev92/vscode-ext-kit@latest
 - Check [GitHub Issues](https://github.com/kkdev92/vscode-ext-kit/issues)
 - Review [API Reference](#api-reference) above
 - See [Contributing Guide](CONTRIBUTING.md) to report bugs
+
+---
+
+## Testing Your Extension
+
+`@kkdev92/vscode-ext-kit/testing` is a separate, zero-dependency subpath that mocks the entire `vscode` module for unit tests — no running extension host required. It never imports `vitest` (or any other test runner) itself: every factory takes a small `{ fn }`-shaped object instead, so the exact same mocks work with Vitest's `vi`, Jest's `jest`, or a compatible object.
+
+### Setup (once per project)
+
+```ts
+// tests/setup.ts
+import { vi } from 'vitest';
+import { createVSCodeMock } from '@kkdev92/vscode-ext-kit/testing';
+
+vi.mock('vscode', () => createVSCodeMock(vi));
+```
+
+```ts
+// vitest.config.ts
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    globals: true,
+    environment: 'node',
+    setupFiles: ['./tests/setup.ts'],
+    clearMocks: true, // resets call history between tests automatically
+  },
+});
+```
+
+### Testing an activation function
+
+`createMockExtensionContext` and `createMockLogger` return values typed as the real `vscode.ExtensionContext` and this library's `Logger` — no `as any`/`as never` needed at the call site.
+
+```ts
+import { describe, it, expect, vi } from 'vitest';
+import * as vscode from 'vscode';
+import { createMockExtensionContext, createMockLogger } from '@kkdev92/vscode-ext-kit/testing';
+import { activate } from '../src/extension.js';
+
+describe('myExtension', () => {
+  it('registers the hello command', () => {
+    const context = createMockExtensionContext(vi);
+    const logger = createMockLogger(vi);
+
+    activate(context, logger);
+
+    expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
+      'myext.hello',
+      expect.any(Function)
+    );
+  });
+});
+```
+
+### Driving events from a mock
+
+Individual builders (`createMockFileSystemWatcher`, `createMockQuickPick`, `createMockTreeView`, ...) are also exported for tests that want a standalone fixture. Each exposes `_`-prefixed test-driving helpers to simulate the native events VS Code would normally fire:
+
+```ts
+import { vi } from 'vitest';
+import * as vscode from 'vscode';
+import { createMockFileSystemWatcher } from '@kkdev92/vscode-ext-kit/testing';
+
+const watcher = createMockFileSystemWatcher(vi);
+vi.mocked(vscode.workspace.createFileSystemWatcher).mockReturnValue(watcher);
+
+// ... code under test registers a listener on watcher.onDidChange ...
+watcher._fireChange({ fsPath: '/test/file.ts' });
+```
 
 ---
 

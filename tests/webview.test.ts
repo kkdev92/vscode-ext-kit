@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
 import {
-  createMockExtensionContext,
-  createMockWebview,
-  createMockWebviewPanel,
-  createMockWebviewView,
+  createMockExtensionContext as createMockExtensionContextWith,
+  createMockWebview as createMockWebviewWith,
+  createMockWebviewPanel as createMockWebviewPanelWith,
+  createMockWebviewView as createMockWebviewViewWith,
   createMockWebviewViewResolveContext,
-  createMockCancellationToken,
+  createMockCancellationToken as createMockCancellationTokenWith,
   ViewColumn,
-} from './mocks/vscode.js';
+} from '../src/testing/index.js';
 import {
   createWebviewPanel,
   registerWebviewPanelSerializer,
@@ -25,10 +25,21 @@ import {
 const mockedReadFile = vi.mocked(vscode.workspace.fs.readFile);
 const asBytes = (text: string): Uint8Array => new TextEncoder().encode(text);
 
+// Thin local re-binds so the rest of this file — written against the
+// pre-testing-kit factories — doesn't need a `vi` argument at every call site.
+const createMockExtensionContext = () => createMockExtensionContextWith(vi);
+const createMockWebview = () => createMockWebviewWith(vi);
+const createMockWebviewPanel = (viewType?: string, title?: string) =>
+  createMockWebviewPanelWith(vi, viewType, title);
+const createMockWebviewView = (viewType?: string) => createMockWebviewViewWith(vi, viewType);
+const createMockCancellationToken = (isCancellationRequested?: boolean) =>
+  createMockCancellationTokenWith(vi, isCancellationRequested);
+
 // The mocked `vscode` module's own factories (in tests/setup.ts) don't record
-// listeners, so tests that need to simulate native events (dispose,
-// view-state change, resolveWebviewView...) override the return value with
-// the listener-capturing mocks from ./mocks/vscode.js instead.
+// listeners by default, so tests that need to simulate native events
+// (dispose, view-state change, resolveWebviewView...) override the return
+// value with a listener-capturing instance built directly from the testing
+// kit's builders instead.
 const mockedWindow = vscode.window as unknown as {
   createWebviewPanel: ReturnType<typeof vi.fn>;
   registerWebviewPanelSerializer: ReturnType<typeof vi.fn>;

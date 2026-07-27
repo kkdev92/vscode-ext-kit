@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createMockWebview } from './mocks/vscode.js';
+import { createMockWebview as createMockWebviewWith } from '../src/testing/index.js';
 import { createWebviewRpc } from '../src/views/webview/rpc.js';
+
+// Thin local re-bind so the rest of this file doesn't need a `vi` argument
+// at every call site.
+const createMockWebview = () => createMockWebviewWith(vi);
 
 /** Waits a macrotask turn — enough for the RPC's internal Promise chains to settle. */
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));

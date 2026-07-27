@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
 import {
-  createMockExtensionContext,
-  createMockTreeView,
+  createMockExtensionContext as createMockExtensionContextWith,
+  createMockTreeView as createMockTreeViewWith,
   TreeItemCollapsibleState,
   ThemeIcon,
-} from './mocks/vscode.js';
+} from '../src/testing/index.js';
 import {
   BaseTreeDataProvider,
   SimpleTreeDataProvider,
@@ -15,6 +15,11 @@ import {
   LOAD_MORE_ID,
   type TreeItemData,
 } from '../src/views/treeview.js';
+
+// Thin local re-binds so the rest of this file — written against the
+// pre-testing-kit factories — doesn't need a `vi` argument at every call site.
+const createMockExtensionContext = () => createMockExtensionContextWith(vi);
+const createMockTreeView = <T = unknown>() => createMockTreeViewWith<T>(vi);
 
 // Get the mocked window namespace so tests can override createTreeView's
 // return value with a listener-capturing mock (needed for checkbox bridging).

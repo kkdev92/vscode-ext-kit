@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
 import {
-  createMockTextEditor,
-  createMockTextDocument,
-  createMockCancellationToken,
+  createMockTextEditor as createMockTextEditorWith,
+  createMockTextDocument as createMockTextDocumentWith,
+  createMockCancellationToken as createMockCancellationTokenWith,
+  createMockUri,
   Selection,
   Position,
   Range,
-  Uri,
   WorkspaceEdit as MockWorkspaceEdit,
-} from './mocks/vscode.js';
+} from '../src/testing/index.js';
 import {
   replaceText,
   getSelectedText,
@@ -32,6 +32,16 @@ import {
   applyEditsGrouped,
   applyWorkspaceEdits,
 } from '../src/workspace/editor.js';
+
+// Thin local re-binds so the rest of this file — written against the
+// pre-testing-kit factories — doesn't need a `vi` argument at every call site.
+const createMockTextEditor = (content?: string, languageId?: string) =>
+  createMockTextEditorWith(vi, content, languageId);
+const createMockTextDocument = (content?: string, languageId?: string) =>
+  createMockTextDocumentWith(vi, content, languageId);
+const createMockCancellationToken = (isCancellationRequested?: boolean) =>
+  createMockCancellationTokenWith(vi, isCancellationRequested);
+const Uri = createMockUri(vi);
 
 describe('editor', () => {
   beforeEach(() => {
