@@ -53,14 +53,7 @@ export interface DateFormatOptions {
  * Unit for relative time formatting.
  */
 export type RelativeTimeUnit =
-  | 'year'
-  | 'quarter'
-  | 'month'
-  | 'week'
-  | 'day'
-  | 'hour'
-  | 'minute'
-  | 'second';
+  'year' | 'quarter' | 'month' | 'week' | 'day' | 'hour' | 'minute' | 'second';
 
 // Intl constructors are expensive (locale data lookup); cache instances per
 // language + options. The caches are tiny in practice — the language is fixed
