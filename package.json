@@ -25,6 +25,16 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./timing": {
+      "types": "./dist/std/timing.d.ts",
+      "import": "./dist/std/timing.js",
+      "default": "./dist/std/timing.js"
+    },
+    "./retry": {
+      "types": "./dist/std/retry.d.ts",
+      "import": "./dist/std/retry.js",
+      "default": "./dist/std/retry.js"
     }
   },
   "files": [
