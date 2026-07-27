@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { retry } from '../src/std/retry.js';
+import { retry, RetryExhaustedError } from '../src/std/retry.js';
+import { TimeoutError } from '../src/std/timing.js';
 
 describe('retry', () => {
   beforeEach(() => {
@@ -35,20 +36,24 @@ describe('retry', () => {
   });
 
   describe('maxAttempts', () => {
-    it('should throw after max attempts exhausted', async () => {
+    it('should throw a RetryExhaustedError after max attempts exhausted', async () => {
       const error = new Error('persistent failure');
       const fn = vi.fn().mockRejectedValue(error);
 
       const resultPromise = retry(fn, { maxAttempts: 3 });
 
       // Attach error handler immediately to prevent unhandled rejection
-      const catchPromise = resultPromise.catch((e): Error => e as Error);
+      const catchPromise = resultPromise.catch(
+        (e): RetryExhaustedError => e as RetryExhaustedError
+      );
 
       await vi.runAllTimersAsync();
 
-      const caughtError = (await catchPromise) as Error;
-      expect(caughtError).toBeInstanceOf(Error);
-      expect(caughtError.message).toBe('persistent failure');
+      const caughtError = (await catchPromise) as RetryExhaustedError;
+      expect(caughtError).toBeInstanceOf(RetryExhaustedError);
+      expect(caughtError.attempts).toBe(3);
+      expect(caughtError.cause).toBe(error);
+      expect(caughtError.history).toEqual([error, error, error]);
       expect(fn).toHaveBeenCalledTimes(3);
     });
 
@@ -56,12 +61,16 @@ describe('retry', () => {
       const fn = vi.fn().mockRejectedValue(new Error('fail'));
 
       const resultPromise = retry(fn, { maxAttempts: 5 });
-      const catchPromise = resultPromise.catch((e): Error => e as Error);
+      const catchPromise = resultPromise.catch(
+        (e): RetryExhaustedError => e as RetryExhaustedError
+      );
 
       await vi.runAllTimersAsync();
 
-      const caughtError = (await catchPromise) as Error;
-      expect(caughtError).toBeInstanceOf(Error);
+      const caughtError = (await catchPromise) as RetryExhaustedError;
+      expect(caughtError).toBeInstanceOf(RetryExhaustedError);
+      expect(caughtError.attempts).toBe(5);
+      expect(caughtError.history).toHaveLength(5);
       expect(fn).toHaveBeenCalledTimes(5);
     });
 
@@ -80,7 +89,7 @@ describe('retry', () => {
         .mockRejectedValueOnce(new Error('fail'))
         .mockResolvedValue('success');
 
-      const resultPromise = retry(fn, { delay: 1000, backoff: 'linear' });
+      const resultPromise = retry(fn, { delay: 1000, backoff: 'linear', jitter: 'none' });
 
       // First call happens immediately
       expect(fn).toHaveBeenCalledTimes(1);
@@ -104,7 +113,7 @@ describe('retry', () => {
         .mockRejectedValueOnce(new Error('fail'))
         .mockResolvedValue('success');
 
-      const resultPromise = retry(fn, { delay: 1000 });
+      const resultPromise = retry(fn, { delay: 1000, jitter: 'none' });
 
       // First call happens immediately
       expect(fn).toHaveBeenCalledTimes(1);
@@ -128,12 +137,16 @@ describe('retry', () => {
       const retryIf = vi.fn().mockReturnValue(false);
 
       const resultPromise = retry(fn, { retryIf });
-      const catchPromise = resultPromise.catch((e): Error => e as Error);
+      const catchPromise = resultPromise.catch(
+        (e): RetryExhaustedError => e as RetryExhaustedError
+      );
 
       await vi.runAllTimersAsync();
 
-      const caughtError = (await catchPromise) as Error;
-      expect(caughtError.message).toBe('permanent error');
+      const caughtError = (await catchPromise) as RetryExhaustedError;
+      expect(caughtError).toBeInstanceOf(RetryExhaustedError);
+      expect(caughtError.attempts).toBe(1);
+      expect((caughtError.cause as Error).message).toBe('permanent error');
       expect(fn).toHaveBeenCalledTimes(1);
       expect(retryIf).toHaveBeenCalledWith(expect.any(Error), 1);
     });
@@ -165,12 +178,16 @@ describe('retry', () => {
       const resultPromise = retry(fn, {
         retryIf: (error) => error instanceof RetryableError,
       });
-      const catchPromise = resultPromise.catch((e): Error => e as Error);
+      const catchPromise = resultPromise.catch(
+        (e): RetryExhaustedError => e as RetryExhaustedError
+      );
 
       await vi.runAllTimersAsync();
 
-      const caughtError = (await catchPromise) as Error;
-      expect(caughtError.message).toBe('stop here');
+      const caughtError = (await catchPromise) as RetryExhaustedError;
+      expect(caughtError).toBeInstanceOf(RetryExhaustedError);
+      expect(caughtError.attempts).toBe(2);
+      expect((caughtError.cause as Error).message).toBe('stop here');
       expect(fn).toHaveBeenCalledTimes(2);
     });
   });
@@ -185,6 +202,7 @@ describe('retry', () => {
         maxAttempts: 3,
         delay: 1000,
         backoff: 'exponential',
+        jitter: 'none',
         onRetry,
       });
       const catchPromise = resultPromise.catch((e): Error => e as Error);
@@ -236,6 +254,7 @@ describe('retry', () => {
         delay: 1000,
         backoff: 'exponential',
         maxDelay: 1500,
+        jitter: 'none',
         onRetry,
       });
       const catchPromise = resultPromise.catch((e): Error => e as Error);
@@ -258,6 +277,7 @@ describe('retry', () => {
         delay: 1000,
         backoff: 'linear',
         maxDelay: 10_000,
+        jitter: 'none',
         onRetry,
       });
       const catchPromise = resultPromise.catch((e): Error => e as Error);
@@ -292,6 +312,27 @@ describe('retry', () => {
       expect(onRetry).toHaveBeenCalledWith(expect.any(Error), 1, 500);
     });
 
+    it('is full jitter by default when omitted', async () => {
+      vi.spyOn(Math, 'random').mockReturnValue(0.5);
+
+      const fn = vi.fn().mockRejectedValue(new Error('fail'));
+      const onRetry = vi.fn();
+
+      const resultPromise = retry(fn, {
+        maxAttempts: 2,
+        delay: 1000,
+        backoff: 'linear',
+        onRetry,
+      });
+      const catchPromise = resultPromise.catch((e): Error => e as Error);
+
+      await vi.runAllTimersAsync();
+      await catchPromise;
+
+      // Same formula as the explicit 'full' test above: 1000 * 0.5 = 500.
+      expect(onRetry).toHaveBeenCalledWith(expect.any(Error), 1, 500);
+    });
+
     it('equal: yields delay/2 + random*(delay/2)', async () => {
       vi.spyOn(Math, 'random').mockReturnValue(0.5);
 
@@ -314,7 +355,7 @@ describe('retry', () => {
       expect(onRetry).toHaveBeenCalledWith(expect.any(Error), 1, 750);
     });
 
-    it('none (default): leaves delay unchanged', async () => {
+    it('none: leaves delay unchanged', async () => {
       const fn = vi.fn().mockRejectedValue(new Error('fail'));
       const onRetry = vi.fn();
 
@@ -322,6 +363,7 @@ describe('retry', () => {
         maxAttempts: 2,
         delay: 1234,
         backoff: 'linear',
+        jitter: 'none',
         onRetry,
       });
       const catchPromise = resultPromise.catch((e): Error => e as Error);
@@ -330,6 +372,116 @@ describe('retry', () => {
       await catchPromise;
 
       expect(onRetry).toHaveBeenCalledWith(expect.any(Error), 1, 1234);
+    });
+  });
+
+  describe('context (attempt/signal)', () => {
+    it('passes the current attempt number and the signal to fn', async () => {
+      const controller = new AbortController();
+      const seen: Array<{ attempt: number; signal: AbortSignal | undefined }> = [];
+
+      const fn = vi.fn(async (ctx: { attempt: number; signal?: AbortSignal }) => {
+        seen.push({ attempt: ctx.attempt, signal: ctx.signal });
+        if (ctx.attempt < 3) {
+          throw new Error('fail');
+        }
+        return 'done';
+      });
+
+      const resultPromise = retry(fn, { signal: controller.signal, jitter: 'none' });
+      await vi.runAllTimersAsync();
+      const result = await resultPromise;
+
+      expect(result).toBe('done');
+      expect(seen.map((s) => s.attempt)).toEqual([1, 2, 3]);
+      expect(seen.every((s) => s.signal === controller.signal)).toBe(true);
+    });
+  });
+
+  describe('signal', () => {
+    it('rejects immediately without calling fn if already aborted', async () => {
+      const controller = new AbortController();
+      const reason = new Error('pre-aborted');
+      controller.abort(reason);
+
+      const fn = vi.fn().mockResolvedValue('success');
+
+      await expect(retry(fn, { signal: controller.signal })).rejects.toBe(reason);
+      expect(fn).not.toHaveBeenCalled();
+    });
+
+    it('interrupts the inter-retry wait and does not attempt again', async () => {
+      const controller = new AbortController();
+      const fn = vi.fn().mockRejectedValue(new Error('fail'));
+
+      const resultPromise = retry(fn, {
+        maxAttempts: 5,
+        delay: 1000,
+        signal: controller.signal,
+      });
+      const catchPromise = resultPromise.catch((error: unknown) => error);
+
+      // Let the first attempt run and fail, entering the inter-retry sleep.
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fn).toHaveBeenCalledTimes(1);
+
+      const reason = new Error('cancelled mid-wait');
+      controller.abort(reason);
+
+      const error = await catchPromise;
+      expect(error).toBe(reason);
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('timeoutMs', () => {
+    it('treats a per-attempt timeout as a retryable failure and records it in history', async () => {
+      const fn = vi.fn(
+        () =>
+          new Promise<never>(() => {
+            // Never settles: forces every attempt to time out.
+          })
+      );
+      const onRetry = vi.fn();
+
+      const resultPromise = retry(fn, {
+        maxAttempts: 2,
+        timeoutMs: 500,
+        delay: 100,
+        jitter: 'none',
+        onRetry,
+      });
+      const catchPromise = resultPromise.catch(
+        (e): RetryExhaustedError => e as RetryExhaustedError
+      );
+
+      await vi.runAllTimersAsync();
+      const error = await catchPromise;
+
+      expect(error).toBeInstanceOf(RetryExhaustedError);
+      expect(error.attempts).toBe(2);
+      expect(error.history).toHaveLength(2);
+      expect(error.history[0]).toBeInstanceOf(TimeoutError);
+      expect(fn).toHaveBeenCalledTimes(2);
+    });
+
+    it('succeeds if a later attempt resolves within the timeout', async () => {
+      const fn = vi
+        .fn()
+        .mockImplementationOnce(() => new Promise<never>(() => {}))
+        .mockResolvedValueOnce('success');
+
+      const resultPromise = retry(fn, {
+        maxAttempts: 2,
+        timeoutMs: 500,
+        delay: 100,
+        jitter: 'none',
+      });
+      await vi.runAllTimersAsync();
+
+      const result = await resultPromise;
+      expect(result).toBe('success');
+      expect(fn).toHaveBeenCalledTimes(2);
     });
   });
 });

@@ -4,36 +4,30 @@
  *
  * This library provides common utilities for building VS Code extensions:
  *
- * - **Logger** - Structured logging via OutputChannel with dynamic log levels
- * - **safeExecute** - Unified error handling with logging and notifications
- * - **registerCommands** - Batch command registration with error handling
- * - **Config utilities** - Type-safe configuration access
- * - **withProgress/withSteps** - Progress notifications with step-based tracking
+ * - **Extension Kit** - One-call wiring for logger + error handling + commands
+ * - **Logger** - LogOutputChannel-backed structured logging with child scopes
+ * - **run/tryRun** - Unified, cancellation-aware error handling
+ * - **Commands** - Compile-time checked batch command registration
+ * - **Config** - Schema-driven, validated, observable configuration
+ * - **Storage** - Versioned, migratable global/workspace/secret storage
  * - **UI utilities** - QuickPick, InputBox, and multi-step wizard
  * - **Notification** - showInfo/showWarn/showError with actions
  * - **StatusBar** - Managed status bar items with spinner support
  * - **FileWatcher** - Debounced file watching with event batching
- * - **Storage** - Type-safe global/workspace storage wrappers
  * - **Editor** - Text editor manipulation utilities
  * - **TreeView** - Base TreeDataProvider with caching
  * - **WebView** - Managed WebView panels with CSP support
+ * - **std** - vscode-free debounce/throttle/timeout/retry (also under the
+ *   `./timing` and `./retry` subpath exports for webview bundles)
+ * - **l10n** - Localization and Intl-based formatting
  *
  * @example
  * ```typescript
- * import {
- *   createLogger,
- *   registerCommands,
- *   safeExecute,
- *   withProgress,
- *   showInfo,
- *   createStatusBarItem,
- * } from '@kkdev92/vscode-ext-kit';
+ * import { createExtensionKit, showInfo } from '@kkdev92/vscode-ext-kit';
  *
  * export function activate(context: vscode.ExtensionContext) {
- *   const logger = createLogger('MyExtension');
- *   context.subscriptions.push(logger);
- *
- *   registerCommands(context, logger, {
+ *   const kit = createExtensionKit<'myext.hello'>(context, 'MyExtension');
+ *   kit.registerCommands({
  *     'myext.hello': () => showInfo('Hello!'),
  *   });
  * }
@@ -43,7 +37,7 @@
  */
 
 // ============================================
-// Types
+// Core: shared types
 // ============================================
 export type {
   LogLevel,
@@ -56,59 +50,82 @@ export type {
   InputTextOptions,
 } from './core/types.js';
 
+// ============================================
+// Core: Result
+// ============================================
 export type { Result } from './core/result.js';
 export { ok, err, unwrap, unwrapOr, mapResult, mapResultErr } from './core/result.js';
 
-export type { RetryOptions, RetryJitter } from './std/retry.js';
+// ============================================
+// Core: schema (Standard Schema-compatible)
+// ============================================
+export { s, validateSchema } from './core/schema.js';
 export type {
-  DebouncedFunction,
-  ThrottledFunction,
-  TimingResult,
-  TimingOptions,
-} from './std/timing.js';
-export type { NotificationOptions, NotificationAction, ConfirmOptions } from './ui/notification.js';
-export type { StatusBarItemOptions, ManagedStatusBarItem } from './ui/statusbar.js';
-export type {
-  FileWatcherOptions,
-  FileWatcherEvent,
-  ManagedFileWatcher,
-} from './workspace/filewatcher.js';
-export type { StorageOptions, TypedStorage, SecretStorage } from './storage/index.js';
-export type { EditOperation } from './workspace/editor.js';
-export type { TreeItemData } from './views/treeview.js';
-export type {
-  WebViewOptions,
-  WebViewMessage,
-  ManagedWebViewPanel,
-  CSPOptions,
-} from './views/webview.js';
+  StandardSchemaV1,
+  Infer,
+  SchemaIssue,
+  SchemaResult,
+  StringOptions,
+  NumberOptions,
+} from './core/schema.js';
 
 // ============================================
-// Logger
+// Core: logger
 // ============================================
 export { createLogger } from './core/logger.js';
 
 // ============================================
-// Run (unified error handling)
+// Core: run (unified error handling)
 // ============================================
 export { run, tryRun, isCancellation } from './core/run.js';
 export type { RunOptions } from './core/run.js';
 
 // ============================================
-// Extension Kit
+// Core: Extension Kit
 // ============================================
 export { createExtensionKit } from './core/kit.js';
 export type { ExtensionKit, ExtensionKitOptions } from './core/kit.js';
 
 // ============================================
-// Commands
+// Core: commands
 // ============================================
 export { registerCommands, registerTextEditorCommands, executeCommand } from './core/commands.js';
 
 // ============================================
+// Core: disposable
+// ============================================
+export { DisposableCollection, createScope } from './core/disposable.js';
+
+// ============================================
 // Config
 // ============================================
-export { getConfig, getSetting, setSetting, onConfigChange } from './config/index.js';
+export { field, defineConfigSchema, watchSetting } from './config/index.js';
+export type {
+  ConfigFieldDef,
+  ConfigValidationIssue,
+  ConfigInspection,
+  TypedConfig,
+  ConfigWatcher,
+} from './config/index.js';
+
+// ============================================
+// Storage
+// ============================================
+export {
+  createGlobalStorage,
+  createWorkspaceStorage,
+  createSecretStore,
+  createSecretStorage,
+  listStorageKeys,
+} from './storage/index.js';
+export type {
+  StorageIssue,
+  StorageOptions,
+  GlobalStorageOptions,
+  TypedStorage,
+  SecretStore,
+  SecretStorage,
+} from './storage/index.js';
 
 // ============================================
 // Progress
@@ -135,62 +152,27 @@ export type {
 } from './ui/index.js';
 
 // ============================================
-// Disposable
-// ============================================
-export { DisposableCollection, createScope } from './core/disposable.js';
-
-// ============================================
-// Retry
-// ============================================
-export { retry } from './std/retry.js';
-
-// ============================================
-// Timing
-// ============================================
-export { debounce, throttle, withTiming, measureTime } from './std/timing.js';
-
-// ============================================
-// Localization
-// ============================================
-export {
-  t,
-  getLanguage,
-  isLanguage,
-  plural,
-  formatNumber,
-  formatDate,
-  formatRelativeTime,
-} from './l10n/index.js';
-export type {
-  PluralForms,
-  NumberFormatOptions,
-  DateFormatOptions,
-  RelativeTimeUnit,
-} from './l10n/index.js';
-
-// ============================================
 // Notification
 // ============================================
 export { showInfo, showWarn, showError, confirm, showWithActions } from './ui/notification.js';
+export type { NotificationOptions, NotificationAction, ConfirmOptions } from './ui/notification.js';
 
 // ============================================
 // StatusBar
 // ============================================
 export { createStatusBarItem, showStatusMessage } from './ui/statusbar.js';
+export type { StatusBarItemOptions, ManagedStatusBarItem } from './ui/statusbar.js';
 
 // ============================================
 // FileWatcher
 // ============================================
 export { createFileWatcher, watchFile } from './workspace/filewatcher.js';
-
-// ============================================
-// Storage
-// ============================================
-export {
-  createGlobalStorage,
-  createWorkspaceStorage,
-  createSecretStorage,
-} from './storage/index.js';
+export type {
+  FileWatcherOptions,
+  FileWatcherEvent,
+  ManagedFileWatcher,
+  WatchPattern,
+} from './workspace/filewatcher.js';
 
 // ============================================
 // Editor
@@ -203,23 +185,32 @@ export {
   getLine,
   getCurrentLine,
   applyEdits,
+  applyEditsGrouped,
+  applyWorkspaceEdits,
   transformSelection,
   transformAllSelections,
   moveCursor,
   selectRange,
   selectLine,
   selectWord,
-  getLineCount,
-  getDocumentText,
   getFilePath,
-  isDirty,
-  getLanguageId,
+  rangeFromOffsets,
+  getTextInOffsetRange,
+  resolvePositionsBatch,
+  resolveOffsetsBatch,
+} from './workspace/editor.js';
+export type {
+  EditOperation,
+  FilePathInfo,
+  WorkspaceEditEntry,
+  ApplyWorkspaceEditsOptions,
 } from './workspace/editor.js';
 
 // ============================================
 // TreeView
 // ============================================
 export { BaseTreeDataProvider, SimpleTreeDataProvider, createTreeView } from './views/treeview.js';
+export type { TreeItemData } from './views/treeview.js';
 
 // ============================================
 // WebView
@@ -232,3 +223,62 @@ export {
   createWebViewHtml,
   escapeHtml,
 } from './views/webview.js';
+export type {
+  WebViewOptions,
+  WebViewMessage,
+  ManagedWebViewPanel,
+  CSPOptions,
+} from './views/webview.js';
+
+// ============================================
+// std: timing (vscode-free; also exported as the ./timing subpath)
+// ============================================
+export {
+  debounce,
+  throttle,
+  withTiming,
+  measureTime,
+  withTimeout,
+  TimeoutError,
+} from './std/timing.js';
+export type {
+  DebounceOptions,
+  DebouncedFunction,
+  ThrottleOptions,
+  ThrottledFunction,
+  TimingResult,
+  TimingOptions,
+  WithTimeoutOptions,
+  TimeoutOperation,
+} from './std/timing.js';
+
+// ============================================
+// std: retry (vscode-free; also exported as the ./retry subpath)
+// ============================================
+export { retry, RetryExhaustedError } from './std/retry.js';
+export type { RetryOptions, RetryJitter, RetryContext } from './std/retry.js';
+
+// ============================================
+// Localization
+// ============================================
+export {
+  l10n,
+  getLanguage,
+  isLanguage,
+  plural,
+  formatNumber,
+  formatDate,
+  formatRelativeTime,
+  pluralFor,
+  formatNumberFor,
+  formatDateFor,
+  formatRelativeTimeFor,
+  getOrCreateCached,
+} from './l10n/index.js';
+export type {
+  L10nMessageOptions,
+  PluralForms,
+  NumberFormatOptions,
+  DateFormatOptions,
+  RelativeTimeUnit,
+} from './l10n/index.js';

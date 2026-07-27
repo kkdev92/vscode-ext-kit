@@ -1,111 +1,66 @@
 import * as vscode from 'vscode';
+import { pluralFor, formatNumberFor, formatDateFor, formatRelativeTimeFor } from './format.js';
+import type {
+  PluralForms,
+  NumberFormatOptions,
+  DateFormatOptions,
+  RelativeTimeUnit,
+} from './format.js';
+
+export * from './format.js';
 
 /**
- * Plural forms for different languages.
- * Based on CLDR plural rules.
+ * Options accepted by the object form of {@link l10n}'s `t`.
  */
-export interface PluralForms {
-  /** Used for count of 0 (optional, falls back to 'other') */
-  zero?: string;
-  /** Used for count of 1 */
-  one?: string;
-  /** Used for count of 2 (Arabic, etc.) */
-  two?: string;
-  /** Used for small numbers (Slavic languages, etc.) */
-  few?: string;
-  /** Used for large numbers (Slavic languages, etc.) */
-  many?: string;
-  /** Default form (required) */
-  other: string;
+export interface L10nMessageOptions {
+  /**
+   * The message to localize. Supports index templating where strings like
+   * `{0}` and `{1}` are replaced by the item at that index in `args`.
+   */
+  message: string;
+  /** Arguments used to fill in the message template. */
+  args?: Array<string | number | boolean>;
+  /** A comment to help translators understand the context of the message. */
+  comment?: string | string[];
 }
 
-/**
- * Options for number formatting.
- */
-export interface NumberFormatOptions {
-  /** Minimum number of integer digits (default: 1) */
-  minimumIntegerDigits?: number;
-  /** Minimum number of fraction digits */
-  minimumFractionDigits?: number;
-  /** Maximum number of fraction digits */
-  maximumFractionDigits?: number;
-  /** Use grouping separators (default: true) */
-  useGrouping?: boolean;
-  /** Style: 'decimal', 'currency', 'percent', 'unit' */
-  style?: 'decimal' | 'currency' | 'percent' | 'unit';
-  /** Currency code for style: 'currency' */
-  currency?: string;
-  /** Unit for style: 'unit' */
-  unit?: string;
-}
-
-/**
- * Options for date formatting.
- */
-export interface DateFormatOptions {
-  /** Date style: 'full', 'long', 'medium', 'short' */
-  dateStyle?: 'full' | 'long' | 'medium' | 'short';
-  /** Time style: 'full', 'long', 'medium', 'short' */
-  timeStyle?: 'full' | 'long' | 'medium' | 'short';
-}
-
-/**
- * Unit for relative time formatting.
- */
-export type RelativeTimeUnit =
-  'year' | 'quarter' | 'month' | 'week' | 'day' | 'hour' | 'minute' | 'second';
-
-// Intl constructors are expensive (locale data lookup); cache instances per
-// language + options. The caches are tiny in practice — the language is fixed
-// for a session and extensions use a handful of option sets — but cap them
-// defensively so unbounded option permutations can't grow memory.
-const FORMATTER_CACHE_LIMIT = 100;
-const pluralRulesCache = new Map<string, Intl.PluralRules>();
-const numberFormatCache = new Map<string, Intl.NumberFormat>();
-const dateTimeFormatCache = new Map<string, Intl.DateTimeFormat>();
-const relativeTimeFormatCache = new Map<string, Intl.RelativeTimeFormat>();
-
-function getCachedFormatter<T>(
-  cache: Map<string, T>,
-  language: string,
-  options: unknown,
-  create: (language: string) => T
-): T {
-  const key = options === undefined ? language : `${language}|${JSON.stringify(options)}`;
-  let formatter = cache.get(key);
-  if (formatter === undefined) {
-    if (cache.size >= FORMATTER_CACHE_LIMIT) {
-      cache.clear();
-    }
-    formatter = create(language);
-    cache.set(key, formatter);
+function translate(message: string, ...args: Array<string | number | boolean>): string;
+function translate(options: L10nMessageOptions): string;
+function translate(
+  messageOrOptions: string | L10nMessageOptions,
+  ...args: Array<string | number | boolean>
+): string {
+  if (typeof messageOrOptions === 'string') {
+    return vscode.l10n.t(messageOrOptions, ...args);
   }
-  return formatter;
+
+  const { message, args: templateArgs, comment } = messageOrOptions;
+  if (comment === undefined) {
+    return templateArgs === undefined
+      ? vscode.l10n.t(message)
+      : vscode.l10n.t(message, ...templateArgs);
+  }
+  return vscode.l10n.t({ message, args: templateArgs, comment });
 }
 
 /**
- * Translates a message string using VS Code's localization API.
- * This is a convenience wrapper around `vscode.l10n.t`.
+ * Namespaced translation helper shaped as `l10n.t(...)`, matching the
+ * callee pattern `@vscode/l10n-dev`'s static string extractor scans for
+ * (`l10n.t(...)` / `vscode.l10n.t(...)`). A bare `t(...)` export — this
+ * library's previous shape — cannot be picked up by that tool.
  *
- * @param message - The message to translate
- * @param args - Arguments for string interpolation
- * @returns The translated string
+ * For strings you need the extractor to find with certainty, calling
+ * `vscode.l10n.t(...)` directly remains the safest option; this wrapper
+ * exists for the common case, plus a type-safe `comment` overload for
+ * translator-facing context.
  *
  * @example
  * ```typescript
- * // Simple translation
- * const greeting = t('Hello, World!');
- *
- * // With interpolation
- * const welcome = t('Welcome, {0}!', userName);
- *
- * // With multiple arguments
- * const status = t('Found {0} files in {1}', count, folderName);
+ * l10n.t('Hello, {0}!', name);
+ * l10n.t({ message: 'Found {0} files', args: [count], comment: 'Status bar text' });
  * ```
  */
-export function t(message: string, ...args: (string | number | boolean)[]): string {
-  return vscode.l10n.t(message, ...args);
-}
+export const l10n = { t: translate };
 
 /**
  * Gets the current VS Code display language.
@@ -142,13 +97,15 @@ export function isLanguage(locale: string): boolean {
 }
 
 /**
- * Returns the appropriate plural form based on count.
+ * Returns the appropriate plural form based on count, using VS Code's
+ * current display language. See `pluralFor` for the vscode-independent
+ * core (e.g. for reuse in a Webview bundle).
  *
- * Uses the Intl.PluralRules API to determine the correct form
- * for the current language. Supports all CLDR plural categories.
+ * Supports all CLDR plural categories via `Intl.PluralRules`.
  *
  * @param count - The number to pluralize
  * @param forms - Object containing plural forms
+ * @param extra - Additional named values to interpolate alongside `{count}`
  * @returns The interpolated string with the correct plural form
  *
  * @example
@@ -157,50 +114,26 @@ export function isLanguage(locale: string): boolean {
  * plural(1, { one: '{count} item', other: '{count} items' });
  * // -> "1 item"
  *
- * plural(5, { one: '{count} item', other: '{count} items' });
- * // -> "5 items"
- *
  * // With zero form
- * plural(0, {
- *   zero: 'No items',
- *   one: '{count} item',
- *   other: '{count} items'
- * });
+ * plural(0, { zero: 'No items', one: '{count} item', other: '{count} items' });
  * // -> "No items"
  *
- * // Japanese (no plural distinction)
- * plural(5, { other: '{count}個のアイテム' });
- * // -> "5個のアイテム"
+ * // Extra named placeholders alongside {count}
+ * plural(3, { one: '{count} of {total}', other: '{count} of {total}' }, { total: 10 });
+ * // -> "3 of 10"
  * ```
  */
-export function plural(count: number, forms: PluralForms): string {
-  const rules = getCachedFormatter(
-    pluralRulesCache,
-    vscode.env.language,
-    undefined,
-    (lang) => new Intl.PluralRules(lang)
-  );
-  const rule = rules.select(count);
-
-  // Special case for zero if provided
-  if (count === 0 && forms.zero !== undefined) {
-    return interpolateCount(forms.zero, count);
-  }
-
-  // Get the form for the plural rule, falling back to 'other'
-  const form = forms[rule as keyof PluralForms] ?? forms.other;
-  return interpolateCount(form, count);
+export function plural(
+  count: number,
+  forms: PluralForms,
+  extra?: Record<string, string | number>
+): string {
+  return pluralFor(vscode.env.language, count, forms, extra);
 }
 
 /**
- * Interpolates {count} placeholder in a string.
- */
-function interpolateCount(template: string, count: number): string {
-  return template.replace(/\{count\}/g, String(count));
-}
-
-/**
- * Formats a number according to the current locale.
+ * Formats a number according to the current locale. See `formatNumberFor`
+ * for the vscode-independent core.
  *
  * Uses Intl.NumberFormat with VS Code's display language.
  *
@@ -221,24 +154,15 @@ function interpolateCount(template: string, count: number): string {
  * // Percentage
  * formatNumber(0.75, { style: 'percent' });
  * // -> "75%"
- *
- * // Fixed decimals
- * formatNumber(3.14159, { maximumFractionDigits: 2 });
- * // -> "3.14"
  * ```
  */
 export function formatNumber(value: number, options: NumberFormatOptions = {}): string {
-  const formatter = getCachedFormatter(
-    numberFormatCache,
-    vscode.env.language,
-    options,
-    (lang) => new Intl.NumberFormat(lang, options)
-  );
-  return formatter.format(value);
+  return formatNumberFor(vscode.env.language, value, options);
 }
 
 /**
- * Formats a date according to the current locale.
+ * Formats a date according to the current locale. See `formatDateFor` for
+ * the vscode-independent core.
  *
  * Uses Intl.DateTimeFormat with VS Code's display language.
  *
@@ -257,24 +181,16 @@ export function formatNumber(value: number, options: NumberFormatOptions = {}): 
  * // Long date
  * formatDate(date, { dateStyle: 'long' });
  * // -> "February 4, 2026" (en) / "4. Februar 2026" (de)
- *
- * // Date and time
- * formatDate(new Date(), { dateStyle: 'medium', timeStyle: 'short' });
- * // -> "Feb 4, 2026, 10:30 AM" (en)
  * ```
  */
 export function formatDate(date: Date, options: DateFormatOptions = {}): string {
-  const formatter = getCachedFormatter(
-    dateTimeFormatCache,
-    vscode.env.language,
-    options,
-    (lang) => new Intl.DateTimeFormat(lang, options)
-  );
-  return formatter.format(date);
+  return formatDateFor(vscode.env.language, date, options);
 }
 
 /**
- * Formats a relative time (e.g., "2 days ago", "in 3 hours").
+ * Formats a relative time (e.g., "2 days ago", "in 3 hours") according to
+ * the current locale. See `formatRelativeTimeFor` for the vscode-independent
+ * core.
  *
  * Uses Intl.RelativeTimeFormat with VS Code's display language.
  *
@@ -290,12 +206,6 @@ export function formatDate(date: Date, options: DateFormatOptions = {}): string 
  *
  * formatRelativeTime(2, 'hour');
  * // -> "in 2 hours" (en) / "in 2 Stunden" (de)
- *
- * formatRelativeTime(-5, 'minute', 'short');
- * // -> "5 min. ago" (en)
- *
- * formatRelativeTime(1, 'week', 'narrow');
- * // -> "in 1 wk." (en)
  * ```
  */
 export function formatRelativeTime(
@@ -303,11 +213,5 @@ export function formatRelativeTime(
   unit: RelativeTimeUnit,
   style: 'long' | 'short' | 'narrow' = 'long'
 ): string {
-  const formatter = getCachedFormatter(
-    relativeTimeFormatCache,
-    vscode.env.language,
-    style,
-    (lang) => new Intl.RelativeTimeFormat(lang, { style })
-  );
-  return formatter.format(value, unit);
+  return formatRelativeTimeFor(vscode.env.language, value, unit, style);
 }

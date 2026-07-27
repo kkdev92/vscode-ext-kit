@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { debounce, throttle, withTiming, measureTime } from '../src/std/timing.js';
+import {
+  debounce,
+  throttle,
+  withTiming,
+  measureTime,
+  withTimeout,
+  TimeoutError,
+} from '../src/std/timing.js';
 import { createMockLogger } from './factories.js';
 
 describe('debounce', () => {
@@ -94,6 +101,140 @@ describe('debounce', () => {
 
       expect(fn).toHaveBeenCalledTimes(1);
       expect(fn).toHaveBeenCalledWith('second');
+    });
+  });
+
+  describe('leading', () => {
+    it('invokes immediately on the leading edge when enabled', () => {
+      const fn = vi.fn();
+      const debounced = debounce(fn, 100, { leading: true, trailing: false });
+
+      debounced('a');
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(fn).toHaveBeenCalledWith('a');
+
+      // Trailing disabled: a call queued mid-wait must not fire later.
+      debounced('b');
+      vi.advanceTimersByTime(100);
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it('invokes on both edges when leading and trailing are enabled', () => {
+      const fn = vi.fn();
+      const debounced = debounce(fn, 100, { leading: true, trailing: true });
+
+      debounced('a');
+      debounced('b');
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(fn).toHaveBeenCalledWith('a');
+
+      vi.advanceTimersByTime(100);
+      expect(fn).toHaveBeenCalledTimes(2);
+      expect(fn).toHaveBeenLastCalledWith('b');
+    });
+
+    it('does not double-invoke for a single call with leading and trailing both enabled', () => {
+      const fn = vi.fn();
+      const debounced = debounce(fn, 100, { leading: true, trailing: true });
+
+      debounced('solo');
+      vi.advanceTimersByTime(100);
+
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('maxWait', () => {
+    it('invokes at least once every maxWait even under continuous calls', () => {
+      const fn = vi.fn();
+      const debounced = debounce(fn, 100, { maxWait: 150 });
+
+      debounced('a'); // t=0
+      vi.advanceTimersByTime(60);
+      debounced('b'); // t=60
+      vi.advanceTimersByTime(60);
+      debounced('c'); // t=120
+      expect(fn).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(30); // t=150: maxWait forces a flush
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(fn).toHaveBeenCalledWith('c');
+    });
+
+    it('does not fire before maxWait if calls stop and the normal wait elapses first', () => {
+      const fn = vi.fn();
+      const debounced = debounce(fn, 100, { maxWait: 500 });
+
+      debounced('only');
+      vi.advanceTimersByTime(100);
+
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(fn).toHaveBeenCalledWith('only');
+    });
+  });
+
+  describe('flush', () => {
+    it('immediately invokes a pending trailing call', () => {
+      const fn = vi.fn();
+      const debounced = debounce(fn, 100);
+
+      debounced('a');
+      debounced.flush();
+
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(fn).toHaveBeenCalledWith('a');
+
+      vi.advanceTimersByTime(100);
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it('is a no-op when nothing is pending', () => {
+      const fn = vi.fn();
+      const debounced = debounce(fn, 100);
+
+      debounced.flush();
+
+      expect(fn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('pending', () => {
+    it('reports scheduled vs idle state', () => {
+      const fn = vi.fn();
+      const debounced = debounce(fn, 100);
+
+      expect(debounced.pending()).toBe(false);
+
+      debounced();
+      expect(debounced.pending()).toBe(true);
+
+      vi.advanceTimersByTime(100);
+      expect(debounced.pending()).toBe(false);
+    });
+
+    it('is false after cancel', () => {
+      const fn = vi.fn();
+      const debounced = debounce(fn, 100);
+
+      debounced();
+      debounced.cancel();
+
+      expect(debounced.pending()).toBe(false);
+    });
+  });
+
+  describe('signal', () => {
+    it('cancels the pending invocation when the signal aborts', () => {
+      const fn = vi.fn();
+      const controller = new AbortController();
+      const debounced = debounce(fn, 100, { signal: controller.signal });
+
+      debounced();
+      controller.abort();
+      vi.advanceTimersByTime(100);
+
+      expect(fn).not.toHaveBeenCalled();
+      expect(debounced.pending()).toBe(false);
     });
   });
 });
@@ -205,6 +346,187 @@ describe('throttle', () => {
       expect(fn).toHaveBeenCalledTimes(2);
       expect(fn).toHaveBeenLastCalledWith('third');
     });
+  });
+
+  describe('leading: false', () => {
+    it('skips the immediate call and only fires on the trailing edge', () => {
+      const fn = vi.fn();
+      const throttled = throttle(fn, 100, { leading: false });
+
+      throttled('a');
+      expect(fn).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(100);
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(fn).toHaveBeenCalledWith('a');
+    });
+  });
+
+  describe('trailing: false', () => {
+    it('only fires the leading call and drops queued trailing calls', () => {
+      const fn = vi.fn();
+      const throttled = throttle(fn, 100, { trailing: false });
+
+      throttled('a');
+      throttled('b');
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(fn).toHaveBeenCalledWith('a');
+
+      vi.advanceTimersByTime(100);
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('flush', () => {
+    it('immediately invokes a pending trailing call', () => {
+      const fn = vi.fn();
+      const throttled = throttle(fn, 100);
+
+      throttled('first');
+      throttled('second');
+      throttled.flush();
+
+      expect(fn).toHaveBeenCalledTimes(2);
+      expect(fn).toHaveBeenLastCalledWith('second');
+
+      vi.advanceTimersByTime(100);
+      expect(fn).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('pending', () => {
+    it('reports scheduled vs idle state', () => {
+      const fn = vi.fn();
+      const throttled = throttle(fn, 100);
+
+      expect(throttled.pending()).toBe(false);
+
+      throttled();
+      expect(throttled.pending()).toBe(true);
+
+      vi.advanceTimersByTime(100);
+      expect(throttled.pending()).toBe(false);
+    });
+  });
+
+  describe('signal', () => {
+    it('cancels the pending trailing invocation when the signal aborts', () => {
+      const fn = vi.fn();
+      const controller = new AbortController();
+      const throttled = throttle(fn, 100, { signal: controller.signal });
+
+      throttled('first');
+      throttled('second');
+      controller.abort();
+      vi.advanceTimersByTime(100);
+
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(fn).toHaveBeenCalledWith('first');
+    });
+  });
+});
+
+// ============================================
+// withTimeout
+// ============================================
+
+describe('withTimeout', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('resolves with the value when the promise settles before the timeout', async () => {
+    const inner = new Promise<string>((resolve) => setTimeout(() => resolve('done'), 50));
+
+    const resultPromise = withTimeout(inner, 100);
+    await vi.advanceTimersByTimeAsync(50);
+
+    await expect(resultPromise).resolves.toBe('done');
+  });
+
+  it('rejects with a named TimeoutError when the timeout elapses first', async () => {
+    const inner = new Promise<string>(() => {
+      // Never settles.
+    });
+
+    const resultPromise = withTimeout(inner, 100);
+    const catchPromise = resultPromise.catch((error: unknown) => error);
+
+    await vi.advanceTimersByTimeAsync(100);
+    const error = await catchPromise;
+
+    expect(error).toBeInstanceOf(TimeoutError);
+    expect((error as Error).name).toBe('TimeoutError');
+    expect((error as Error).message).toContain('100ms');
+  });
+
+  it('propagates the source promise rejection when it fails before the timeout', async () => {
+    const inner = Promise.reject(new Error('boom'));
+
+    await expect(withTimeout(inner, 100)).rejects.toThrow('boom');
+  });
+
+  it('passes a combined AbortSignal to a function-shaped operation', async () => {
+    let receivedSignal: AbortSignal | undefined;
+    const operation = (signal: AbortSignal): Promise<string> => {
+      receivedSignal = signal;
+      return new Promise((resolve) => setTimeout(() => resolve('ok'), 10));
+    };
+
+    const resultPromise = withTimeout(operation, 100);
+    await vi.advanceTimersByTimeAsync(10);
+
+    await expect(resultPromise).resolves.toBe('ok');
+    expect(receivedSignal).toBeInstanceOf(AbortSignal);
+    expect(receivedSignal?.aborted).toBe(false);
+  });
+
+  it('aborts the signal passed to a function-shaped operation on timeout', async () => {
+    let receivedSignal: AbortSignal | undefined;
+    const operation = (signal: AbortSignal): Promise<never> => {
+      receivedSignal = signal;
+      return new Promise(() => {
+        // Never settles; only the signal matters for this test.
+      });
+    };
+
+    const resultPromise = withTimeout(operation, 50);
+    const catchPromise = resultPromise.catch((error: unknown) => error);
+
+    await vi.advanceTimersByTimeAsync(50);
+    await catchPromise;
+
+    expect(receivedSignal?.aborted).toBe(true);
+    expect(receivedSignal?.reason).toBeInstanceOf(TimeoutError);
+  });
+
+  it('rejects immediately if the external signal is already aborted', async () => {
+    const controller = new AbortController();
+    const reason = new Error('pre-aborted');
+    controller.abort(reason);
+
+    await expect(
+      withTimeout(Promise.resolve('never'), 100, { signal: controller.signal })
+    ).rejects.toBe(reason);
+  });
+
+  it('rejects with the external abort reason when it aborts before settling or timing out', async () => {
+    const controller = new AbortController();
+    const inner = new Promise<string>(() => {
+      // Never settles.
+    });
+
+    const resultPromise = withTimeout(inner, 10_000, { signal: controller.signal });
+    const catchPromise = resultPromise.catch((error: unknown) => error);
+
+    const reason = new Error('cancelled by caller');
+    controller.abort(reason);
+
+    expect(await catchPromise).toBe(reason);
   });
 });
 

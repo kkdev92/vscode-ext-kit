@@ -6,19 +6,47 @@ import { debounce } from '../std/timing.js';
 // ============================================
 
 /**
+ * A single glob pattern entry: a plain glob string, or a pre-built
+ * `vscode.RelativePattern` that carries its own base folder.
+ */
+export type WatchPattern = string | vscode.RelativePattern;
+
+/**
  * Options for creating a file watcher.
  */
 export interface FileWatcherOptions {
-  /** Glob pattern(s) to watch */
-  patterns: string | string[];
-  /** Workspace folder (when specified, uses RelativePattern for better performance) */
+  /**
+   * Glob pattern(s) to watch. An entry may be a plain glob string or a
+   * pre-built `vscode.RelativePattern`, so a single watcher can span
+   * multiple workspace folders with different base folders by mixing
+   * `RelativePattern` entries in the array.
+   */
+  patterns: WatchPattern | WatchPattern[];
+  /**
+   * Workspace folder used as the base for any *string* pattern (via
+   * `RelativePattern`, for better performance). Ignored for entries that
+   * are already a `RelativePattern` — those carry their own base.
+   */
   workspaceFolder?: vscode.WorkspaceFolder;
   /** Patterns to ignore */
   ignorePatterns?: string[];
   /** Debounce delay in milliseconds (default: 100) */
   debounceDelay?: number;
-  /** Events to watch (default: all) */
+  /**
+   * Events to watch (default: all). This also determines which native
+   * `ignore*Events` flags are passed to `createFileSystemWatcher`, so event
+   * kinds nobody asked for never enter the batching pipeline in the first
+   * place (as opposed to being filtered out after the fact).
+   */
   events?: ('create' | 'change' | 'delete')[];
+  /**
+   * Once the number of distinct pending files reaches this count, flush
+   * immediately instead of waiting for `debounceDelay`. Bounds memory
+   * during large bursts (e.g. `git checkout`, `npm install`, build output
+   * being rewritten) where events keep arriving faster than the debounce
+   * window ever gets a chance to elapse. Default: unbounded.
+   */
+  maxBatchSize?: number;
 }
 
 /**
@@ -46,7 +74,13 @@ export interface ManagedFileWatcher extends vscode.Disposable {
    */
   onDidChange(listener: (events: FileWatcherEvent[]) => void): vscode.Disposable;
 
-  /** Pause the file watcher. */
+  /**
+   * Pauses event delivery and discards any events currently pending in the
+   * debounce window. Native watchers stay registered in the background,
+   * but the batch that was building up is dropped — resuming does not
+   * replay it. If you need to react to changes made while paused, dispose
+   * and recreate the watcher instead of relying on `resume()` to flush.
+   */
   pause(): void;
 
   /** Resume the file watcher. */
@@ -73,6 +107,7 @@ export interface ManagedFileWatcher extends vscode.Disposable {
  *   ignorePatterns: ['**\/node_modules/**'],
  *   debounceDelay: 300,
  *   events: ['change', 'create'],
+ *   maxBatchSize: 500, // flush immediately during large bursts
  * });
  *
  * watcher.onDidChange((events) => {
@@ -83,6 +118,14 @@ export interface ManagedFileWatcher extends vscode.Disposable {
  * });
  *
  * context.subscriptions.push(watcher);
+ *
+ * // Multi-root workspace: mix RelativePattern entries with their own base
+ * const perFolder = createFileWatcher({
+ *   patterns: [
+ *     new vscode.RelativePattern(folderA, '**\/*.ts'),
+ *     new vscode.RelativePattern(folderB, '**\/*.md'),
+ *   ],
+ * });
  * ```
  */
 export function createFileWatcher(options: FileWatcherOptions): ManagedFileWatcher {
@@ -92,25 +135,38 @@ export function createFileWatcher(options: FileWatcherOptions): ManagedFileWatch
     ignorePatterns = [],
     debounceDelay = 100,
     events = ['create', 'change', 'delete'],
+    maxBatchSize,
   } = options;
 
   const patternList = Array.isArray(patterns) ? patterns : [patterns];
   const watchers: vscode.FileSystemWatcher[] = [];
   const listeners: ((events: FileWatcherEvent[]) => void)[] = [];
-  const pendingEvents: FileWatcherEvent[] = [];
+  // Keyed by uri.toString() so repeated events for the same file are O(1) to
+  // dedupe (a linear `find` per event is O(n), i.e. O(n^2) over a burst) and
+  // so that, at flush time, each file is reported with its latest event type.
+  const pendingEvents = new Map<string, FileWatcherEvent>();
   let isPaused = false;
   let isDisposed = false;
 
-  // Create debounced flush function
-  const flushEvents = debounce(() => {
-    if (pendingEvents.length > 0 && !isPaused) {
-      const events = [...pendingEvents];
-      pendingEvents.length = 0;
-      for (const listener of listeners) {
-        listener(events);
+  function flushNow(): void {
+    if (pendingEvents.size === 0 || isPaused) {
+      return;
+    }
+    const batch = [...pendingEvents.values()];
+    pendingEvents.clear();
+    for (const listener of listeners) {
+      try {
+        listener(batch);
+      } catch {
+        // Isolate listener failures: one bad listener must not prevent the
+        // rest from being notified (mirrors registerCommands' safeExecute
+        // wrapping in commands.ts).
       }
     }
-  }, debounceDelay);
+  }
+
+  // Create debounced flush function
+  const flushEvents = debounce(flushNow, debounceDelay);
 
   // Compile ignore patterns once at creation — building a RegExp per pattern
   // on every event is wasteful, and regex metacharacters in patterns
@@ -147,36 +203,52 @@ export function createFileWatcher(options: FileWatcherOptions): ManagedFileWatch
       return;
     }
 
-    // Check for duplicate events
-    const existing = pendingEvents.find((e) => e.uri.fsPath === uri.fsPath && e.type === type);
-    if (existing) {
-      existing.timestamp = Date.now();
-    } else {
-      pendingEvents.push({
-        type,
-        uri,
-        timestamp: Date.now(),
-      });
-    }
+    pendingEvents.set(uri.toString(), { type, uri, timestamp: Date.now() });
 
-    flushEvents();
+    if (maxBatchSize !== undefined && pendingEvents.size >= maxBatchSize) {
+      // Bypass the debounce window entirely once the batch is large enough
+      // that waiting longer only risks unbounded memory growth.
+      flushEvents.cancel();
+      flushNow();
+    } else {
+      flushEvents();
+    }
   }
+
+  // Derive the native ignore flags from `events` once, and reuse them both
+  // for the watcher constructor call and for deciding which listeners to
+  // attach at all.
+  const ignoreCreateEvents = !events.includes('create');
+  const ignoreChangeEvents = !events.includes('change');
+  const ignoreDeleteEvents = !events.includes('delete');
 
   // Create watchers for each pattern
   for (const pattern of patternList) {
-    // Use RelativePattern when workspaceFolder is specified for better performance
-    const watchPattern = workspaceFolder
-      ? new vscode.RelativePattern(workspaceFolder, pattern)
-      : pattern;
-    const watcher = vscode.workspace.createFileSystemWatcher(watchPattern);
+    // A pattern that's already a RelativePattern carries its own base
+    // folder; only plain string patterns get wrapped with `workspaceFolder`.
+    const watchPattern: vscode.GlobPattern =
+      typeof pattern === 'string' && workspaceFolder
+        ? new vscode.RelativePattern(workspaceFolder, pattern)
+        : pattern;
 
-    if (events.includes('create')) {
+    // Pass ignore*Events to the native watcher instead of only filtering
+    // after the fact, so event kinds nobody asked for are never subscribed
+    // to (and, per VS Code's own docs for these flags, never generated for
+    // this watcher in the first place).
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      watchPattern,
+      ignoreCreateEvents,
+      ignoreChangeEvents,
+      ignoreDeleteEvents
+    );
+
+    if (!ignoreCreateEvents) {
       watcher.onDidCreate((uri) => addEvent('create', uri));
     }
-    if (events.includes('change')) {
+    if (!ignoreChangeEvents) {
       watcher.onDidChange((uri) => addEvent('change', uri));
     }
-    if (events.includes('delete')) {
+    if (!ignoreDeleteEvents) {
       watcher.onDidDelete((uri) => addEvent('delete', uri));
     }
 
@@ -197,7 +269,7 @@ export function createFileWatcher(options: FileWatcherOptions): ManagedFileWatch
     pause(): void {
       isPaused = true;
       flushEvents.cancel();
-      pendingEvents.length = 0;
+      pendingEvents.clear();
     },
 
     resume(): void {
@@ -211,7 +283,7 @@ export function createFileWatcher(options: FileWatcherOptions): ManagedFileWatch
     dispose(): void {
       isDisposed = true;
       flushEvents.cancel();
-      pendingEvents.length = 0;
+      pendingEvents.clear();
       listeners.length = 0;
       for (const watcher of watchers) {
         watcher.dispose();
@@ -248,27 +320,19 @@ export function watchFile(
   onChange: () => void,
   debounceDelay: number = 100
 ): vscode.Disposable {
-  const debouncedOnChange = debounce(onChange, debounceDelay);
-
-  // Create a pattern that matches the specific file
+  // Built on top of createFileWatcher so a single-file watch gets the same
+  // engine (native ignore flags, Map-based dedup, etc.) instead of a second,
+  // hand-rolled debounce+watch pipeline.
   const pattern = new vscode.RelativePattern(
     vscode.Uri.joinPath(uri, '..'),
     uri.path.split('/').pop() || ''
   );
 
-  const watcher = vscode.workspace.createFileSystemWatcher(pattern);
-
-  const disposables = [
-    watcher,
-    watcher.onDidChange(() => debouncedOnChange()),
-    watcher.onDidCreate(() => debouncedOnChange()),
-    watcher.onDidDelete(() => debouncedOnChange()),
-  ];
+  const watcher = createFileWatcher({ patterns: pattern, debounceDelay });
+  const subscription = watcher.onDidChange(() => onChange());
 
   return new vscode.Disposable(() => {
-    debouncedOnChange.cancel();
-    for (const d of disposables) {
-      d.dispose();
-    }
+    subscription.dispose();
+    watcher.dispose();
   });
 }

@@ -500,11 +500,65 @@ export class Disposable {
 }
 
 // Mock CancellationToken factory
-export function createMockCancellationToken() {
+export function createMockCancellationToken(isCancellationRequested: boolean = false) {
   return {
-    isCancellationRequested: false,
+    isCancellationRequested,
     onCancellationRequested: vi.fn(() => ({ dispose: vi.fn() })),
   };
+}
+
+// Mock CancellationError class (name is 'Canceled', matching the real API)
+export class CancellationError extends Error {
+  constructor() {
+    super('Canceled');
+    this.name = 'Canceled';
+  }
+}
+
+// Mock WorkspaceEdit class. Entries are keyed by `uri.toString()` so tests
+// can inspect what was recorded for a given file after a call such as
+// `applyWorkspaceEdits`.
+export interface MockWorkspaceEditEntry {
+  range: Range;
+  newText: string;
+  metadata?: unknown;
+}
+
+export class WorkspaceEdit {
+  private readonly _entries = new Map<string, MockWorkspaceEditEntry[]>();
+
+  replace(uri: { toString(): string }, range: Range, newText: string, metadata?: unknown): void {
+    const key = uri.toString();
+    const list = this._entries.get(key) ?? [];
+    list.push({ range, newText, metadata });
+    this._entries.set(key, list);
+  }
+
+  insert(
+    uri: { toString(): string },
+    position: Position,
+    newText: string,
+    metadata?: unknown
+  ): void {
+    this.replace(uri, new Range(position, position), newText, metadata);
+  }
+
+  delete(uri: { toString(): string }, range: Range, metadata?: unknown): void {
+    this.replace(uri, range, '', metadata);
+  }
+
+  has(uri: { toString(): string }): boolean {
+    return this._entries.has(uri.toString());
+  }
+
+  get size(): number {
+    return this._entries.size;
+  }
+
+  // Test helper: inspect the recorded entries for a uri.
+  _getEntries(uri: { toString(): string }): MockWorkspaceEditEntry[] {
+    return this._entries.get(uri.toString()) ?? [];
+  }
 }
 
 // Reset all mocks
@@ -826,9 +880,14 @@ export function createMockTextDocument(content: string = '', languageId: string 
       }
       return new Position(lines.length - 1, lines[lines.length - 1]?.length || 0);
     }),
-    getWordRangeAtPosition: vi.fn((position: Position) => {
+    getWordRangeAtPosition: vi.fn((position: Position, regex?: RegExp) => {
       const line = lines[position.line] || '';
-      const wordPattern = /\w+/g;
+      // Force the `g` flag so `.exec()` advances through the line instead of
+      // matching the same spot forever when a caller passes a bare pattern
+      // (e.g. `/[\w-]+/` to treat kebab-case as one word).
+      const wordPattern = regex
+        ? new RegExp(regex.source, regex.flags.includes('g') ? regex.flags : `${regex.flags}g`)
+        : /\w+/g;
       let match;
       while ((match = wordPattern.exec(line)) !== null) {
         if (
@@ -841,6 +900,9 @@ export function createMockTextDocument(content: string = '', languageId: string 
             position.line,
             match.index + match[0].length
           );
+        }
+        if (match[0].length === 0) {
+          wordPattern.lastIndex++;
         }
       }
       return undefined;
@@ -886,7 +948,11 @@ export function createMockTextEditor(content: string = '', languageId: string = 
           replace: (range: Range, text: string) => void;
           insert: (position: Position, text: string) => void;
           delete: (range: Range) => void;
-        }) => void
+        }) => void,
+        // Accepted (and recorded via the mock's own `.mock.calls`) but not
+        // otherwise interpreted — tests assert on undoStopBefore/After by
+        // reading the call args directly.
+        _options?: { undoStopBefore: boolean; undoStopAfter: boolean }
       ) => {
         const operations: { type: string; range?: Range; position?: Position; text?: string }[] =
           [];
@@ -975,6 +1041,8 @@ export default {
   Range,
   Selection,
   Disposable,
+  CancellationError,
+  WorkspaceEdit,
   window,
   commands,
   workspace,
