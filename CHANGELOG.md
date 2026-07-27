@@ -3,8 +3,90 @@
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-This project is pre-1.0: while it follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
-in spirit, breaking changes may land in minor releases and are marked **Breaking**.
+From 1.0.0 onward this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Pre-1.0 releases followed it in spirit; their breaking changes are marked **Breaking**.
+
+## [1.0.0] - 2026-07-28
+
+A ground-up redesign for type safety, performance and testability.
+**Not backwards compatible with 0.x** — see [MIGRATION.md](MIGRATION.md) for a
+complete 0.x → 1.0 mapping. Requirements are unchanged (VS Code `^1.96.0`,
+zero runtime dependencies).
+
+### Added
+
+- **`createExtensionKit`** — one call in `activate()` wires a logger, a
+  disposable scope, and logger-bound `run`/`tryRun`/command registration.
+- **Schema-driven config**: `defineConfigSchema` + `field` + built-in
+  Standard Schema-compatible `s.*` validators (or bring zod/valibot).
+  Validated & cached reads, per-key change events, `watchSetting`,
+  `checkPackageJsonSync`.
+- **Typed webview RPC**: `createWebviewRpc` (request/response + events over
+  `postMessage`, `AbortSignal`/timeout, auto-reject on panel close), plus
+  `registerWebviewView` (sidebar) and `registerWebviewPanelSerializer`.
+- **Wizard fluent builder**: type-accumulating `wizard().step(...).optionalStep(...)
+  .branch(...).run(...)` returning `Result` with the exact answered shape —
+  async items (auto busy), async debounced validation, native back button and
+  step counter.
+- **`@kkdev92/vscode-ext-kit/testing`**: the vscode mock suite behind this
+  library's own test suite, published as a framework-agnostic testing kit
+  (`createVSCodeMock(vi)`, typed `createMockExtensionContext`, per-API mock
+  builders). Works with vitest/jest/bun:test.
+- **Subpath exports** `./timing` and `./retry` — vscode-free modules that
+  webview bundles can import directly.
+- Logger: `child(scope)` loggers, structured fields, `level` getter.
+- Commands: compile-time command-ID checking via
+  `registerCommands<'a.x' | 'a.y'>`, per-command `Disposable` map returns.
+- Storage: TTL, Settings Sync (`syncable`), typed `onDidChange`, `tryGet`,
+  multi-key `createSecretStore` with feature-detected `keys()`.
+- Editor: `applyWorkspaceEdits`, `applyEditsGrouped`, offset/position batch
+  utilities. TreeView: checkbox events, drag & drop helper, pagination
+  helper. UI: `createLanguageStatusItem`, pick separators, `PickItem`
+  value/display separation. std: `withTimeout`, debounce/throttle
+  `leading`/`maxWait`/`flush`/`pending`/`signal`, retry `signal`/`timeoutMs`/
+  `RetryExhaustedError`. `DisposableCollection` supports `using`
+  (`Symbol.dispose`); new `createScope`.
+
+### Changed
+
+- **Breaking:** Logger uses a native `LogOutputChannel` by default and takes
+  structured fields instead of printf varargs; telemetry goes through
+  `vscode.TelemetrySender` (custom `TelemetryReporter` and `redactStackPaths`
+  removed). The last Node API import is gone — the library no longer uses
+  any Node built-in.
+- **Breaking:** `safeExecute`/`trySafeExecute` → `run`/`tryRun` with
+  cancellation classification: `CancellationError`/`AbortError` produce no
+  error toast, log at debug level, mark `cancelled: true`, and are never
+  rethrown.
+- **Breaking:** config helpers (`getConfig`/`getSetting`/`setSetting`/
+  `onConfigChange`) replaced by the schema API; notification
+  `showWithActions` merged into `showInfo`/`showWarn`/`showError` with
+  reference-resolved action maps; `WebView*` renamed to `Webview*`;
+  `t()` → `l10n.t()`; editor thin wrappers (`getLineCount`/`getDocumentText`/
+  `isDirty`/`getLanguageId`) removed; `getFilePath` returns
+  `{ fsPath, uri }` and supports remote schemes.
+- **Breaking:** storage envelope format (one write per set, version inside
+  the envelope) — 0.x stored values are not read back; retry `jitter`
+  defaults to `'full'`; CSP defaults flipped to safe (inline styles / https
+  images opt-in).
+- `src/` reorganized into domain folders; tests are now type-checked
+  (`tsc -p tsconfig.tests.json` runs in `npm run typecheck`).
+
+### Fixed
+
+- `CommandHandler` rejected precisely-typed handlers the raw API accepts.
+- Wizard `step.title` was ignored whenever step numbers were shown.
+- Status bar `update()`/`set()` destroyed an active spinner;
+  `showStatusMessage` reused one hardcoded item id across calls.
+- `showWithActions` resolved actions by title string and broke on duplicate
+  titles.
+- Storage wrote every value twice (value + version keys, non-atomic).
+- `SimpleTreeDataProvider.reveal()` could never work (no `getParent`);
+  `removeItem` only worked at the root level.
+- File watcher subscribed to event kinds it then filtered out, and deduped
+  pending events in O(n) per event.
+- Logger `migrate`-style config listener leaks and `DisposableCollection`
+  add-after-dispose throwing instead of disposing.
 
 ## [0.5.0] - 2026-07-28
 
@@ -108,6 +190,7 @@ platform support, toolchain currency, and release supply chain.
 
 Initial public release.
 
+[1.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v0.5.0...v1.0.0
 [0.5.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/kkdev92/vscode-ext-kit/compare/v0.3.0...v0.3.1

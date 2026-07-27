@@ -1,6 +1,6 @@
 {
   "name": "@kkdev92/vscode-ext-kit",
-  "version": "0.5.0",
+  "version": "1.0.0",
   "description": "A lightweight utility library for VS Code extension development",
   "author": "kkdev92",
   "license": "MIT",
@@ -46,6 +46,7 @@
     "dist",
     "README.md",
     "CHANGELOG.md",
+    "MIGRATION.md",
     "LICENSE"
   ],
   "engines": {
