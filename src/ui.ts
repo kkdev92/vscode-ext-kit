@@ -174,8 +174,7 @@ interface WizardQuickPickStepMulti<TState, TKey extends keyof TState> extends Wi
  * QuickPick step definition (single or multi).
  */
 export type WizardQuickPickStep<TState, TKey extends keyof TState> =
-  | WizardQuickPickStepSingle<TState, TKey>
-  | WizardQuickPickStepMulti<TState, TKey>;
+  WizardQuickPickStepSingle<TState, TKey> | WizardQuickPickStepMulti<TState, TKey>;
 
 /**
  * Input step definition. Valid when `TState[TKey]` is `string` or `unknown`
@@ -214,8 +213,7 @@ interface WizardInputStepValid<TState, TKey extends keyof TState> extends Wizard
  * A wizard step can be either a QuickPick or Input step.
  */
 export type WizardStep<TState, TKey extends keyof TState = keyof TState> =
-  | WizardQuickPickStep<TState, TKey>
-  | WizardInputStep<TState, TKey>;
+  WizardQuickPickStep<TState, TKey> | WizardInputStep<TState, TKey>;
 
 /**
  * Wizard configuration options.

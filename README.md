@@ -74,7 +74,7 @@ A lightweight, type-safe utility library for VS Code extension development. Elim
 npm install @kkdev92/vscode-ext-kit
 ```
 
-> Requires VS Code 1.96.0+ and Node.js 20.0.0+
+> Requires VS Code 1.96.0+ and Node.js 22.0.0+
 
 ## Quick Start
 
@@ -909,7 +909,7 @@ npm install @kkdev92/vscode-ext-kit@latest
 
 ### Prerequisites
 
-- Node.js >= 20.0.0
+- Node.js >= 22.22.1 (Node 24 LTS recommended)
 - npm >= 10.0.0
 
 ### Setup

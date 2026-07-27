@@ -7,7 +7,7 @@ on:
 
 permissions:
   contents: write
-  packages: write
+  id-token: write
 
 jobs:
   publish:
@@ -15,10 +15,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
@@ -30,20 +30,25 @@ jobs:
       - name: Run linter
         run: npm run lint
 
+      - name: Run type check
+        run: npm run typecheck
+
+      - name: Check for unused code
+        run: npm run knip
+
       - name: Run tests
         run: npm test
 
       - name: Build
         run: npm run build
 
+      # Auth comes from npm trusted publishing (OIDC) via id-token: write —
+      # there is no NODE_AUTH_TOKEN. The registry-url above is still required
+      # so npm targets registry.npmjs.org when exchanging the OIDC token.
       - name: Publish to npm
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          generate_release_notes: true
+        run: gh release create "$GITHUB_REF_NAME" --generate-notes
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
