@@ -47,7 +47,6 @@ export type {
   TextEditorCommandHandler,
   RegisterCommandsOptions,
   ProgressOptions,
-  InputTextOptions,
 } from './core/types.js';
 
 // ============================================
@@ -135,33 +134,58 @@ export type {
   ProgressReporter,
   ProgressStep,
   StepsProgressOptions,
+  WithStepsOptions,
   StepsResult,
 } from './ui/progress.js';
 
 // ============================================
-// UI
+// UI: pick / input / wizard
 // ============================================
-export { pickOne, pickMany, inputText, wizard } from './ui/index.js';
+export {
+  pickOne,
+  pickMany,
+  toPickItem,
+  toPickSeparator,
+  inputText,
+  wizard,
+  quickpickStep,
+  inputStep,
+  WizardStepError,
+} from './ui/index.js';
 export type {
-  WizardQuickPickItem,
-  WizardQuickPickStep,
-  WizardInputStep,
-  WizardStep,
-  WizardOptions,
-  WizardResult,
+  PickItem,
+  PickItemDisplay,
+  InputTextOptions,
+  StepOutcome,
+  StepDefinition,
+  QuickPickStepConfig,
+  InputStepConfig,
+  WizardRunOptions,
+  WizardBuilder,
 } from './ui/index.js';
 
 // ============================================
 // Notification
 // ============================================
-export { showInfo, showWarn, showError, confirm, showWithActions } from './ui/notification.js';
-export type { NotificationOptions, NotificationAction, ConfirmOptions } from './ui/notification.js';
+export { showInfo, showWarn, showError, confirm } from './ui/notification.js';
+export type { NotifyAction, NotifyOptions, ConfirmOptions } from './ui/notification.js';
 
 // ============================================
 // StatusBar
 // ============================================
 export { createStatusBarItem, showStatusMessage } from './ui/statusbar.js';
 export type { StatusBarItemOptions, ManagedStatusBarItem } from './ui/statusbar.js';
+
+// ============================================
+// Language Status
+// ============================================
+export { createLanguageStatusItem } from './ui/languageStatus.js';
+export type {
+  LanguageStatusItemSeverity,
+  LanguageStatusItemOptions,
+  LanguageStatusItemUpdate,
+  ManagedLanguageStatusItem,
+} from './ui/languageStatus.js';
 
 // ============================================
 // FileWatcher
@@ -209,26 +233,41 @@ export type {
 // ============================================
 // TreeView
 // ============================================
-export { BaseTreeDataProvider, SimpleTreeDataProvider, createTreeView } from './views/treeview.js';
-export type { TreeItemData } from './views/treeview.js';
+export {
+  BaseTreeDataProvider,
+  SimpleTreeDataProvider,
+  createTreeView,
+  createDragAndDropController,
+  withPagination,
+  LOAD_MORE_ID,
+} from './views/treeview.js';
+export type { TreeItemData, TreeCheckboxChange, TreeDragAndDropOptions } from './views/treeview.js';
 
 // ============================================
-// WebView
+// Webview
 // ============================================
 export {
-  createWebViewPanel,
+  createWebviewPanel,
+  registerWebviewPanelSerializer,
+  registerWebviewView,
+  createWebviewRpc,
   generateCSP,
   generateNonce,
   loadHtmlTemplate,
-  createWebViewHtml,
+  createWebviewHtml,
   escapeHtml,
-} from './views/webview.js';
+} from './views/webview/index.js';
 export type {
-  WebViewOptions,
-  WebViewMessage,
-  ManagedWebViewPanel,
+  WebviewOptions,
+  WebviewMessage,
+  ManagedWebviewPanel,
+  WebviewViewOptions,
+  ManagedWebviewView,
+  WebviewRpc,
+  WebviewRpcSchema,
+  WebviewRpcRequestOptions,
   CSPOptions,
-} from './views/webview.js';
+} from './views/webview/index.js';
 
 // ============================================
 // std: timing (vscode-free; also exported as the ./timing subpath)

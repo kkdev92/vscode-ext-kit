@@ -104,16 +104,8 @@ export interface ProgressOptions {
 // ============================================
 // UI types
 // ============================================
-
-export interface InputTextOptions {
-  /** Prompt text to display */
-  prompt: string;
-  /** Placeholder text */
-  placeHolder?: string;
-  /** Initial value */
-  value?: string;
-  /** Password input mode */
-  password?: boolean;
-  /** Validation function */
-  validate?: (value: string) => string | undefined | Promise<string | undefined>;
-}
+//
+// `InputTextOptions` (and the wizard's various step/option types) moved to
+// `src/ui/input.ts` / `src/ui/wizard.ts` / `src/ui/pick.ts` as part of the
+// v1 UI redesign — the UI layer's option types now live next to the
+// functions that use them instead of in this shared file.

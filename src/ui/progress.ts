@@ -27,6 +27,15 @@ export interface StepsProgressOptions extends ProgressOptions {
 }
 
 /**
+ * Options for {@link withSteps}, combining the progress title with the
+ * usual {@link StepsProgressOptions}.
+ */
+export interface WithStepsOptions extends StepsProgressOptions {
+  /** Progress title displayed to user */
+  title: string;
+}
+
+/**
  * Result of a step-based progress operation.
  */
 export interface StepsResult<T extends readonly ProgressStep<unknown>[]> {
@@ -91,33 +100,41 @@ export async function withProgress<T>(
  * Each step's progress is calculated based on its weight (default: 1).
  * Progress is automatically reported after each step completes.
  *
- * @param title - Progress title displayed to user
- * @param steps - Array of steps to execute in order
- * @param opts - Progress options
+ * Steps are passed as rest arguments rather than an array so that
+ * `StepsResult<T>['results']` infers a precise per-step tuple type (e.g.
+ * `[number, string]`) straight from an inline call — no `as const` needed.
+ * Passing an array `T[]` to a single array parameter loses that per-element
+ * type (it widens to `T[]`); a rest parameter keeps each argument's literal
+ * position and type intact.
+ *
+ * @param options - Progress title plus the usual progress options
+ * @param steps - Steps to execute in order (as separate arguments, not an array)
  * @returns Result object containing completion status and results from each step
  *
  * @example
  * ```typescript
  * // Basic usage
- * const result = await withSteps('Deploying...', [
+ * const result = await withSteps(
+ *   { title: 'Deploying...' },
  *   { label: 'Building', task: async () => await build() },
  *   { label: 'Testing', task: async () => await runTests() },
- *   { label: 'Publishing', task: async () => await publish() },
- * ]);
+ *   { label: 'Publishing', task: async () => await publish() }
+ * );
  *
  * if (result.completed) {
  *   console.log('All steps completed');
  * }
  *
- * // With weights (heavier steps show more progress)
- * const result = await withSteps('Processing...', [
+ * // With weights (heavier steps show more progress) and per-step result types
+ * const result = await withSteps(
+ *   { title: 'Processing...', cancellable: true },
  *   { label: 'Downloading', task: download, weight: 3 },
- *   { label: 'Processing', task: process, weight: 5 },
- *   { label: 'Uploading', task: upload, weight: 2 },
- * ], { cancellable: true });
+ *   { label: 'Counting', task: () => 42, weight: 5 },
+ *   { label: 'Uploading', task: upload, weight: 2 }
+ * );
  *
- * // Access individual step results
- * const [downloadResult, processResult, uploadResult] = result.results;
+ * // Access individual step results — result.results[1] is typed as number
+ * const [downloadResult, count, uploadResult] = result.results;
  *
  * // Handle cancellation
  * if (result.cancelled) {
@@ -126,11 +143,10 @@ export async function withProgress<T>(
  * ```
  */
 export async function withSteps<T extends readonly ProgressStep<unknown>[]>(
-  title: string,
-  steps: T,
-  opts: StepsProgressOptions = {}
+  options: WithStepsOptions,
+  ...steps: T
 ): Promise<StepsResult<T>> {
-  const { location = vscode.ProgressLocation.Notification, cancellable = false } = opts;
+  const { title, location = vscode.ProgressLocation.Notification, cancellable = false } = options;
 
   // Calculate total weight for progress calculation
   const totalWeight = steps.reduce((sum, step) => sum + (step.weight ?? 1), 0);

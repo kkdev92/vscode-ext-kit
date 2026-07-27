@@ -1,18 +1,39 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
-import { createMockExtensionContext, createMockWebview, ViewColumn } from './mocks/vscode.js';
 import {
-  createWebViewPanel,
+  createMockExtensionContext,
+  createMockWebview,
+  createMockWebviewPanel,
+  createMockWebviewView,
+  createMockWebviewViewResolveContext,
+  createMockCancellationToken,
+  ViewColumn,
+} from './mocks/vscode.js';
+import {
+  createWebviewPanel,
+  registerWebviewPanelSerializer,
+  registerWebviewView,
   generateCSP,
   generateNonce,
-  createWebViewHtml,
+  createWebviewHtml,
   escapeHtml,
   loadHtmlTemplate,
-} from '../src/views/webview.js';
+  type ManagedWebviewView,
+} from '../src/views/webview/index.js';
 
 // loadHtmlTemplate reads templates through vscode.workspace.fs (mocked in setup.ts)
 const mockedReadFile = vi.mocked(vscode.workspace.fs.readFile);
 const asBytes = (text: string): Uint8Array => new TextEncoder().encode(text);
+
+// The mocked `vscode` module's own factories (in tests/setup.ts) don't record
+// listeners, so tests that need to simulate native events (dispose,
+// view-state change, resolveWebviewView...) override the return value with
+// the listener-capturing mocks from ./mocks/vscode.js instead.
+const mockedWindow = vscode.window as unknown as {
+  createWebviewPanel: ReturnType<typeof vi.fn>;
+  registerWebviewPanelSerializer: ReturnType<typeof vi.fn>;
+  registerWebviewViewProvider: ReturnType<typeof vi.fn>;
+};
 
 describe('webview', () => {
   beforeEach(() => {
@@ -20,14 +41,14 @@ describe('webview', () => {
   });
 
   // ============================================
-  // createWebViewPanel
+  // createWebviewPanel
   // ============================================
 
-  describe('createWebViewPanel', () => {
+  describe('createWebviewPanel', () => {
     it('creates a webview panel with default options', () => {
       const context = createMockExtensionContext();
 
-      const panel = createWebViewPanel(context as never, {
+      const panel = createWebviewPanel(context as never, {
         viewType: 'test.view',
         title: 'Test View',
       });
@@ -39,13 +60,13 @@ describe('webview', () => {
     it('creates a webview panel with custom options', () => {
       const context = createMockExtensionContext();
 
-      const panel = createWebViewPanel(context as never, {
+      const panel = createWebviewPanel(context as never, {
         viewType: 'test.view',
         title: 'Test View',
         column: ViewColumn.Two,
         enableScripts: true,
         enableForms: true,
-        retainContext: true,
+        retainContextWhenHidden: true,
         enableFindWidget: true,
       });
 
@@ -55,7 +76,7 @@ describe('webview', () => {
     it('sets HTML content', () => {
       const context = createMockExtensionContext();
 
-      const panel = createWebViewPanel(context as never, {
+      const panel = createWebviewPanel(context as never, {
         viewType: 'test.view',
         title: 'Test',
       });
@@ -68,7 +89,7 @@ describe('webview', () => {
     it('posts message to webview', async () => {
       const context = createMockExtensionContext();
 
-      const panel = createWebViewPanel(context as never, {
+      const panel = createWebviewPanel(context as never, {
         viewType: 'test.view',
         title: 'Test',
       });
@@ -81,7 +102,7 @@ describe('webview', () => {
     it('registers message handler', () => {
       const context = createMockExtensionContext();
 
-      const panel = createWebViewPanel(context as never, {
+      const panel = createWebviewPanel(context as never, {
         viewType: 'test.view',
         title: 'Test',
       });
@@ -93,24 +114,27 @@ describe('webview', () => {
       expect(typeof disposable.dispose).toBe('function');
     });
 
-    it('registers view state change handler', () => {
+    it('registers view state change handler and maps native events to a plain boolean', () => {
       const context = createMockExtensionContext();
+      const mockPanel = createMockWebviewPanel('test.view', 'Test');
+      mockedWindow.createWebviewPanel.mockReturnValue(mockPanel);
 
-      const panel = createWebViewPanel(context as never, {
+      const panel = createWebviewPanel(context as never, {
         viewType: 'test.view',
         title: 'Test',
       });
-
       const handler = vi.fn();
-      const disposable = panel.onDidChangeViewState(handler);
+      panel.onDidChangeViewState(handler);
 
-      expect(disposable).toBeDefined();
+      mockPanel._fireViewStateChange(false);
+
+      expect(handler).toHaveBeenCalledWith(false);
     });
 
     it('registers dispose handler', () => {
       const context = createMockExtensionContext();
 
-      const panel = createWebViewPanel(context as never, {
+      const panel = createWebviewPanel(context as never, {
         viewType: 'test.view',
         title: 'Test',
       });
@@ -124,7 +148,7 @@ describe('webview', () => {
     it('reveals the panel', () => {
       const context = createMockExtensionContext();
 
-      const panel = createWebViewPanel(context as never, {
+      const panel = createWebviewPanel(context as never, {
         viewType: 'test.view',
         title: 'Test',
       });
@@ -136,7 +160,7 @@ describe('webview', () => {
     it('converts URI to webview URI', () => {
       const context = createMockExtensionContext();
 
-      const panel = createWebViewPanel(context as never, {
+      const panel = createWebviewPanel(context as never, {
         viewType: 'test.view',
         title: 'Test',
       });
@@ -150,7 +174,7 @@ describe('webview', () => {
     it('exposes native panel', () => {
       const context = createMockExtensionContext();
 
-      const panel = createWebViewPanel(context as never, {
+      const panel = createWebviewPanel(context as never, {
         viewType: 'test.view',
         title: 'Test',
       });
@@ -162,7 +186,7 @@ describe('webview', () => {
     it('disposes panel', () => {
       const context = createMockExtensionContext();
 
-      const panel = createWebViewPanel(context as never, {
+      const panel = createWebviewPanel(context as never, {
         viewType: 'test.view',
         title: 'Test',
       });
@@ -174,12 +198,275 @@ describe('webview', () => {
     it('adds panel to context subscriptions', () => {
       const context = createMockExtensionContext();
 
-      createWebViewPanel(context as never, {
+      createWebviewPanel(context as never, {
         viewType: 'test.view',
         title: 'Test',
       });
 
       expect(context.subscriptions).toHaveLength(1);
+    });
+
+    it('exposes a typed rpc channel wired to the panel webview', async () => {
+      const context = createMockExtensionContext();
+      const mockPanel = createMockWebviewPanel('test.view', 'Test');
+      mockedWindow.createWebviewPanel.mockReturnValue(mockPanel);
+
+      const panel = createWebviewPanel(context as never, {
+        viewType: 'test.view',
+        title: 'Test',
+      });
+      panel.rpc.emit('greet', { name: 'world' });
+
+      expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({
+        k: 'ev',
+        event: 'greet',
+        payload: { name: 'world' },
+      });
+    });
+
+    it('rejects in-flight rpc requests when the native panel is closed by the user', async () => {
+      const context = createMockExtensionContext();
+      const mockPanel = createMockWebviewPanel('test.view', 'Test');
+      mockedWindow.createWebviewPanel.mockReturnValue(mockPanel);
+
+      const panel = createWebviewPanel(context as never, {
+        viewType: 'test.view',
+        title: 'Test',
+      });
+      const pending = panel.rpc.request('getData', undefined);
+
+      // Simulate the user closing the panel's tab directly (not via
+      // panel.dispose()) — the native onDidDispose bridge must still tear
+      // down the RPC channel so this doesn't hang forever.
+      mockPanel._fireDispose();
+
+      await expect(pending).rejects.toThrow();
+    });
+  });
+
+  // ============================================
+  // registerWebviewPanelSerializer
+  // ============================================
+
+  describe('registerWebviewPanelSerializer', () => {
+    it('registers a serializer for the given view type', () => {
+      const context = createMockExtensionContext();
+
+      registerWebviewPanelSerializer(context as never, 'test.view', vi.fn());
+
+      expect(mockedWindow.registerWebviewPanelSerializer).toHaveBeenCalledWith(
+        'test.view',
+        expect.anything()
+      );
+    });
+
+    it('adds the registration to context subscriptions', () => {
+      const context = createMockExtensionContext();
+
+      registerWebviewPanelSerializer(context as never, 'test.view', vi.fn());
+
+      expect(context.subscriptions.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('wraps the restored panel as a ManagedWebviewPanel and forwards persisted state', async () => {
+      const context = createMockExtensionContext();
+      const restore = vi.fn();
+
+      registerWebviewPanelSerializer<never, { value: number }>(
+        context as never,
+        'test.view',
+        restore
+      );
+
+      const [, serializer] = mockedWindow.registerWebviewPanelSerializer.mock.calls[0] as [
+        string,
+        { deserializeWebviewPanel: (panel: unknown, state: unknown) => Promise<void> },
+      ];
+      const mockPanel = createMockWebviewPanel('test.view', 'Restored');
+      await serializer.deserializeWebviewPanel(mockPanel, { value: 42 });
+
+      expect(restore).toHaveBeenCalledTimes(1);
+      const [managedPanel, state] = restore.mock.calls[0] as [{ native: unknown }, unknown];
+      expect(managedPanel.native).toBe(mockPanel);
+      expect(state).toEqual({ value: 42 });
+    });
+
+    it('gives the restored panel a working setHtml/rpc, same as createWebviewPanel', async () => {
+      const context = createMockExtensionContext();
+      const restore = vi.fn((panel: { setHtml: (html: string) => void }) => {
+        panel.setHtml('<p>restored</p>');
+      });
+
+      registerWebviewPanelSerializer(context as never, 'test.view', restore);
+
+      const [, serializer] = mockedWindow.registerWebviewPanelSerializer.mock.calls[0] as [
+        string,
+        { deserializeWebviewPanel: (panel: unknown, state: unknown) => Promise<void> },
+      ];
+      const mockPanel = createMockWebviewPanel('test.view', 'Restored');
+      await serializer.deserializeWebviewPanel(mockPanel, undefined);
+
+      expect(mockPanel.webview.html).toBe('<p>restored</p>');
+    });
+  });
+
+  // ============================================
+  // registerWebviewView
+  // ============================================
+
+  describe('registerWebviewView', () => {
+    it('registers a provider for the given view id', () => {
+      const context = createMockExtensionContext();
+
+      registerWebviewView(context as never, 'test.sidebar', vi.fn());
+
+      expect(mockedWindow.registerWebviewViewProvider).toHaveBeenCalledWith(
+        'test.sidebar',
+        expect.anything(),
+        expect.objectContaining({ webviewOptions: { retainContextWhenHidden: false } })
+      );
+    });
+
+    it('adds the registration to context subscriptions', () => {
+      const context = createMockExtensionContext();
+
+      registerWebviewView(context as never, 'test.sidebar', vi.fn());
+
+      expect(context.subscriptions.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('respects a custom retainContextWhenHidden', () => {
+      const context = createMockExtensionContext();
+
+      registerWebviewView(context as never, 'test.sidebar', vi.fn(), {
+        retainContextWhenHidden: true,
+      });
+
+      expect(mockedWindow.registerWebviewViewProvider).toHaveBeenCalledWith(
+        'test.sidebar',
+        expect.anything(),
+        expect.objectContaining({ webviewOptions: { retainContextWhenHidden: true } })
+      );
+    });
+
+    async function resolveMockView(
+      context: ReturnType<typeof createMockExtensionContext>,
+      onResolve: (view: ManagedWebviewView) => void | Promise<void>,
+      options?: Parameters<typeof registerWebviewView>[3]
+    ) {
+      registerWebviewView(context as never, 'test.sidebar', onResolve, options);
+      const [, provider] = mockedWindow.registerWebviewViewProvider.mock.calls[0] as [
+        string,
+        {
+          resolveWebviewView: (view: unknown, ctx: unknown, token: unknown) => Promise<void>;
+        },
+      ];
+      const mockView = createMockWebviewView('test.sidebar');
+      await provider.resolveWebviewView(
+        mockView,
+        createMockWebviewViewResolveContext(),
+        createMockCancellationToken()
+      );
+      return mockView;
+    }
+
+    it('resolves with a ManagedWebviewView wrapping the native WebviewView', async () => {
+      const context = createMockExtensionContext();
+      const onResolve = vi.fn();
+
+      const mockView = await resolveMockView(context, onResolve);
+
+      expect(onResolve).toHaveBeenCalledTimes(1);
+      const view = onResolve.mock.calls[0]![0] as { native: unknown };
+      expect(view.native).toBe(mockView);
+    });
+
+    it('applies webview content options with sensible defaults', async () => {
+      const context = createMockExtensionContext();
+
+      const mockView = await resolveMockView(context, vi.fn(), { enableScripts: true });
+
+      expect(mockView.webview.options).toMatchObject({ enableScripts: true, enableForms: false });
+    });
+
+    it('lets the resolved view set HTML and use rpc', async () => {
+      const context = createMockExtensionContext();
+      const onResolve = vi.fn(
+        (view: {
+          setHtml: (html: string) => void;
+          rpc: { emit: (e: string, p: unknown) => void };
+        }) => {
+          view.setHtml('<p>sidebar</p>');
+          view.rpc.emit('ping', undefined);
+        }
+      );
+
+      const mockView = await resolveMockView(context, onResolve as never);
+
+      expect(mockView.webview.html).toBe('<p>sidebar</p>');
+      expect(mockView.webview.postMessage).toHaveBeenCalledWith({
+        k: 'ev',
+        event: 'ping',
+        payload: undefined,
+      });
+    });
+
+    it('forwards visibility changes as a plain boolean', async () => {
+      const context = createMockExtensionContext();
+      const handler = vi.fn();
+      const onResolve = vi.fn(
+        (view: { onDidChangeVisibility: (h: (v: boolean) => void) => void }) => {
+          view.onDidChangeVisibility(handler);
+        }
+      );
+
+      const mockView = await resolveMockView(context, onResolve as never);
+      mockView.visible = false;
+      mockView._fireVisibilityChange();
+
+      expect(handler).toHaveBeenCalledWith(false);
+    });
+
+    it('rejects in-flight rpc requests when the native view is disposed', async () => {
+      const context = createMockExtensionContext();
+      let capturedRpc: { request: (m: string, p: unknown) => Promise<unknown> } | undefined;
+      const onResolve = vi.fn((view: { rpc: typeof capturedRpc }) => {
+        capturedRpc = view.rpc;
+      });
+
+      const mockView = await resolveMockView(context, onResolve as never);
+      const pending = capturedRpc!.request('getData', undefined);
+
+      mockView._fireDispose();
+
+      await expect(pending).rejects.toThrow();
+    });
+
+    it('builds a fresh managed wrapper on every resolve', async () => {
+      const context = createMockExtensionContext();
+      const seen: unknown[] = [];
+      const onResolve = vi.fn((view: unknown) => {
+        seen.push(view);
+      });
+
+      registerWebviewView(context as never, 'test.sidebar', onResolve as never);
+      const [, provider] = mockedWindow.registerWebviewViewProvider.mock.calls[0] as [
+        string,
+        { resolveWebviewView: (view: unknown, ctx: unknown, token: unknown) => Promise<void> },
+      ];
+      await provider.resolveWebviewView(
+        createMockWebviewView(),
+        createMockWebviewViewResolveContext(),
+        createMockCancellationToken()
+      );
+      await provider.resolveWebviewView(
+        createMockWebviewView(),
+        createMockWebviewViewResolveContext(),
+        createMockCancellationToken()
+      );
+
+      expect(seen).toHaveLength(2);
+      expect(seen[0]).not.toBe(seen[1]);
     });
   });
 
@@ -233,33 +520,60 @@ describe('webview', () => {
       expect(csp).not.toContain('connect-src');
     });
 
-    it('omits unsafe-inline from style-src when allowInlineStyles is false', () => {
+    it('includes media-src only when mediaSrc entries are given', () => {
       const webview = createMockWebview();
 
-      const csp = generateCSP(webview as never, { allowInlineStyles: false });
+      expect(generateCSP(webview as never)).not.toContain('media-src');
+
+      const csp = generateCSP(webview as never, { mediaSrc: ['https://media.example.com'] });
+      expect(csp).toContain('media-src');
+      expect(csp).toContain('https://media.example.com');
+      expect(csp).toContain(webview.cspSource);
+    });
+
+    it('includes worker-src only when workerSrc entries are given', () => {
+      const webview = createMockWebview();
+
+      expect(generateCSP(webview as never)).not.toContain('worker-src');
+
+      const csp = generateCSP(webview as never, { workerSrc: ['blob:'] });
+      expect(csp).toContain('worker-src');
+      expect(csp).toContain('blob:');
+    });
+
+    it('defaults to omitting unsafe-inline from style-src', () => {
+      const webview = createMockWebview();
+
+      const csp = generateCSP(webview as never);
 
       const styleSrc = csp.split(';').find((p) => p.trim().startsWith('style-src'));
       expect(styleSrc).toBeDefined();
       expect(styleSrc).not.toContain("'unsafe-inline'");
     });
 
-    it('uses nonce in style-src when allowInlineStyles is false and nonce is provided', () => {
+    it('opts into unsafe-inline in style-src when allowInlineStyles is true', () => {
       const webview = createMockWebview();
 
-      const csp = generateCSP(webview as never, {
-        allowInlineStyles: false,
-        nonce: 'abc123',
-      });
+      const csp = generateCSP(webview as never, { allowInlineStyles: true });
+
+      const styleSrc = csp.split(';').find((p) => p.trim().startsWith('style-src'));
+      expect(styleSrc).toContain("'unsafe-inline'");
+    });
+
+    it('uses nonce in style-src by default when a nonce is provided', () => {
+      const webview = createMockWebview();
+
+      const csp = generateCSP(webview as never, { nonce: 'abc123' });
 
       const styleSrc = csp.split(';').find((p) => p.trim().startsWith('style-src'));
       expect(styleSrc).toContain("'nonce-abc123'");
       expect(styleSrc).not.toContain("'unsafe-inline'");
     });
 
-    it('omits https: from img-src when allowAnyHttpsImages is false', () => {
+    it('defaults to omitting https: from img-src', () => {
       const webview = createMockWebview();
 
-      const csp = generateCSP(webview as never, { allowAnyHttpsImages: false });
+      const csp = generateCSP(webview as never);
 
       const imgSrc = csp.split(';').find((p) => p.trim().startsWith('img-src'));
       expect(imgSrc).toBeDefined();
@@ -271,14 +585,12 @@ describe('webview', () => {
       expect(tokens).toContain('data:');
     });
 
-    it('keeps backward-compatible defaults (unsafe-inline + https: img)', () => {
+    it('opts into https: images in img-src when allowAnyHttpsImages is true', () => {
       const webview = createMockWebview();
 
-      const csp = generateCSP(webview as never);
+      const csp = generateCSP(webview as never, { allowAnyHttpsImages: true });
 
-      const styleSrc = csp.split(';').find((p) => p.trim().startsWith('style-src'));
       const imgSrc = csp.split(';').find((p) => p.trim().startsWith('img-src'));
-      expect(styleSrc).toContain("'unsafe-inline'");
       const imgTokens = imgSrc!.trim().split(/\s+/);
       expect(imgTokens).toContain('https:');
     });
@@ -313,12 +625,12 @@ describe('webview', () => {
   });
 
   // ============================================
-  // createWebViewHtml
+  // createWebviewHtml
   // ============================================
 
-  describe('createWebViewHtml', () => {
+  describe('createWebviewHtml', () => {
     it('creates basic HTML structure', () => {
-      const html = createWebViewHtml({ body: '<div>Content</div>' });
+      const html = createWebviewHtml({ body: '<div>Content</div>' });
 
       expect(html).toContain('<!DOCTYPE html>');
       expect(html).toContain('<html lang="en">');
@@ -326,7 +638,7 @@ describe('webview', () => {
     });
 
     it('includes title', () => {
-      const html = createWebViewHtml({
+      const html = createWebviewHtml({
         title: 'My Title',
         body: '',
       });
@@ -335,7 +647,7 @@ describe('webview', () => {
     });
 
     it('includes CSP meta tag', () => {
-      const html = createWebViewHtml({
+      const html = createWebviewHtml({
         csp: "default-src 'none'",
         body: '',
       });
@@ -346,7 +658,7 @@ describe('webview', () => {
     });
 
     it('includes style links', () => {
-      const html = createWebViewHtml({
+      const html = createWebviewHtml({
         styles: ['style1.css', 'style2.css'],
         body: '',
       });
@@ -356,7 +668,7 @@ describe('webview', () => {
     });
 
     it('includes script tags', () => {
-      const html = createWebViewHtml({
+      const html = createWebviewHtml({
         scripts: ['script1.js', 'script2.js'],
         body: '',
       });
@@ -366,7 +678,7 @@ describe('webview', () => {
     });
 
     it('includes nonce in script tags', () => {
-      const html = createWebViewHtml({
+      const html = createWebviewHtml({
         scripts: ['script.js'],
         nonce: 'abc123',
         body: '',
@@ -376,7 +688,7 @@ describe('webview', () => {
     });
 
     it('escapes HTML in attributes', () => {
-      const html = createWebViewHtml({
+      const html = createWebviewHtml({
         title: '<script>alert("xss")</script>',
         body: '',
       });

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
-import { showInfo, showWarn, showError, confirm, showWithActions } from '../src/ui/notification.js';
+import { showInfo, showWarn, showError, confirm } from '../src/ui/notification.js';
 
 // Get the mocked window object
 const mockedWindow = vscode.window as unknown as {
@@ -8,6 +8,22 @@ const mockedWindow = vscode.window as unknown as {
   showWarningMessage: ReturnType<typeof vi.fn>;
   showErrorMessage: ReturnType<typeof vi.fn>;
 };
+
+function fakeMemento(initial: Record<string, unknown> = {}): vscode.Memento {
+  const store = new Map<string, unknown>(Object.entries(initial));
+  return {
+    keys: () => [...store.keys()],
+    get: ((key: string, defaultValue?: unknown) =>
+      store.has(key) ? store.get(key) : defaultValue) as vscode.Memento['get'],
+    update: vi.fn(async (key: string, value: unknown) => {
+      if (value === undefined) {
+        store.delete(key);
+      } else {
+        store.set(key, value);
+      }
+    }),
+  };
+}
 
 describe('notification', () => {
   beforeEach(() => {
@@ -17,154 +33,113 @@ describe('notification', () => {
     mockedWindow.showErrorMessage.mockResolvedValue(undefined);
   });
 
-  // ============================================
-  // showInfo
-  // ============================================
-
-  describe('showInfo', () => {
-    it('shows information message without actions', async () => {
-      await showInfo('Test message');
+  describe('showInfo / showWarn / showError (no actions)', () => {
+    it('shows an information message with no items when there are no actions', async () => {
+      const result = await showInfo('Test message');
 
       expect(mockedWindow.showInformationMessage).toHaveBeenCalledWith('Test message', {
         modal: undefined,
+        detail: undefined,
       });
-    });
-
-    it('shows information message with modal option', async () => {
-      await showInfo('Test message', { modal: true });
-
-      expect(mockedWindow.showInformationMessage).toHaveBeenCalledWith('Test message', {
-        modal: true,
-      });
-    });
-
-    it('shows information message with actions', async () => {
-      mockedWindow.showInformationMessage.mockResolvedValue('Reload');
-
-      const result = await showInfo('File changed', {}, 'Reload', 'Ignore');
-
-      expect(mockedWindow.showInformationMessage).toHaveBeenCalledWith(
-        'File changed',
-        { modal: undefined, detail: undefined },
-        'Reload',
-        'Ignore'
-      );
-      expect(result).toBe('Reload');
-    });
-
-    it('returns undefined when no action selected', async () => {
-      mockedWindow.showInformationMessage.mockResolvedValue(undefined);
-
-      const result = await showInfo('File changed', {}, 'Reload', 'Ignore');
-
       expect(result).toBeUndefined();
     });
 
-    it('shows information message with modal and detail', async () => {
-      await showInfo('Test', { modal: true, detail: 'Additional info' }, 'OK');
-
-      expect(mockedWindow.showInformationMessage).toHaveBeenCalledWith(
-        'Test',
-        { modal: true, detail: 'Additional info' },
-        'OK'
-      );
-    });
-  });
-
-  // ============================================
-  // showWarn
-  // ============================================
-
-  describe('showWarn', () => {
-    it('shows warning message without actions', async () => {
-      await showWarn('Warning message');
-
-      expect(mockedWindow.showWarningMessage).toHaveBeenCalledWith('Warning message', {
-        modal: undefined,
-      });
-    });
-
-    it('shows warning message with modal option', async () => {
-      await showWarn('Warning message', { modal: true });
+    it('shows a warning message with modal/detail', async () => {
+      await showWarn('Warning message', { modal: true, detail: 'more info' });
 
       expect(mockedWindow.showWarningMessage).toHaveBeenCalledWith('Warning message', {
         modal: true,
+        detail: 'more info',
       });
     });
 
-    it('shows warning message with actions', async () => {
-      mockedWindow.showWarningMessage.mockResolvedValue('Continue');
-
-      const result = await showWarn('Proceed?', {}, 'Continue', 'Cancel');
-
-      expect(mockedWindow.showWarningMessage).toHaveBeenCalledWith(
-        'Proceed?',
-        { modal: undefined, detail: undefined },
-        'Continue',
-        'Cancel'
-      );
-      expect(result).toBe('Continue');
-    });
-
-    it('returns undefined when dismissed', async () => {
-      mockedWindow.showWarningMessage.mockResolvedValue(undefined);
-
-      const result = await showWarn('Proceed?', {}, 'Continue');
-
-      expect(result).toBeUndefined();
-    });
-  });
-
-  // ============================================
-  // showError
-  // ============================================
-
-  describe('showError', () => {
-    it('shows error message without actions', async () => {
+    it('shows an error message', async () => {
       await showError('Error occurred');
 
       expect(mockedWindow.showErrorMessage).toHaveBeenCalledWith('Error occurred', {
         modal: undefined,
+        detail: undefined,
       });
     });
+  });
 
-    it('shows error message with modal option', async () => {
-      await showError('Critical error', { modal: true });
-
-      expect(mockedWindow.showErrorMessage).toHaveBeenCalledWith('Critical error', { modal: true });
-    });
-
-    it('shows error message with actions', async () => {
-      mockedWindow.showErrorMessage.mockResolvedValue('Retry');
-
-      const result = await showError('Failed', {}, 'Retry', 'Abort');
-
-      expect(mockedWindow.showErrorMessage).toHaveBeenCalledWith(
-        'Failed',
-        { modal: undefined, detail: undefined },
-        'Retry',
-        'Abort'
+  describe('actions carry a separate value from their title (proposal B)', () => {
+    it('resolves with the value of the clicked action, not its title', async () => {
+      mockedWindow.showInformationMessage.mockImplementation(
+        async (
+          _message: string,
+          _options: unknown,
+          ...items: { title: string; value: unknown }[]
+        ) => items.find((i) => i.title === 'Reload')
       );
-      expect(result).toBe('Retry');
+
+      const result = await showInfo('File changed', {
+        actions: [
+          { title: 'Reload', value: 'reload' as const },
+          { title: 'Ignore', value: 'ignore' as const },
+        ],
+      });
+
+      expect(mockedWindow.showInformationMessage).toHaveBeenCalledWith(
+        'File changed',
+        { modal: undefined, detail: undefined },
+        { title: 'Reload', isCloseAffordance: undefined, value: 'reload' },
+        { title: 'Ignore', isCloseAffordance: undefined, value: 'ignore' }
+      );
+      expect(result).toBe('reload');
     });
 
-    it('shows error message with detail', async () => {
-      await showError('Error', { modal: true, detail: 'Stack trace here' }, 'OK');
+    it('returns undefined when the notification is dismissed', async () => {
+      mockedWindow.showWarningMessage.mockResolvedValue(undefined);
 
-      expect(mockedWindow.showErrorMessage).toHaveBeenCalledWith(
-        'Error',
-        { modal: true, detail: 'Stack trace here' },
-        'OK'
+      const result = await showWarn('Proceed?', {
+        actions: [{ title: 'Continue', value: 'continue' as const }],
+      });
+
+      expect(result).toBeUndefined();
+    });
+
+    it('resolves the correct value even when two actions share the same title (bug #12 regression)', async () => {
+      // VS Code resolves with the *object reference* it was given, so two
+      // items with an identical title must not be confused with each other
+      // via a title-string lookup.
+      mockedWindow.showErrorMessage.mockImplementation(
+        async (
+          _message: string,
+          _options: unknown,
+          ...items: { title: string; value: unknown }[]
+        ) => items[1] // always "select" the second "Retry"
+      );
+
+      const result = await showError('Failed twice', {
+        actions: [
+          { title: 'Retry', value: 'retry-first' as const },
+          { title: 'Retry', value: 'retry-second' as const },
+        ],
+      });
+
+      expect(result).toBe('retry-second');
+    });
+
+    it('passes isCloseAffordance through', async () => {
+      await showWarn('Test', {
+        actions: [
+          { title: 'OK', value: 'ok' as const },
+          { title: 'Cancel', value: 'cancel' as const, isCloseAffordance: true },
+        ],
+      });
+
+      expect(mockedWindow.showWarningMessage).toHaveBeenCalledWith(
+        'Test',
+        { modal: undefined, detail: undefined },
+        { title: 'OK', isCloseAffordance: undefined, value: 'ok' },
+        { title: 'Cancel', isCloseAffordance: true, value: 'cancel' }
       );
     });
   });
 
-  // ============================================
-  // confirm
-  // ============================================
-
   describe('confirm', () => {
-    it('returns true when Yes clicked', async () => {
+    it('defaults to a modal warning with Yes/No', async () => {
       mockedWindow.showWarningMessage.mockResolvedValue('Yes');
 
       const result = await confirm('Delete file?');
@@ -178,29 +153,22 @@ describe('notification', () => {
       expect(result).toBe(true);
     });
 
-    it('returns false when No clicked', async () => {
+    it('returns false when No is clicked', async () => {
       mockedWindow.showWarningMessage.mockResolvedValue('No');
 
-      const result = await confirm('Delete file?');
-
-      expect(result).toBe(false);
+      expect(await confirm('Delete file?')).toBe(false);
     });
 
-    it('returns false when dismissed', async () => {
+    it('returns false when dismissed (Escape)', async () => {
       mockedWindow.showWarningMessage.mockResolvedValue(undefined);
 
-      const result = await confirm('Delete file?');
-
-      expect(result).toBe(false);
+      expect(await confirm('Delete file?')).toBe(false);
     });
 
     it('uses custom button texts', async () => {
       mockedWindow.showWarningMessage.mockResolvedValue('Delete');
 
-      const result = await confirm('Remove item?', {
-        yesText: 'Delete',
-        noText: 'Keep',
-      });
+      const result = await confirm('Remove item?', { yesText: 'Delete', noText: 'Keep' });
 
       expect(mockedWindow.showWarningMessage).toHaveBeenCalledWith(
         'Remove item?',
@@ -211,128 +179,83 @@ describe('notification', () => {
       expect(result).toBe(true);
     });
 
-    it('can be non-modal', async () => {
+    it('can be non-modal, with detail', async () => {
       mockedWindow.showWarningMessage.mockResolvedValue('Yes');
 
-      await confirm('Proceed?', { modal: false });
+      await confirm('Proceed?', { modal: false, detail: 'why' });
 
       expect(mockedWindow.showWarningMessage).toHaveBeenCalledWith(
         'Proceed?',
-        { modal: false, detail: undefined },
+        { modal: false, detail: 'why' },
         'Yes',
         'No'
       );
     });
 
-    it('includes detail text', async () => {
-      mockedWindow.showWarningMessage.mockResolvedValue('Yes');
-
-      await confirm('Delete?', { detail: 'This cannot be undone' });
-
-      expect(mockedWindow.showWarningMessage).toHaveBeenCalledWith(
-        'Delete?',
-        { modal: true, detail: 'This cannot be undone' },
-        'Yes',
-        'No'
-      );
-    });
-  });
-
-  // ============================================
-  // showWithActions
-  // ============================================
-
-  describe('showWithActions', () => {
-    it('shows info notification with custom actions', async () => {
-      mockedWindow.showInformationMessage.mockResolvedValue({ title: 'Save' });
-
-      const result = await showWithActions('info', 'Unsaved changes', [
-        { title: 'Save', value: 'save' },
-        { title: 'Discard', value: 'discard' },
-      ]);
-
-      expect(mockedWindow.showInformationMessage).toHaveBeenCalledWith(
-        'Unsaved changes',
-        { modal: undefined, detail: undefined },
-        { title: 'Save', isCloseAffordance: undefined },
-        { title: 'Discard', isCloseAffordance: undefined }
-      );
-      expect(result).toBe('save');
-    });
-
-    it('shows warn notification with custom actions', async () => {
-      mockedWindow.showWarningMessage.mockResolvedValue({ title: 'Continue' });
-
-      const result = await showWithActions('warn', 'Proceed?', [
-        { title: 'Continue', value: 1 },
-        { title: 'Stop', value: 0 },
-      ]);
-
-      expect(mockedWindow.showWarningMessage).toHaveBeenCalled();
-      expect(result).toBe(1);
-    });
-
-    it('shows error notification with custom actions', async () => {
-      mockedWindow.showErrorMessage.mockResolvedValue({ title: 'Retry' });
-
-      const result = await showWithActions('error', 'Operation failed', [
-        { title: 'Retry', value: 'retry' },
-        { title: 'Abort', value: 'abort' },
-      ]);
-
-      expect(mockedWindow.showErrorMessage).toHaveBeenCalled();
-      expect(result).toBe('retry');
-    });
-
-    it('returns undefined when dismissed', async () => {
-      mockedWindow.showInformationMessage.mockResolvedValue(undefined);
-
-      const result = await showWithActions('info', 'Test', [{ title: 'OK', value: 'ok' }]);
-
-      expect(result).toBeUndefined();
-    });
-
-    it('handles isCloseAffordance', async () => {
-      mockedWindow.showWarningMessage.mockResolvedValue({ title: 'Cancel' });
-
-      await showWithActions('warn', 'Test', [
-        { title: 'OK', value: 'ok' },
-        { title: 'Cancel', value: 'cancel', isCloseAffordance: true },
-      ]);
-
-      expect(mockedWindow.showWarningMessage).toHaveBeenCalledWith(
-        'Test',
-        { modal: undefined, detail: undefined },
-        { title: 'OK', isCloseAffordance: undefined },
-        { title: 'Cancel', isCloseAffordance: true }
-      );
-    });
-
-    it('supports modal option', async () => {
-      mockedWindow.showInformationMessage.mockResolvedValue({ title: 'OK' });
-
-      await showWithActions('info', 'Test', [{ title: 'OK', value: 'ok' }], {
-        modal: true,
-        detail: 'Details',
+    describe('severity', () => {
+      it('defaults to the warning dialog', async () => {
+        mockedWindow.showWarningMessage.mockResolvedValue('Yes');
+        await confirm('Q?');
+        expect(mockedWindow.showWarningMessage).toHaveBeenCalled();
+        expect(mockedWindow.showInformationMessage).not.toHaveBeenCalled();
       });
 
-      expect(mockedWindow.showInformationMessage).toHaveBeenCalledWith(
-        'Test',
-        { modal: true, detail: 'Details' },
-        { title: 'OK', isCloseAffordance: undefined }
-      );
+      it('uses showInformationMessage for severity: info', async () => {
+        mockedWindow.showInformationMessage.mockResolvedValue('Yes');
+        const result = await confirm('Enable feature?', { severity: 'info' });
+        expect(mockedWindow.showInformationMessage).toHaveBeenCalledWith(
+          'Enable feature?',
+          { modal: true, detail: undefined },
+          'Yes',
+          'No'
+        );
+        expect(result).toBe(true);
+      });
+
+      it('uses showErrorMessage for severity: error', async () => {
+        mockedWindow.showErrorMessage.mockResolvedValue('No');
+        const result = await confirm('Really?', { severity: 'error' });
+        expect(mockedWindow.showErrorMessage).toHaveBeenCalled();
+        expect(result).toBe(false);
+      });
     });
 
-    it('handles complex value types', async () => {
-      const complexValue = { id: 1, action: 'save', data: { foo: 'bar' } };
-      mockedWindow.showInformationMessage.mockResolvedValue({ title: 'Save' });
+    describe('remember ("don\'t ask again")', () => {
+      it('skips prompting entirely when already remembered', async () => {
+        const memento = fakeMemento({ 'myext.confirmed': true });
 
-      const result = await showWithActions('info', 'Test', [
-        { title: 'Save', value: complexValue },
-        { title: 'Cancel', value: null },
-      ]);
+        const result = await confirm('Q?', { remember: { memento, key: 'myext.confirmed' } });
 
-      expect(result).toEqual(complexValue);
+        expect(result).toBe(true);
+        expect(mockedWindow.showWarningMessage).not.toHaveBeenCalled();
+      });
+
+      it('adds a "Don\'t Ask Again" button and persists the choice when clicked', async () => {
+        const memento = fakeMemento();
+        mockedWindow.showWarningMessage.mockResolvedValue("Don't Ask Again");
+
+        const result = await confirm('Q?', { remember: { memento, key: 'myext.confirmed' } });
+
+        expect(mockedWindow.showWarningMessage).toHaveBeenCalledWith(
+          'Q?',
+          { modal: true, detail: undefined },
+          'Yes',
+          'No',
+          "Don't Ask Again"
+        );
+        expect(result).toBe(true);
+        expect(memento.update).toHaveBeenCalledWith('myext.confirmed', true);
+      });
+
+      it('does not persist anything when a plain No is clicked', async () => {
+        const memento = fakeMemento();
+        mockedWindow.showWarningMessage.mockResolvedValue('No');
+
+        const result = await confirm('Q?', { remember: { memento, key: 'myext.confirmed' } });
+
+        expect(result).toBe(false);
+        expect(memento.update).not.toHaveBeenCalled();
+      });
     });
   });
 });

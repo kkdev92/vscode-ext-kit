@@ -215,6 +215,8 @@ export const ViewColumn = {
 
 // Mock Webview factory
 export function createMockWebview() {
+  const messageListeners: ((message: unknown) => void)[] = [];
+
   return {
     html: '',
     options: {},
@@ -224,14 +226,26 @@ export function createMockWebview() {
       fsPath: uri.toString(),
       scheme: 'vscode-webview',
     })),
-    onDidReceiveMessage: vi.fn(() => ({ dispose: vi.fn() })),
+    onDidReceiveMessage: vi.fn((listener: (message: unknown) => void) => {
+      messageListeners.push(listener);
+      return {
+        dispose: vi.fn(() => messageListeners.splice(messageListeners.indexOf(listener), 1)),
+      };
+    }),
     postMessage: vi.fn().mockResolvedValue(true),
+    // Test helper: simulates the webview content posting `message` back to the extension host.
+    _fireMessage: (message: unknown) => {
+      messageListeners.forEach((l) => l(message));
+    },
   };
 }
 
 // Mock WebviewPanel factory
 export function createMockWebviewPanel(viewType: string = 'test', title: string = 'Test') {
   const webview = createMockWebview();
+  const viewStateListeners: ((e: { webviewPanel: { visible: boolean } }) => void)[] = [];
+  const disposeListeners: (() => void)[] = [];
+
   return {
     viewType,
     title,
@@ -240,21 +254,88 @@ export function createMockWebviewPanel(viewType: string = 'test', title: string 
     viewColumn: ViewColumn.One,
     active: true,
     visible: true,
-    onDidChangeViewState: vi.fn(() => ({ dispose: vi.fn() })),
-    onDidDispose: vi.fn(() => ({ dispose: vi.fn() })),
+    onDidChangeViewState: vi.fn((listener: (e: { webviewPanel: { visible: boolean } }) => void) => {
+      viewStateListeners.push(listener);
+      return {
+        dispose: vi.fn(() => viewStateListeners.splice(viewStateListeners.indexOf(listener), 1)),
+      };
+    }),
+    onDidDispose: vi.fn((listener: () => void) => {
+      disposeListeners.push(listener);
+      return {
+        dispose: vi.fn(() => disposeListeners.splice(disposeListeners.indexOf(listener), 1)),
+      };
+    }),
     reveal: vi.fn(),
     dispose: vi.fn(),
+    // Test helpers
+    _fireViewStateChange: (visible: boolean) => {
+      viewStateListeners.forEach((l) => l({ webviewPanel: { visible } }));
+    },
+    _fireDispose: () => {
+      disposeListeners.forEach((l) => l());
+    },
   };
 }
 
+// Mock WebviewView factory (sidebar/panel-hosted webview views)
+export function createMockWebviewView(viewType: string = 'test') {
+  const webview = createMockWebview();
+  const visibilityListeners: (() => void)[] = [];
+  const disposeListeners: (() => void)[] = [];
+
+  return {
+    viewType,
+    webview,
+    title: '',
+    description: '',
+    badge: undefined as { readonly tooltip: string; readonly value: number } | undefined,
+    visible: true,
+    onDidChangeVisibility: vi.fn((listener: () => void) => {
+      visibilityListeners.push(listener);
+      return {
+        dispose: vi.fn(() => visibilityListeners.splice(visibilityListeners.indexOf(listener), 1)),
+      };
+    }),
+    onDidDispose: vi.fn((listener: () => void) => {
+      disposeListeners.push(listener);
+      return {
+        dispose: vi.fn(() => disposeListeners.splice(disposeListeners.indexOf(listener), 1)),
+      };
+    }),
+    show: vi.fn(),
+    // Test helpers
+    _fireVisibilityChange: () => {
+      visibilityListeners.forEach((l) => l());
+    },
+    _fireDispose: () => {
+      disposeListeners.forEach((l) => l());
+    },
+  };
+}
+
+// Mock WebviewViewResolveContext factory
+export function createMockWebviewViewResolveContext<T = unknown>(state?: T) {
+  return { state };
+}
+
 // Mock TreeView factory
-export function createMockTreeView() {
+export function createMockTreeView<T = unknown>() {
+  const checkboxListeners: ((e: { items: readonly (readonly [T, number])[] }) => void)[] = [];
+
   return {
     onDidExpandElement: vi.fn(() => ({ dispose: vi.fn() })),
     onDidCollapseElement: vi.fn(() => ({ dispose: vi.fn() })),
     onDidChangeSelection: vi.fn(() => ({ dispose: vi.fn() })),
     onDidChangeVisibility: vi.fn(() => ({ dispose: vi.fn() })),
-    onDidChangeCheckboxState: vi.fn(() => ({ dispose: vi.fn() })),
+    onDidChangeCheckboxState: vi.fn(
+      (listener: (e: { items: readonly (readonly [T, number])[] }) => void) => {
+        checkboxListeners.push(listener);
+        return {
+          dispose: vi.fn(() => checkboxListeners.splice(checkboxListeners.indexOf(listener), 1)),
+        };
+      }
+    ),
     selection: [],
     visible: true,
     title: '',
@@ -263,6 +344,10 @@ export function createMockTreeView() {
     badge: undefined,
     reveal: vi.fn().mockResolvedValue(undefined),
     dispose: vi.fn(),
+    // Test helper: simulates the user checking/unchecking boxes in the UI.
+    _fireCheckboxState: (items: readonly (readonly [T, number])[]) => {
+      checkboxListeners.forEach((l) => l({ items }));
+    },
   };
 }
 

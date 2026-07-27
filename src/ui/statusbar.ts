@@ -109,12 +109,32 @@ export function createStatusBarItem(
 
   const item = vscode.window.createStatusBarItem(id, vscodeAlignment, priority);
 
-  // Store original text for spinner restore
-  let originalText = options.text;
+  // `baseText` is the logical "current" text, set by update()/set()/the
+  // constructor. `spinnerOverrideText` is a one-shot label supplied to
+  // showSpinner(text) that overrides it for as long as the spinner is
+  // showing — until the next update()/set() call reclaims priority, which
+  // is what lets callers report progress ("Processing 42%") *while* the
+  // spinner keeps spinning instead of it being silently clobbered (see
+  // render() below, and the "spinner + update()" tests).
+  let baseText = options.text;
+  let spinnerOverrideText: string | undefined;
   let isShowingSpinner = false;
+
+  /** Re-renders `item.text` from the current base/spinner state. Every text
+   * mutation goes through here so the spinner icon and the logical text
+   * never fight over `item.text` directly. */
+  function render(): void {
+    if (isShowingSpinner) {
+      const label = spinnerOverrideText ?? baseText.replace(/^\$\([^)]+\)\s*/, '');
+      item.text = `$(sync~spin) ${label}`;
+    } else {
+      item.text = baseText;
+    }
+  }
 
   // Apply initial options
   applyOptions(item, options);
+  render();
 
   if (visible) {
     item.show();
@@ -122,8 +142,9 @@ export function createStatusBarItem(
 
   const managedItem: ManagedStatusBarItem = {
     update(text: string, tooltip?: string): void {
-      item.text = text;
-      originalText = text;
+      baseText = text;
+      spinnerOverrideText = undefined;
+      render();
       if (tooltip !== undefined) {
         item.tooltip = tooltip;
       }
@@ -132,7 +153,9 @@ export function createStatusBarItem(
     set(opts: Partial<StatusBarItemOptions>): void {
       applyOptions(item, opts);
       if (opts.text !== undefined) {
-        originalText = opts.text;
+        baseText = opts.text;
+        spinnerOverrideText = undefined;
+        render();
       }
     },
 
@@ -147,16 +170,16 @@ export function createStatusBarItem(
     showSpinner(text?: string): void {
       isShowingSpinner = true;
       if (text !== undefined) {
-        item.text = `$(sync~spin) ${text}`;
-      } else {
-        item.text = `$(sync~spin) ${originalText.replace(/^\$\([^)]+\)\s*/, '')}`;
+        spinnerOverrideText = text;
       }
+      render();
     },
 
     hideSpinner(): void {
       if (isShowingSpinner) {
         isShowingSpinner = false;
-        item.text = originalText;
+        spinnerOverrideText = undefined;
+        render();
       }
     },
 
@@ -174,12 +197,12 @@ export function createStatusBarItem(
 
 /**
  * Applies options to a status bar item.
+ *
+ * `text` is deliberately not handled here — `createStatusBarItem`'s
+ * `render()` owns it exclusively so spinner state (see the "spinner"
+ * fields/tests) never gets clobbered by a plain option assignment.
  */
 function applyOptions(item: vscode.StatusBarItem, options: Partial<StatusBarItemOptions>): void {
-  if (options.text !== undefined) {
-    item.text = options.text;
-  }
-
   if (options.tooltip !== undefined) {
     item.tooltip = options.tooltip;
   }
@@ -204,8 +227,21 @@ function applyOptions(item: vscode.StatusBarItem, options: Partial<StatusBarItem
 // showStatusMessage
 // ============================================
 
+// Each call gets its own status bar item id. Reusing one fixed id across
+// calls (the pre-1.0 behavior) meant two overlapping messages — e.g.
+// `showStatusMessage('Saving...')` immediately followed by another call for
+// an unrelated operation — shared one VS Code-side item, so either call's
+// timeout-driven dispose() could tear down the *other* call's still-visible
+// message.
+let statusMessageSequence = 0;
+
 /**
  * Shows a temporary status bar message that automatically disappears.
+ *
+ * Safe to call without keeping the returned disposable — the message
+ * disposes itself via `timeout` — but hold onto it and dispose early (or
+ * push it to `context.subscriptions`) if the message should not outlive a
+ * shorter-lived feature or the extension's own deactivation.
  *
  * @param text - The message to display
  * @param timeout - Time in milliseconds before disappearing (default: 5000)
@@ -213,10 +249,10 @@ function applyOptions(item: vscode.StatusBarItem, options: Partial<StatusBarItem
  *
  * @example
  * ```typescript
- * // Show a temporary message
+ * // Fire-and-forget: self-dismisses after 3s
  * showStatusMessage('File saved!', 3000);
  *
- * // Or manually dismiss
+ * // Or manually dismiss (e.g. once a long task actually finishes)
  * const disposable = showStatusMessage('Processing...');
  * await doWork();
  * disposable.dispose();
@@ -224,7 +260,7 @@ function applyOptions(item: vscode.StatusBarItem, options: Partial<StatusBarItem
  */
 export function showStatusMessage(text: string, timeout: number = 5000): vscode.Disposable {
   const item = vscode.window.createStatusBarItem(
-    'vscode-ext-kit.statusMessage',
+    `vscode-ext-kit.statusMessage.${++statusMessageSequence}`,
     vscode.StatusBarAlignment.Left,
     -1000
   );

@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
  * Data for a tree item.
  */
 export interface TreeItemData<T = unknown> {
-  /** Unique identifier */
+  /** Unique identifier. Must be unique across the *entire* tree, not just among siblings. */
   id: string;
   /** Display label */
   label: string;
@@ -18,6 +18,22 @@ export interface TreeItemData<T = unknown> {
   tooltip?: string | vscode.MarkdownString;
   /** Icon */
   iconPath?: vscode.ThemeIcon | vscode.Uri | { light: vscode.Uri; dark: vscode.Uri };
+  /**
+   * The resource this item represents. Setting this enables file-icon-theme
+   * icons (when `iconPath` is unset) and built-in file commands such as
+   * "Copy Path" in the item's context menu.
+   */
+  resourceUri?: vscode.Uri;
+  /**
+   * Checkbox state. Reuses `vscode.TreeItem`'s own field type so this stays
+   * in sync with whatever the pinned `@types/vscode` version supports
+   * (currently a plain state, or `{ state, tooltip, accessibilityInformation }`).
+   *
+   * Requires VS Code 1.80+. Toggling in the UI is reported through
+   * {@link BaseTreeDataProvider.onDidChangeCheckboxState} (wired up
+   * automatically by {@link createTreeView}).
+   */
+  checkboxState?: vscode.TreeItem['checkboxState'];
   /** Context value for when clauses */
   contextValue?: string;
   /** Collapsible state */
@@ -26,6 +42,16 @@ export interface TreeItemData<T = unknown> {
   command?: vscode.Command;
   /** Custom data */
   data?: T;
+}
+
+/**
+ * A single checkbox toggle reported by {@link BaseTreeDataProvider.onDidChangeCheckboxState}.
+ */
+export interface TreeCheckboxChange<T> {
+  /** The item whose checkbox was toggled. */
+  item: T;
+  /** `true` when checked, `false` when unchecked. */
+  checked: boolean;
 }
 
 // ============================================
@@ -70,11 +96,20 @@ export interface TreeItemData<T = unknown> {
 export abstract class BaseTreeDataProvider<T extends TreeItemData>
   implements vscode.TreeDataProvider<T>, vscode.Disposable
 {
-  protected readonly _onDidChangeTreeData = new vscode.EventEmitter<T | undefined | void>();
+  protected readonly _onDidChangeTreeData = new vscode.EventEmitter<T | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
+  private readonly _onDidChangeCheckboxState = new vscode.EventEmitter<TreeCheckboxChange<T>[]>();
+  /**
+   * Fires when the user (un)checks a checkbox in the tree. Bridged
+   * automatically from the native `TreeView.onDidChangeCheckboxState` by
+   * {@link createTreeView} — you don't need to wire this up yourself as
+   * long as the view was created through it.
+   */
+  readonly onDidChangeCheckboxState = this._onDidChangeCheckboxState.event;
+
   private _cache = new Map<string, T[]>();
-  private _disposed = false;
+  protected _disposed = false;
 
   /**
    * Gets the root elements of the tree.
@@ -92,7 +127,7 @@ export abstract class BaseTreeDataProvider<T extends TreeItemData>
 
   /**
    * Gets the parent of an element.
-   * Override this method to support reveal functionality.
+   * Override this method to support `TreeView.reveal()`.
    *
    * @param element - Child element
    */
@@ -101,7 +136,12 @@ export abstract class BaseTreeDataProvider<T extends TreeItemData>
   /**
    * Refreshes the tree view.
    *
-   * @param element - Specific element to refresh, or undefined for entire tree
+   * Passing a specific `element` (rather than `undefined`) is the
+   * partial-update path: VS Code only re-fetches that element's own
+   * `getTreeItem()` rendering and its children, leaving the rest of the
+   * tree's scroll position, selection, and expand/collapse state untouched.
+   *
+   * @param element - Specific element to refresh, or undefined for the entire tree
    */
   refresh(element?: T): void {
     if (element) {
@@ -110,6 +150,18 @@ export abstract class BaseTreeDataProvider<T extends TreeItemData>
       this._cache.clear();
     }
     this._onDidChangeTreeData.fire(element);
+  }
+
+  /**
+   * Notifies listeners that the given items' checkbox state changed.
+   * Normally called for you by {@link createTreeView}'s bridging; call it
+   * directly only if you're driving a `TreeView` without going through
+   * `createTreeView`.
+   *
+   * @param changes - The items that were checked or unchecked
+   */
+  fireCheckboxChange(changes: TreeCheckboxChange<T>[]): void {
+    this._onDidChangeCheckboxState.fire(changes);
   }
 
   /**
@@ -154,6 +206,8 @@ export abstract class BaseTreeDataProvider<T extends TreeItemData>
     item.description = element.description;
     item.tooltip = element.tooltip;
     item.iconPath = element.iconPath;
+    item.resourceUri = element.resourceUri;
+    item.checkboxState = element.checkboxState;
     item.contextValue = element.contextValue;
     item.command = element.command;
 
@@ -206,6 +260,7 @@ export abstract class BaseTreeDataProvider<T extends TreeItemData>
     this._disposed = true;
     this._cache.clear();
     this._onDidChangeTreeData.dispose();
+    this._onDidChangeCheckboxState.dispose();
   }
 }
 
@@ -214,7 +269,14 @@ export abstract class BaseTreeDataProvider<T extends TreeItemData>
 // ============================================
 
 /**
- * A simple tree data provider with static data.
+ * A simple tree data provider backed by an in-memory item tree.
+ *
+ * Maintains its own id → item / id → parent / id → children indices, so
+ * every lookup (`findItem`, `getParentOf`, and the mutators below) is O(1)
+ * plus the size of the affected subtree — never a full-tree walk. Mutators
+ * refresh only the affected node (see {@link BaseTreeDataProvider.refresh}),
+ * so unrelated parts of the tree keep their scroll position and
+ * expand/collapse state.
  *
  * @example
  * ```typescript
@@ -227,57 +289,167 @@ export abstract class BaseTreeDataProvider<T extends TreeItemData>
  * ]);
  *
  * const treeView = createTreeView(context, 'myext.tree', provider);
+ *
+ * // Reveal now works because SimpleTreeDataProvider implements getParentOf.
+ * await treeView.reveal(provider.findItem('1.1')!, { select: true, expand: true });
+ *
+ * provider.addItem({ id: '1.3', label: 'Child 3' }, '1'); // nested add
+ * provider.updateItem('1.1', { label: 'Renamed' });
+ * provider.removeItem('1.2'); // now works for nested ids too
  * ```
  */
 export class SimpleTreeDataProvider<
   T extends TreeItemData & { children?: T[] },
 > extends BaseTreeDataProvider<T> {
-  private _roots: T[];
-  private _itemsById = new Map<string, T>();
-  private _normalizedRoots: T[] = [];
-  private _normalizedChildrenById = new Map<string, T[]>();
+  private _roots: T[] = [];
+  private readonly _itemsById = new Map<string, T>();
+  private readonly _parentById = new Map<string, string | undefined>();
+  private readonly _childrenById = new Map<string, T[]>();
 
   constructor(items: T[] = []) {
     super();
-    this._roots = items;
-    this._rebuildIndex();
+    this.setItems(items);
   }
 
   /**
-   * Sets the tree items.
+   * Replaces the entire tree and refreshes it in full — there is no single
+   * element to scope a partial refresh to when every root is being replaced.
+   * Use {@link setChildren}, {@link addItem}, {@link updateItem}, or
+   * {@link removeItem} for localized changes.
    *
    * @param items - New tree items
    */
   setItems(items: T[]): void {
-    this._roots = items;
-    this._rebuildIndex();
+    this._itemsById.clear();
+    this._parentById.clear();
+    this._childrenById.clear();
+    this._roots = items.map((item) => this._normalize(item, undefined));
     this.refresh();
   }
 
   /**
-   * Adds an item to the root.
+   * Replaces the children of `parentId` (or the roots, when `parentId` is
+   * `undefined`) wholesale. Only `parentId`'s subtree is refreshed.
    *
-   * @param item - Item to add
+   * @param parentId - Parent whose children to replace, or undefined for the roots
+   * @param children - The new children
+   * @returns `false` if `parentId` doesn't refer to a known item
    */
-  addItem(item: T): void {
-    this._roots.push(item);
-    this._rebuildIndex();
-    this.refresh();
+  setChildren(parentId: string | undefined, children: T[]): boolean {
+    const parent = parentId !== undefined ? this._itemsById.get(parentId) : undefined;
+    if (parentId !== undefined && !parent) {
+      return false;
+    }
+
+    const oldContainer = parentId !== undefined ? this._childrenById.get(parentId) : this._roots;
+    if (oldContainer) {
+      for (const old of oldContainer) {
+        this._deindex(old.id);
+      }
+    }
+
+    const normalized = children.map((child) => this._normalize(child, parentId));
+    if (parentId === undefined) {
+      this._roots = normalized;
+    } else {
+      this._childrenById.set(parentId, normalized);
+    }
+    if (parent) {
+      parent.collapsibleState =
+        normalized.length > 0
+          ? vscode.TreeItemCollapsibleState.Collapsed
+          : vscode.TreeItemCollapsibleState.None;
+    }
+
+    this.refresh(parent);
+    return true;
   }
 
   /**
-   * Removes an item by id.
+   * Adds an item under the root, or under an existing item when `parentId`
+   * is given. Only the affected parent (or the whole tree, for a new root)
+   * is refreshed — sibling nodes keep their expand/collapse and selection
+   * state.
+   *
+   * @param item - Item to add (may itself carry nested `children`)
+   * @param parentId - Existing item id to nest under; omit to add at the root
+   * @returns `false` if `parentId` was given but doesn't refer to a known item
+   */
+  addItem(item: T, parentId?: string): boolean {
+    const parent = parentId !== undefined ? this._itemsById.get(parentId) : undefined;
+    if (parentId !== undefined && !parent) {
+      return false;
+    }
+
+    const normalized = this._normalize(item, parentId);
+    if (parentId === undefined) {
+      this._roots.push(normalized);
+    } else {
+      const siblings = this._childrenById.get(parentId) ?? [];
+      siblings.push(normalized);
+      this._childrenById.set(parentId, siblings);
+      if (parent) {
+        parent.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+      }
+    }
+
+    this.refresh(parent);
+    return true;
+  }
+
+  /**
+   * Updates an existing item's own display fields in place (not its
+   * position or `children` — use {@link setChildren} for that). Refreshes
+   * just that item.
+   *
+   * @param id - Item id to update
+   * @param patch - Fields to merge into the existing item
+   * @returns `false` if `id` doesn't refer to a known item
+   */
+  updateItem(id: string, patch: Partial<Omit<T, 'id' | 'children'>>): boolean {
+    const existing = this._itemsById.get(id);
+    if (!existing) {
+      return false;
+    }
+    Object.assign(existing, patch);
+    this.refresh(existing);
+    return true;
+  }
+
+  /**
+   * Removes an item by id, searching the *entire* tree (not just the root
+   * level). Only the removed item's former parent (or the whole tree, for a
+   * removed root) is refreshed.
    *
    * @param id - Item id to remove
+   * @returns `false` if `id` doesn't refer to a known item
    */
-  removeItem(id: string): void {
-    this._roots = this._roots.filter((item) => item.id !== id);
-    this._rebuildIndex();
-    this.refresh();
+  removeItem(id: string): boolean {
+    const parentId = this._parentById.get(id);
+    const container = parentId !== undefined ? this._childrenById.get(parentId) : this._roots;
+    if (!container) {
+      return false;
+    }
+    const index = container.findIndex((it) => it.id === id);
+    if (index === -1) {
+      return false;
+    }
+
+    container.splice(index, 1);
+    this._deindex(id);
+
+    const parent = parentId !== undefined ? this._itemsById.get(parentId) : undefined;
+    if (parent && container.length === 0) {
+      parent.collapsibleState = vscode.TreeItemCollapsibleState.None;
+      this._childrenById.delete(parent.id);
+    }
+
+    this.refresh(parent);
+    return true;
   }
 
   /**
-   * Finds an item by id.
+   * Finds an item by id anywhere in the tree.
    *
    * @param id - Item id
    * @returns The original item (with its `children`) or undefined.
@@ -286,44 +458,204 @@ export class SimpleTreeDataProvider<
     return this._itemsById.get(id);
   }
 
-  getRoots(): T[] {
-    return this._normalizedRoots;
-  }
-
-  getChildrenOf(element: T): T[] {
-    return this._normalizedChildrenById.get(element.id) ?? [];
+  /**
+   * Returns the parent of `element`, enabling `TreeView.reveal()`.
+   *
+   * @param element - Child element
+   */
+  override getParentOf(element: T): T | undefined {
+    const parentId = this._parentById.get(element.id);
+    return parentId !== undefined ? this._itemsById.get(parentId) : undefined;
   }
 
   /**
-   * Walks the tree once and pre-computes:
-   * - `_itemsById`: O(1) findItem lookup
-   * - `_normalizedRoots` / `_normalizedChildrenById`: stable arrays returned
-   *   to VS Code so the same reference is handed back across calls when the
-   *   underlying data has not changed.
+   * Returns children directly from the internal index — bypassing
+   * {@link BaseTreeDataProvider}'s cache, which would otherwise duplicate
+   * data this class already indexes in O(1) lookups.
    */
-  private _rebuildIndex(): void {
-    this._itemsById.clear();
-    this._normalizedChildrenById.clear();
+  override async getChildren(element?: T): Promise<T[]> {
+    if (this._disposed) {
+      return [];
+    }
+    if (element === undefined) {
+      return this._roots;
+    }
+    return this._childrenById.get(element.id) ?? [];
+  }
 
-    const normalize = (item: T): T => ({
+  getRoots(): T[] {
+    return this._roots;
+  }
+
+  getChildrenOf(element: T): T[] {
+    return this._childrenById.get(element.id) ?? [];
+  }
+
+  /**
+   * Recursively indexes `item` (and any inline `children` it carries) and
+   * returns a normalized copy — a shallow copy with `collapsibleState`
+   * computed from whether it has children, so callers never have to set
+   * that field themselves. The copy is what gets stored and returned to VS
+   * Code; the caller's original object is never mutated.
+   */
+  private _normalize(item: T, parentId: string | undefined): T {
+    const children = item.children;
+    const normalized: T = {
       ...item,
       collapsibleState:
-        item.children && item.children.length > 0
+        children && children.length > 0
           ? vscode.TreeItemCollapsibleState.Collapsed
           : vscode.TreeItemCollapsibleState.None,
-    });
+    };
 
-    const walk = (items: T[]): T[] =>
-      items.map((item) => {
-        this._itemsById.set(item.id, item);
-        if (item.children && item.children.length > 0) {
-          this._normalizedChildrenById.set(item.id, walk(item.children));
-        }
-        return normalize(item);
-      });
-
-    this._normalizedRoots = walk(this._roots);
+    this._itemsById.set(normalized.id, normalized);
+    this._parentById.set(normalized.id, parentId);
+    if (children && children.length > 0) {
+      this._childrenById.set(
+        normalized.id,
+        children.map((child) => this._normalize(child, normalized.id))
+      );
+    }
+    return normalized;
   }
+
+  /** Removes `id` and, recursively, every descendant from all indices. */
+  private _deindex(id: string): void {
+    const children = this._childrenById.get(id);
+    this._itemsById.delete(id);
+    this._parentById.delete(id);
+    this._childrenById.delete(id);
+    if (children) {
+      for (const child of children) {
+        this._deindex(child.id);
+      }
+    }
+  }
+}
+
+// ============================================
+// Pagination helper
+// ============================================
+
+/** Sentinel id used by {@link withPagination}'s "Load more…" placeholder. */
+export const LOAD_MORE_ID = '__loadMore__';
+
+/**
+ * Caps a children array at `pageSize`, appending a "Load more…" placeholder
+ * item when there's more data than that. A pure formatting helper — your
+ * `getChildrenOf` implementation is responsible for recognizing
+ * `element.id === LOAD_MORE_ID` (e.g. in the item's `command`) and loading
+ * the next page.
+ *
+ * Useful when a lazily-loaded node (e.g. a directory with tens of thousands
+ * of files) would otherwise force VS Code to serialize an enormous array
+ * across the extension host boundary in one call.
+ *
+ * @param items - The full list of children for this level
+ * @param pageSize - Maximum number of real items to show before paginating
+ * @param loadMoreLabel - Label for the placeholder item
+ *
+ * @example
+ * ```typescript
+ * class HugeDirProvider extends BaseTreeDataProvider<FileItem> {
+ *   async getChildrenOf(element: FileItem): Promise<FileItem[]> {
+ *     const allFiles = await listFiles(element.data!.path);
+ *     return withPagination(allFiles, 500);
+ *   }
+ * }
+ * ```
+ */
+export function withPagination<T extends TreeItemData>(
+  items: T[],
+  pageSize: number,
+  loadMoreLabel = 'Load more…'
+): T[] {
+  if (items.length <= pageSize) {
+    return items;
+  }
+  const sentinel = {
+    id: LOAD_MORE_ID,
+    label: loadMoreLabel,
+    iconPath: new vscode.ThemeIcon('ellipsis'),
+  } as unknown as T;
+  return [...items.slice(0, pageSize), sentinel];
+}
+
+// ============================================
+// Drag and drop helper
+// ============================================
+
+/**
+ * Options for {@link createDragAndDropController}.
+ */
+export interface TreeDragAndDropOptions<T extends TreeItemData> {
+  /**
+   * MIME type used to carry dragged item ids. Recommended format:
+   * `application/vnd.code.tree.<viewid-lowercase>`.
+   */
+  mimeType: string;
+  /**
+   * Called after a drop with the dragged items' **ids** — ids are all that
+   * reliably survive serialization across the drag, so resolve them
+   * yourself (e.g. via `provider.findItem(id)`). Fire
+   * `onDidChangeTreeData`/call the provider's own mutators for anything
+   * that needs to be redrawn; this callback does not do that for you.
+   *
+   * @param sourceIds - Ids of the dragged items
+   * @param target - The item dropped onto, or undefined when dropped on the root
+   */
+  onDrop(sourceIds: string[], target: T | undefined): void | Promise<void>;
+}
+
+/**
+ * Builds a type-safe `vscode.TreeDragAndDropController` for reordering or
+ * moving items within (or between) trees that share the same `mimeType`.
+ * Requires VS Code 1.66+. Pass the result as `dragAndDropController` in
+ * {@link createTreeView}'s options.
+ *
+ * @param options - MIME type and drop handler
+ *
+ * @example
+ * ```typescript
+ * const provider = new SimpleTreeDataProvider<FileItem>(initialItems);
+ * const dragAndDropController = createDragAndDropController<FileItem>({
+ *   mimeType: 'application/vnd.code.tree.myextFiles',
+ *   onDrop(sourceIds, target) {
+ *     for (const id of sourceIds) {
+ *       const item = provider.findItem(id);
+ *       if (item) {
+ *         provider.removeItem(id);
+ *         provider.addItem(item, target?.id);
+ *       }
+ *     }
+ *   },
+ * });
+ *
+ * createTreeView(context, 'myext.files', provider, { dragAndDropController });
+ * ```
+ */
+export function createDragAndDropController<T extends TreeItemData>(
+  options: TreeDragAndDropOptions<T>
+): vscode.TreeDragAndDropController<T> {
+  return {
+    dropMimeTypes: [options.mimeType],
+    dragMimeTypes: [options.mimeType],
+    handleDrag(source, dataTransfer) {
+      dataTransfer.set(
+        options.mimeType,
+        new vscode.DataTransferItem(JSON.stringify(source.map((item) => item.id)))
+      );
+    },
+    async handleDrop(target, dataTransfer) {
+      const transferItem = dataTransfer.get(options.mimeType);
+      if (!transferItem) {
+        return;
+      }
+      const raw = await transferItem.asString();
+      const sourceIds = JSON.parse(raw) as string[];
+      await options.onDrop(sourceIds, target);
+    },
+  };
 }
 
 // ============================================
@@ -333,10 +665,15 @@ export class SimpleTreeDataProvider<
 /**
  * Creates a tree view and registers it with the extension context.
  *
+ * When `provider` is a {@link BaseTreeDataProvider}, its
+ * {@link BaseTreeDataProvider.onDidChangeCheckboxState} is automatically
+ * bridged from the native `TreeView.onDidChangeCheckboxState` event.
+ *
  * @param context - Extension context
  * @param viewId - View identifier (must match package.json contribution)
  * @param provider - Tree data provider
- * @param options - Tree view options
+ * @param options - Tree view options (including e.g. `dragAndDropController`
+ *   from {@link createDragAndDropController}, or `manageCheckboxStateManually`)
  * @returns The created tree view
  *
  * @example
@@ -346,6 +683,11 @@ export class SimpleTreeDataProvider<
  *   showCollapseAll: true,
  *   canSelectMany: false,
  * });
+ *
+ * // The returned TreeView is the real vscode.TreeView, so its badge and
+ * // checkbox-change event both just work:
+ * treeView.badge = { value: 3, tooltip: '3 pending' };
+ * treeView.onDidChangeCheckboxState((e) => console.log(e.items));
  * ```
  */
 export function createTreeView<T extends TreeItemData>(
@@ -363,6 +705,19 @@ export function createTreeView<T extends TreeItemData>(
 
   if ('dispose' in provider && typeof provider.dispose === 'function') {
     context.subscriptions.push(provider as vscode.Disposable);
+  }
+
+  if (provider instanceof BaseTreeDataProvider) {
+    context.subscriptions.push(
+      treeView.onDidChangeCheckboxState((e) => {
+        provider.fireCheckboxChange(
+          e.items.map(([item, state]) => ({
+            item,
+            checked: state === vscode.TreeItemCheckboxState.Checked,
+          }))
+        );
+      })
+    );
   }
 
   return treeView;
