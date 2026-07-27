@@ -35,6 +35,7 @@ A lightweight, type-safe utility library for VS Code extension development. Elim
   - [WebView](#webview)
   - [Utilities](#utilities)
 - [Development](#development)
+- [Changelog](#changelog)
 - [Contributing](#contributing)
 - [Security](#security)
 - [License](#license)
@@ -940,6 +941,12 @@ Pre-commit hooks automatically run:
 1. **lint-staged** - Formats and lints staged files
 2. **typecheck** - Verifies TypeScript types
 3. **test** - Runs the test suite
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the release history.
+
+---
 
 ## Contributing
 
