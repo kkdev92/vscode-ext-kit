@@ -9,7 +9,7 @@ import {
   SimpleTreeDataProvider,
   createTreeView,
   type TreeItemData,
-} from '../src/treeview.js';
+} from '../src/views/treeview.js';
 
 describe('treeview', () => {
   beforeEach(() => {

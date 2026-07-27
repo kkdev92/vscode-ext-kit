@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
-import { t, getLanguage, isLanguage, plural, formatNumber, formatDate, formatRelativeTime } from '../src/l10n.js';
+import { t, getLanguage, isLanguage, plural, formatNumber, formatDate, formatRelativeTime } from '../src/l10n/index.js';
 
 describe('l10n', () => {
   beforeEach(() => {

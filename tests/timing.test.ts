@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { debounce, throttle, withTiming, measureTime } from '../src/timing.js';
-import type { Logger } from '../src/types.js';
+import { debounce, throttle, withTiming, measureTime } from '../src/std/timing.js';
+import type { Logger } from '../src/core/types.js';
 
 describe('debounce', () => {
   beforeEach(() => {

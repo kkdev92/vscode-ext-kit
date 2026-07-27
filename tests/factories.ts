@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import type * as vscode from 'vscode';
-import type { Logger } from '../src/types.js';
+import type { Logger } from '../src/core/types.js';
 
 /**
  * Creates a mock Logger instance for testing.

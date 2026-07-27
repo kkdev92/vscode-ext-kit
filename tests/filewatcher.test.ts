@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as vscode from 'vscode';
-import { createFileWatcher, watchFile } from '../src/filewatcher.js';
+import { createFileWatcher, watchFile } from '../src/workspace/filewatcher.js';
 
 // Helper to create a mock file system watcher with event firing capability
 function createTestFileSystemWatcher() {

@@ -24,7 +24,7 @@ import {
   getFilePath,
   isDirty,
   getLanguageId,
-} from '../src/editor.js';
+} from '../src/workspace/editor.js';
 
 describe('editor', () => {
   beforeEach(() => {

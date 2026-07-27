@@ -1,7 +1,7 @@
 import * as os from 'node:os';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
-import { createLogger } from '../src/logger.js';
+import { createLogger } from '../src/core/logger.js';
 
 describe('Logger', () => {
   beforeEach(() => {

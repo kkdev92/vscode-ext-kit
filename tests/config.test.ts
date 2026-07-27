@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
-import { getConfig, getSetting, setSetting, onConfigChange } from '../src/config.js';
+import { getConfig, getSetting, setSetting, onConfigChange } from '../src/config/index.js';
 
 describe('Config', () => {
   beforeEach(() => {

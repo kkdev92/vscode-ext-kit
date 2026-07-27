@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DisposableCollection } from '../src/disposable.js';
+import { DisposableCollection } from '../src/core/disposable.js';
 
 describe('DisposableCollection', () => {
   let collection: DisposableCollection;

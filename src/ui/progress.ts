@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { ProgressOptions } from './types.js';
+import type { ProgressOptions } from '../core/types.js';
 
 /**
  * Progress reporter for reporting progress updates.

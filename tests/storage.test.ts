@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createMockExtensionContext } from './mocks/vscode.js';
-import { createGlobalStorage, createWorkspaceStorage, createSecretStorage } from '../src/storage.js';
+import { createGlobalStorage, createWorkspaceStorage, createSecretStorage } from '../src/storage/index.js';
 
 describe('storage', () => {
   let context: ReturnType<typeof createMockExtensionContext>;

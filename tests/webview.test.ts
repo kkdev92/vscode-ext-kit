@@ -8,7 +8,7 @@ import {
   createWebViewHtml,
   escapeHtml,
   loadHtmlTemplate,
-} from '../src/webview.js';
+} from '../src/views/webview.js';
 
 // loadHtmlTemplate reads templates through vscode.workspace.fs (mocked in setup.ts)
 const mockedReadFile = vi.mocked(vscode.workspace.fs.readFile);

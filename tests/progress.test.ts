@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
-import { withProgress, withSteps, toAbortSignal, type ProgressReporter, type ProgressStep } from '../src/progress.js';
+import { withProgress, withSteps, toAbortSignal, type ProgressReporter, type ProgressStep } from '../src/ui/progress.js';
 
 describe('Progress', () => {
   beforeEach(() => {

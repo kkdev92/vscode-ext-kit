@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { debounce } from './timing.js';
+import { debounce } from '../std/timing.js';
 
 // ============================================
 // Types

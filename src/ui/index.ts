@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { InputTextOptions } from './types.js';
+import type { InputTextOptions } from '../core/types.js';
 
 // ============================================
 // Basic UI Utilities

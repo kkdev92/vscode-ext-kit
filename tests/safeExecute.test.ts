@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
-import { safeExecute, trySafeExecute } from '../src/safeExecute.js';
-import type { Logger } from '../src/types.js';
+import { safeExecute, trySafeExecute } from '../src/core/safeExecute.js';
+import type { Logger } from '../src/core/types.js';
 import { createMockLogger } from './factories.js';
 
 describe('safeExecute', () => {

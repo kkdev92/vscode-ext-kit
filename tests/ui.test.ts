@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
-import { pickOne, pickMany, inputText, wizard, type WizardQuickPickItem, type WizardOptions } from '../src/ui.js';
+import { pickOne, pickMany, inputText, wizard, type WizardQuickPickItem, type WizardOptions } from '../src/ui/index.js';
 
 describe('UI', () => {
   beforeEach(() => {
