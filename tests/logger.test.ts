@@ -100,6 +100,87 @@ describe('createLogger — log mode (default)', () => {
     expect(logged).toContain(error.stack!.split('\n')[1]!.trim());
   });
 
+  describe('error() accepts unknown', () => {
+    // `error()` takes `unknown` so a `catch (error)` binding needs no
+    // normalization at the call site; these cover what non-Error values render as.
+    it('passes a string through unchanged', () => {
+      const logger = createLogger('Test');
+      const channel = lastChannel();
+
+      logger.error('plain string');
+
+      expect(channel.error).toHaveBeenCalledWith('plain string');
+    });
+
+    it.each([
+      ['a number', 42, '42'],
+      ['a boolean', false, 'false'],
+      ['null', null, 'null'],
+      ['undefined', undefined, 'undefined'],
+      ['a bigint', 7n, '7'],
+    ])('stringifies %s', (_label, input, expected) => {
+      const logger = createLogger('Test');
+      const channel = lastChannel();
+
+      logger.error(input);
+
+      expect(channel.error).toHaveBeenCalledWith(expected);
+    });
+
+    it('stringifies a symbol without throwing', () => {
+      const logger = createLogger('Test');
+      const channel = lastChannel();
+
+      logger.error(Symbol('boom'));
+
+      expect(channel.error).toHaveBeenCalledWith('Symbol(boom)');
+    });
+
+    it('serializes a plain object as JSON instead of [object Object]', () => {
+      const logger = createLogger('Test');
+      const channel = lastChannel();
+
+      logger.error({ code: 'ENOENT', path: '/tmp/x' });
+
+      expect(channel.error).toHaveBeenCalledWith('{"code":"ENOENT","path":"/tmp/x"}');
+    });
+
+    it('serializes a null-prototype object without throwing', () => {
+      const logger = createLogger('Test');
+      const channel = lastChannel();
+      const bare = Object.create(null) as Record<string, unknown>;
+      bare['reason'] = 'no prototype';
+
+      // `String(bare)` would throw "Cannot convert object to primitive value".
+      expect(() => logger.error(bare)).not.toThrow();
+      expect(channel.error).toHaveBeenCalledWith('{"reason":"no prototype"}');
+    });
+
+    it('uses the type tag for non-plain objects', () => {
+      const logger = createLogger('Test');
+      const channel = lastChannel();
+
+      logger.error([1, 2]);
+
+      expect(channel.error).toHaveBeenCalledWith('[object Array]');
+    });
+
+    it('reports a non-Error value to telemetry wrapped in an Error', () => {
+      const sender: vscode.TelemetrySender = { sendEventData: vi.fn(), sendErrorData: vi.fn() };
+      const logger = createLogger('Test', { telemetry: sender });
+
+      logger.error(404);
+
+      const results = vi.mocked(vscode.env.createTelemetryLogger).mock.results;
+      const telemetry = results[results.length - 1]!.value as unknown as {
+        logError: ReturnType<typeof vi.fn>;
+      };
+      const [reported] = telemetry.logError.mock.calls[0]!;
+      expect(reported).toBeInstanceOf(Error);
+      expect((reported as Error).message).toBe('404');
+    });
+  });
+
   it('silent level suppresses everything', () => {
     const logger = createLogger('Test', { level: 'silent' });
     const channel = lastChannel();

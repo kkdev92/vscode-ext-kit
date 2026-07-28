@@ -6,6 +6,69 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 From 1.0.0 onward this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0 releases followed it in spirit; their breaking changes are marked **Breaking**.
 
+## [1.1.0] - 2026-07-28
+
+Fixes and additions from the first real 1.0 adoption, all reported from a
+downstream extension's migration. Two of them made the published package
+harder to use than the source tree suggested.
+
+### Fixed
+
+- **The documented test setup did not work for consumers.** Vitest
+  externalizes `node_modules`, so `vi.mock('vscode', ...)` never reached the
+  kit's own `import * as vscode from 'vscode'` and any test touching a kit
+  function failed with `Cannot find package 'vscode'`. The README's
+  `vitest.config.ts` example now includes the required
+  `server.deps.inline: ['@kkdev92/vscode-ext-kit']`, with an explanation of
+  why it is mandatory rather than a workaround.
+- **Published sourcemaps pointed at files that were not shipped.** `dist`
+  carries 74 `.js.map`/`.d.ts.map` files whose `sources` resolve to `../src`,
+  but `src` was not in `files`. Consumers inlining the package saw a
+  `Sourcemap ... points to missing source files` warning per module, and
+  Go-to-Definition stopped at the `.d.ts`. `src` is now published, so both
+  debugging and Go-to-Definition land on the real TypeScript.
+- **`createVSCodeMock` was missing `workspace.applyEdit`**, which this
+  library itself calls from `applyWorkspaceEdits`/`applyEditsGrouped` — so
+  testing consumer code that used those helpers failed with
+  `vscode.workspace.applyEdit is not a function`.
+- `npm run build` now cleans `dist` first. Stale 0.x output (19 flat
+  `*.d.ts` files whose sources no longer exist) survived rebuilds and
+  misrepresented the API when read locally. Published tarballs were never
+  affected (`prepublishOnly` already cleaned).
+
+### Added
+
+- **`s.nullable(inner)`** — accepts `null` in addition to the inner schema,
+  mirroring `s.optional`. VS Code settings commonly declare
+  `"type": ["string", "null"]` with a `null` default to mean "unset", which
+  `s.optional` (which admits `undefined`) does not cover:
+  `field(s.nullable(s.enum('compact', 'wide')), null)`.
+- **`Logger.error` accepts `unknown`** — a `catch (error)` binding can be
+  passed straight through (`catch (error) { logger.error(error, { file }) }`)
+  instead of being normalized at every call site. `Error` instances keep
+  their stack; anything else is stringified safely.
+- **Mock coverage for the APIs extensions actually use**:
+  `window.activeTextEditor` / `visibleTextEditors` (both directly assignable
+  for test setup), `window.onDidChangeActiveTextEditor` /
+  `onDidChangeTextEditorSelection` / `showTextDocument`,
+  `workspace.workspaceFolders` / `getWorkspaceFolder` / `asRelativePath` /
+  `openTextDocument` / `onDidChangeTextDocument` / `onDidSaveTextDocument`,
+  and `env.clipboard`. Extending a namespace by hand is no longer the price
+  of testing an ordinary extension.
+- **A consumer smoke test** (`npm run test:smoke`, plus a CI job): packs the
+  tarball, installs it into a throwaway project configured exactly as the
+  README documents, then typechecks and runs tests against the *published*
+  artifact — asserting the `vscode` mock reaches the kit's internals, all four
+  entry points resolve, and no sourcemap warnings appear. Both packaging bugs
+  above were invisible to the existing suite because it only ever tests
+  `src/`.
+- **A meta test** asserting every `vscode.*` member this library calls exists
+  on `createVSCodeMock`, so a missing mock (like `applyEdit`) fails here
+  rather than in a consumer's test run.
+- `.gitattributes` normalizing line endings to LF, so `format:check` stops
+  failing on Windows checkouts (`core.autocrlf` produced CRLF while Prettier
+  is configured for LF).
+
 ## [1.0.0] - 2026-07-28
 
 A ground-up redesign for type safety, performance and testability.
@@ -190,6 +253,7 @@ platform support, toolchain currency, and release supply chain.
 
 Initial public release.
 
+[1.1.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v0.5.0...v1.0.0
 [0.5.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v0.3.1...v0.4.0

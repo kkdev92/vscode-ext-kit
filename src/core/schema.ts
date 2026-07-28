@@ -159,6 +159,27 @@ export const s = {
     return make((v) => (v === undefined ? pass(undefined) : inner['~standard'].validate(v)));
   },
 
+  /**
+   * Accepts `null` in addition to the inner schema.
+   *
+   * VS Code settings commonly use `"type": ["string", "null"]` with a `null`
+   * default to mean "unset", which {@link s.optional} (which admits
+   * `undefined`) does not cover.
+   *
+   * @example
+   * ```typescript
+   * const config = defineConfigSchema('myExt', {
+   *   preset: field(s.nullable(s.enum('compact', 'wide')), null),
+   * });
+   * config.get('preset'); // 'compact' | 'wide' | null
+   * ```
+   */
+  nullable<Output>(
+    inner: StandardSchemaV1<unknown, Output>
+  ): StandardSchemaV1<unknown, Output | null> {
+    return make((v) => (v === null ? pass(null) : inner['~standard'].validate(v)));
+  },
+
   /** A string-keyed record with uniformly-typed values. */
   record<Value>(
     value: StandardSchemaV1<unknown, Value>

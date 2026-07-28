@@ -34,6 +34,7 @@ optional sugar, not a framework.
 | 0.x | 1.0 |
 | --- | --- |
 | `logger.info('msg', arg1, arg2)` (printf-style varargs) | `logger.info('msg', { key: value })` (structured fields) |
+| `logger.error('msg', err)` (varargs) | `logger.error(err, { ... })` — first argument is `unknown`, so a `catch (error)` binding passes straight through; put any extra context in the fields object |
 | Hand-formatted `[INFO] [timestamp]` lines | Native `LogOutputChannel` (timestamps/colors/level dropdown come from VS Code) |
 | `timestamp` option | Removed — VS Code renders timestamps in `'log'` mode; `'plain'` mode always includes them |
 | `telemetryReporter` (custom interface) + `redactStackPaths` | `telemetry: vscode.TelemetrySender` — wrapped with `env.createTelemetryLogger`, which scrubs PII natively |

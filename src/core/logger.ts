@@ -18,6 +18,24 @@ const LOG_LEVEL_PREFIX: Record<Exclude<LogLevel, 'silent'>, string> = {
   error: 'ERROR',
 };
 
+/**
+ * Renders a non-Error thrown value as a message.
+ *
+ * Primitives (including symbols, which `String()` handles) stringify
+ * directly. Objects go through `Object.prototype.toString` rather than
+ * `String(value)`, because the latter throws on null-prototype objects and
+ * yields a useless `[object Object]` for plain ones — so anything that would
+ * land on `[object Object]` falls back to JSON instead.
+ */
+function stringifyErrorInput(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value === null || value === undefined || typeof value !== 'object') {
+    return String(value);
+  }
+  const tag = Object.prototype.toString.call(value);
+  return tag === '[object Object]' ? safeStringify(value) : tag;
+}
+
 /** Circular-safe JSON serialization for structured log fields. */
 function safeStringify(value: unknown): string {
   const seen = new WeakSet<object>();
@@ -134,8 +152,10 @@ export function createLogger(name: string, opts: LoggerOptions = {}): Logger {
       },
       error(input, fields) {
         if (!shouldLog('error')) return;
+        // `input` is `unknown` so a `catch` binding can be passed straight in:
+        // Errors keep their stack, everything else is stringified.
         const error = input instanceof Error ? input : undefined;
-        const message = input instanceof Error ? input.message : input;
+        const message = error ? error.message : stringifyErrorInput(input);
         const text = error?.stack ? `${message}\n${error.stack}` : message;
         emit('error', scope, text, fields);
 
