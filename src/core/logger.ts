@@ -19,21 +19,21 @@ const LOG_LEVEL_PREFIX: Record<Exclude<LogLevel, 'silent'>, string> = {
 };
 
 /**
- * Renders a non-Error thrown value as a message. `String(value)` throws for
- * null-prototype objects and symbols, and yields a useless `[object Object]`
- * for plain objects, so both cases fall back to JSON.
+ * Renders a non-Error thrown value as a message.
+ *
+ * Primitives (including symbols, which `String()` handles) stringify
+ * directly. Objects go through `Object.prototype.toString` rather than
+ * `String(value)`, because the latter throws on null-prototype objects and
+ * yields a useless `[object Object]` for plain ones — so anything that would
+ * land on `[object Object]` falls back to JSON instead.
  */
 function stringifyErrorInput(value: unknown): string {
   if (typeof value === 'string') return value;
   if (value === null || value === undefined || typeof value !== 'object') {
-    try {
-      return String(value);
-    } catch {
-      return safeStringify(value);
-    }
+    return String(value);
   }
-  const asString = Object.prototype.toString.call(value);
-  return asString === '[object Object]' ? safeStringify(value) : asString;
+  const tag = Object.prototype.toString.call(value);
+  return tag === '[object Object]' ? safeStringify(value) : tag;
 }
 
 /** Circular-safe JSON serialization for structured log fields. */

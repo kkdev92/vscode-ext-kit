@@ -22,7 +22,7 @@ harder to use than the source tree suggested.
   `server.deps.inline: ['@kkdev92/vscode-ext-kit']`, with an explanation of
   why it is mandatory rather than a workaround.
 - **Published sourcemaps pointed at files that were not shipped.** `dist`
-  carries 114 `.js.map`/`.d.ts.map` files whose `sources` resolve to `../src`,
+  carries 74 `.js.map`/`.d.ts.map` files whose `sources` resolve to `../src`,
   but `src` was not in `files`. Consumers inlining the package saw a
   `Sourcemap ... points to missing source files` warning per module, and
   Go-to-Definition stopped at the `.d.ts`. `src` is now published, so both
