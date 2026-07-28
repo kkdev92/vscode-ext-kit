@@ -50,7 +50,12 @@ export interface Logger extends vscode.Disposable {
   debug(message: string, fields?: Record<string, unknown>): void;
   info(message: string, fields?: Record<string, unknown>): void;
   warn(message: string, fields?: Record<string, unknown>): void;
-  error(error: string | Error, fields?: Record<string, unknown>): void;
+  /**
+   * Logs an error. Accepts `unknown` so a `catch (error)` binding can be
+   * passed straight through: anything that isn't an `Error` is stringified,
+   * and `Error` instances keep their stack.
+   */
+  error(error: unknown, fields?: Record<string, unknown>): void;
   /**
    * Creates a child logger that shares this logger's channel, level and
    * telemetry, prefixing every message with `[scope]`. Nested children

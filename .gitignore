@@ -9,6 +9,9 @@ out/
 # Test coverage
 coverage/
 
+# Consumer smoke test scratch (scripts/smoke-consumer.mjs)
+.smoke-tmp/
+
 # Environment
 .env
 .env.*

@@ -180,11 +180,19 @@ context.subscriptions.push(logger);
 logger.info('activated', { workspaceFolders: 2 });
 logger.error(new Error('sync failed'), { retry: 3 });
 
+try {
+  await sync();
+} catch (error) {
+  logger.error(error, { retry: 3 }); // `unknown` — catch bindings pass straight through
+}
+
 const gitLogger = logger.child('git');
 gitLogger.debug('spawn', { args: ['status'] }); // -> [git] spawn {"args":["status"]}
 
 logger.setLevel('warn');
 ```
+
+`error()`'s first parameter is typed `unknown`, not `string | Error`, so a `catch (error)` binding can be passed straight through — `Error` instances keep their message and stack, anything else is stringified; put structured context in the second argument.
 
 Key `LoggerOptions`:
 
@@ -219,6 +227,8 @@ if (result.ok) {
 Both receive an `AbortSignal` (aborted once the operation settles or fails) and a `RunOptions`: `userMessage` (custom toast text), `rethrow` (rethrow real errors after logging — cancellations are *never* rethrown), and `silent` (log only, no toast). `isCancellation(error)` recognizes `vscode.CancellationError`, an aborted-signal `AbortError`, or anything named `'Canceled'` — the same classification `run`/`tryRun` use internally.
 
 `Result<T, E = Error>` is `{ ok: true; value: T } | { ok: false; error: E; cancelled: boolean }`, with helpers `ok`, `err`, `unwrap`, `unwrapOr`, `mapResult`, and `mapResultErr`.
+
+Outside `run`/`tryRun` — e.g. a non-user-facing `catch` — [`logger.error`](#logger) takes the caught value directly: its first parameter is `unknown`, not `string | Error`, so there's no normalization step to write by hand.
 
 ### Commands
 
@@ -267,7 +277,7 @@ context.subscriptions.push(
 await config.set('maxItems', 100);
 ```
 
-`field(schema, defaultValue, description?)` pairs a [Standard Schema v1](https://standardschema.dev) validator with the value used when a setting is unset or fails validation — either a built-in `s.*` builder (`string`, `number`, `boolean`, `enum`, `array`, `object`, `optional`, `record`, `unknown`, `custom`) or any library with synchronous Standard Schema validation (zod, valibot, ...). `validateSchema(schema, value)` runs a schema directly if you need one outside config/storage.
+`field(schema, defaultValue, description?)` pairs a [Standard Schema v1](https://standardschema.dev) validator with the value used when a setting is unset or fails validation — either a built-in `s.*` builder (`string`, `number`, `boolean`, `enum`, `array`, `object`, `optional`, `nullable`, `record`, `unknown`, `custom`) or any library with synchronous Standard Schema validation (zod, valibot, ...). `s.nullable(inner)` mirrors `s.optional` for VS Code's `"type": ["string", "null"]` settings pattern, where `null` (not `undefined`) means "unset": `field(s.nullable(s.enum('compact', 'wide')), null)` accepts `'compact'`, `'wide'`, or `null`. `validateSchema(schema, value)` runs a schema directly if you need one outside config/storage.
 
 `TypedConfig` returned by `defineConfigSchema`:
 
@@ -666,6 +676,18 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['./tests/setup.ts'],
     clearMocks: true, // resets call history between tests automatically
+    server: {
+      deps: {
+        // Required: Vitest externalizes node_modules by default, loading them
+        // through Node's ESM loader instead of Vite's transform. This kit
+        // imports 'vscode' itself (e.g. in core/logger.ts), so without
+        // inlining it here, `vi.mock('vscode', ...)` never reaches that
+        // import and calling into the kit throws "Cannot find package
+        // 'vscode'". This is not a workaround for an edge case — any project
+        // that imports this kit from `node_modules` needs this entry.
+        inline: ['@kkdev92/vscode-ext-kit'],
+      },
+    },
   },
 });
 ```
@@ -709,6 +731,33 @@ vi.mocked(vscode.workspace.createFileSystemWatcher).mockReturnValue(watcher);
 
 // ... code under test registers a listener on watcher.onDidChange ...
 watcher._fireChange({ fsPath: '/test/file.ts' });
+```
+
+### Overriding or extending the mock
+
+The defaults mirror a freshly started extension host — no open editor, no workspace folder. `activeTextEditor` / `visibleTextEditors` are plain mutable fields (not getters), so override one for a single test by assigning it directly — no need to recompose the `window` namespace:
+
+```ts
+import { vi } from 'vitest';
+import * as vscode from 'vscode';
+import { createMockTextEditor } from '@kkdev92/vscode-ext-kit/testing';
+
+vscode.window.activeTextEditor = createMockTextEditor(vi, 'const x = 1;', 'typescript');
+```
+
+To add an API this kit doesn't mock yet, spread the namespace you need inside `vi.mock`'s factory instead of hand-building the whole module:
+
+```ts
+import { vi } from 'vitest';
+import { createVSCodeMock } from '@kkdev92/vscode-ext-kit/testing';
+
+vi.mock('vscode', () => {
+  const base = createVSCodeMock(vi);
+  return {
+    ...base,
+    env: { ...base.env, openExternal: vi.fn().mockResolvedValue(true) },
+  };
+});
 ```
 
 ---

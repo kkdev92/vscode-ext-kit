@@ -1,6 +1,6 @@
 {
   "name": "@kkdev92/vscode-ext-kit",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A lightweight utility library for VS Code extension development",
   "author": "kkdev92",
   "license": "MIT",
@@ -44,6 +44,7 @@
   },
   "files": [
     "dist",
+    "src",
     "README.md",
     "CHANGELOG.md",
     "MIGRATION.md",
@@ -72,10 +73,11 @@
   "scripts": {
     "prepare": "husky",
     "clean": "rimraf dist",
-    "build": "tsc",
+    "build": "npm run clean && tsc",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:smoke": "node scripts/smoke-consumer.mjs",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
     "lint": "eslint src tests",

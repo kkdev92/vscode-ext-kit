@@ -1161,6 +1161,27 @@ function createMockWindowNamespace(framework: MockFrameworkLike) {
         return task(progress, token);
       }
     ),
+    // `undefined`/`[]` by default, mirroring a freshly started extension host
+    // with nothing focused. Plain mutable fields — not getters, not
+    // `readonly` — so a test can assign `vscode.window.activeTextEditor =
+    // myEditor` directly instead of recomposing the whole `window` namespace.
+    activeTextEditor: undefined as vscode.TextEditor | undefined,
+    visibleTextEditors: [] as vscode.TextEditor[],
+    onDidChangeActiveTextEditor: fn(() => ({ dispose: fn() })),
+    onDidChangeTextEditorSelection: fn(() => ({ dispose: fn() })),
+    /**
+     * Returns a fresh {@link createMockTextEditor} fixture. When `document`
+     * looks like a mock `TextDocument` (has `getText`), it's threaded through
+     * so `result.document` is the same object the caller passed in, matching
+     * the real API's identity guarantee.
+     */
+    showTextDocument: fn((document?: unknown) => {
+      const editor = createMockTextEditor(framework);
+      if (typeof document === 'object' && document !== null && 'getText' in document) {
+        editor.document = document as typeof editor.document;
+      }
+      return Promise.resolve(editor);
+    }),
   };
 }
 
@@ -1195,6 +1216,35 @@ function createMockWorkspaceNamespace(framework: MockFrameworkLike) {
     fs: {
       readFile: fn().mockResolvedValue(new Uint8Array()),
     },
+    /** Used by `applyWorkspaceEdits`/`applyEditsGrouped` (`src/workspace/editor.ts`). */
+    applyEdit: fn().mockResolvedValue(true),
+    // `undefined` by default (mirrors an extension host with no folder
+    // open). A plain mutable field — not a getter, not `readonly` — so a
+    // test can assign `vscode.workspace.workspaceFolders = [...]` directly
+    // instead of recomposing the whole `workspace` namespace.
+    workspaceFolders: undefined as vscode.WorkspaceFolder[] | undefined,
+    getWorkspaceFolder: fn((_uri: vscode.Uri) => undefined as vscode.WorkspaceFolder | undefined),
+    /** Simplified: returns `pathOrUri` itself for a string, or `.fsPath` for a Uri. */
+    asRelativePath: fn(
+      (pathOrUri: string | vscode.Uri, _includeWorkspaceFolder?: boolean): string =>
+        typeof pathOrUri === 'string' ? pathOrUri : pathOrUri.fsPath
+    ),
+    /** Honors `{ language, content }` options; otherwise an empty plaintext document. */
+    openTextDocument: fn((uriOrOptions?: unknown) => {
+      if (
+        typeof uriOrOptions === 'object' &&
+        uriOrOptions !== null &&
+        ('content' in uriOrOptions || 'language' in uriOrOptions)
+      ) {
+        const { language, content } = uriOrOptions as { language?: string; content?: string };
+        return Promise.resolve(
+          createMockTextDocument(framework, content ?? '', language ?? 'plaintext')
+        );
+      }
+      return Promise.resolve(createMockTextDocument(framework));
+    }),
+    onDidChangeTextDocument: fn(() => ({ dispose: fn() })),
+    onDidSaveTextDocument: fn(() => ({ dispose: fn() })),
   };
 }
 
@@ -1220,6 +1270,10 @@ function createMockEnvNamespace(framework: MockFrameworkLike) {
   const { fn } = framework;
   return {
     language: 'en',
+    clipboard: {
+      readText: fn().mockResolvedValue(''),
+      writeText: fn().mockResolvedValue(undefined),
+    },
     createTelemetryLogger: fn(() => ({
       logUsage: fn(),
       logError: fn(),
@@ -1258,6 +1312,12 @@ function createMockL10nNamespace(framework: MockFrameworkLike) {
  *
  * `vscode.env` and `vscode.l10n` are implemented (unlike some generic
  * `vscode` mocks) since this library's own `l10n` module depends on them.
+ *
+ * Extension-authoring state that VS Code itself only lets the host set
+ * (`window.activeTextEditor`, `window.visibleTextEditors`,
+ * `workspace.workspaceFolders`) is exposed as plain, directly-assignable
+ * fields here — a test sets `vscode.window.activeTextEditor = myEditor`
+ * instead of recomposing the whole namespace.
  *
  * @example
  * ```ts
