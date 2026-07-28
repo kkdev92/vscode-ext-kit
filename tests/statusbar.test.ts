@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createStatusBarItem, showStatusMessage } from '../src/statusbar.js';
+import * as vscode from 'vscode';
+import { createStatusBarItem, showStatusMessage } from '../src/ui/statusbar.js';
 
 describe('statusbar', () => {
   beforeEach(() => {
@@ -217,6 +218,42 @@ describe('statusbar', () => {
 
         expect(item.native.text).toBe('Updated');
       });
+
+      it('keeps the spinner running and updates the label when update() is called mid-spinner (bug #3)', () => {
+        const item = createStatusBarItem('test.item', { text: '$(check) Ready' });
+
+        item.showSpinner('Loading...');
+        expect(item.native.text).toBe('$(sync~spin) Loading...');
+
+        item.update('Processing 42%');
+        expect(item.native.text).toBe('$(sync~spin) Processing 42%');
+
+        item.hideSpinner();
+        expect(item.native.text).toBe('Processing 42%');
+      });
+
+      it('keeps the spinner running and updates the label when set({text}) is called mid-spinner (bug #3)', () => {
+        const item = createStatusBarItem('test.item', { text: '$(check) Ready' });
+
+        item.showSpinner();
+        expect(item.native.text).toBe('$(sync~spin) Ready');
+
+        item.set({ text: 'Halfway there' });
+        expect(item.native.text).toBe('$(sync~spin) Halfway there');
+
+        item.hideSpinner();
+        expect(item.native.text).toBe('Halfway there');
+      });
+
+      it('set() without text does not disturb an active spinner', () => {
+        const item = createStatusBarItem('test.item', { text: '$(check) Ready' });
+
+        item.showSpinner('Loading...');
+        item.set({ tooltip: 'still going' });
+
+        expect(item.native.text).toBe('$(sync~spin) Loading...');
+        expect(item.native.tooltip).toBe('still going');
+      });
     });
 
     describe('dispose', () => {
@@ -254,6 +291,45 @@ describe('statusbar', () => {
 
       expect(disposable).toBeDefined();
       expect(typeof disposable.dispose).toBe('function');
+    });
+
+    it('uses a unique id per call, so two overlapping messages do not share one status bar item (bug #10)', () => {
+      showStatusMessage('First');
+      showStatusMessage('Second');
+
+      const calls = vi.mocked(vscode.window.createStatusBarItem).mock.calls;
+      const [firstId] = calls[calls.length - 2] ?? [];
+      const [secondId] = calls[calls.length - 1] ?? [];
+
+      expect(firstId).toBeDefined();
+      expect(secondId).toBeDefined();
+      expect(firstId).not.toBe(secondId);
+    });
+
+    it('disposing one message does not dispose an overlapping one (bug #10)', () => {
+      const first = showStatusMessage('First', 10000);
+      showStatusMessage('Second', 10000);
+
+      const results = vi.mocked(vscode.window.createStatusBarItem).mock.results;
+      const firstItem = results[results.length - 2]?.value as { dispose: ReturnType<typeof vi.fn> };
+      const secondItem = results[results.length - 1]?.value as {
+        dispose: ReturnType<typeof vi.fn>;
+      };
+
+      first.dispose();
+
+      expect(firstItem.dispose).toHaveBeenCalledTimes(1);
+      expect(secondItem.dispose).not.toHaveBeenCalled();
+    });
+
+    it('self-disposes after the timeout elapses', () => {
+      showStatusMessage('Test message', 5000);
+      const results = vi.mocked(vscode.window.createStatusBarItem).mock.results;
+      const item = results[results.length - 1]?.value as { dispose: ReturnType<typeof vi.fn> };
+
+      vi.advanceTimersByTime(5000);
+
+      expect(item.dispose).toHaveBeenCalledTimes(1);
     });
   });
 });

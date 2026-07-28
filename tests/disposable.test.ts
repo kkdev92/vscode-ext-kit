@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DisposableCollection } from '../src/disposable.js';
+import { DisposableCollection, createScope } from '../src/core/disposable.js';
+import { createMockExtensionContext } from './factories.js';
 
 describe('DisposableCollection', () => {
   let collection: DisposableCollection;
@@ -18,12 +19,15 @@ describe('DisposableCollection', () => {
       expect(collection.size).toBe(1);
     });
 
-    it('should throw if collection is disposed', () => {
+    it('should dispose immediately when the collection is already disposed', () => {
       collection.dispose();
 
-      expect(() => collection.add({ dispose: vi.fn() })).toThrow(
-        'Cannot add to a disposed DisposableCollection'
-      );
+      const late = { dispose: vi.fn() };
+      const result = collection.add(late);
+
+      expect(result).toBe(late);
+      expect(late.dispose).toHaveBeenCalledTimes(1);
+      expect(collection.size).toBe(0);
     });
   });
 
@@ -38,12 +42,14 @@ describe('DisposableCollection', () => {
       expect(collection.size).toBe(3);
     });
 
-    it('should throw if collection is disposed', () => {
+    it('should dispose immediately when the collection is already disposed', () => {
       collection.dispose();
 
-      expect(() => collection.push({ dispose: vi.fn() })).toThrow(
-        'Cannot add to a disposed DisposableCollection'
-      );
+      const late = { dispose: vi.fn() };
+      collection.push(late);
+
+      expect(late.dispose).toHaveBeenCalledTimes(1);
+      expect(collection.size).toBe(0);
     });
   });
 
@@ -235,11 +241,60 @@ describe('DisposableCollection', () => {
 
       expect(() => collection.dispose()).toThrow();
 
-      // Subsequent add should throw because collection is marked disposed
-      expect(() => collection.add({ dispose: vi.fn() })).toThrow(
-        'Cannot add to a disposed DisposableCollection'
-      );
+      // Subsequent add is disposed immediately because the collection is disposed
+      const late = { dispose: vi.fn() };
+      collection.add(late);
+      expect(late.dispose).toHaveBeenCalledTimes(1);
       expect(collection.size).toBe(0);
     });
+  });
+
+  describe('Symbol.dispose (using support)', () => {
+    it('disposes members when Symbol.dispose is invoked', () => {
+      const d1 = { dispose: vi.fn() };
+      collection.add(d1);
+
+      collection[Symbol.dispose]();
+
+      expect(d1.dispose).toHaveBeenCalledTimes(1);
+    });
+
+    it('disposes at the end of a using block', () => {
+      const d1 = { dispose: vi.fn() };
+
+      {
+        using scope = new DisposableCollection();
+        scope.add(d1);
+      }
+
+      expect(d1.dispose).toHaveBeenCalledTimes(1);
+    });
+
+    it('disposes even when the using block throws', () => {
+      const d1 = { dispose: vi.fn() };
+
+      expect(() => {
+        using scope = new DisposableCollection();
+        scope.add(d1);
+        throw new Error('boom');
+      }).toThrow('boom');
+
+      expect(d1.dispose).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+describe('createScope', () => {
+  it('registers the scope in context.subscriptions and disposes members', () => {
+    const context = createMockExtensionContext();
+
+    const scope = createScope(context);
+    const d1 = { dispose: vi.fn() };
+    scope.add(d1);
+
+    expect(context.subscriptions).toContain(scope);
+
+    scope.dispose();
+    expect(d1.dispose).toHaveBeenCalledTimes(1);
   });
 });

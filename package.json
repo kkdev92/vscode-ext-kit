@@ -1,6 +1,6 @@
 {
   "name": "@kkdev92/vscode-ext-kit",
-  "version": "0.5.0",
+  "version": "1.0.0",
   "description": "A lightweight utility library for VS Code extension development",
   "author": "kkdev92",
   "license": "MIT",
@@ -25,12 +25,28 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./timing": {
+      "types": "./dist/std/timing.d.ts",
+      "import": "./dist/std/timing.js",
+      "default": "./dist/std/timing.js"
+    },
+    "./retry": {
+      "types": "./dist/std/retry.d.ts",
+      "import": "./dist/std/retry.js",
+      "default": "./dist/std/retry.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js",
+      "default": "./dist/testing/index.js"
     }
   },
   "files": [
     "dist",
     "README.md",
     "CHANGELOG.md",
+    "MIGRATION.md",
     "LICENSE"
   ],
   "engines": {
@@ -64,7 +80,7 @@
     "format:check": "prettier --check \"src/**/*.ts\"",
     "lint": "eslint src tests",
     "lint:fix": "eslint src tests --fix",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.tests.json",
     "knip": "knip",
     "prepublishOnly": "npm run clean && npm run lint && npm run typecheck && npm run knip && npm run test && npm run build"
   },
@@ -82,7 +98,7 @@
     "typescript"
   ],
   "lint-staged": {
-    "src/**/*.ts": [
+    "{src,tests}/**/*.ts": [
       "prettier --write",
       "eslint --fix"
     ]

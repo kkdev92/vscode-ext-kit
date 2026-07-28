@@ -1,6 +1,39 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
-import { withProgress, withSteps, toAbortSignal, type ProgressReporter, type ProgressStep } from '../src/progress.js';
+import {
+  withProgress,
+  withSteps,
+  toAbortSignal,
+  type ProgressReporter,
+} from '../src/ui/progress.js';
+
+/**
+ * Overrides `vscode.window.withProgress` for exactly one call so a test can
+ * capture every `progress.report()` call it makes, instead of the inert
+ * `{ report: vi.fn() }` the shared mock in tests/setup.ts installs. The
+ * single cast here (rather than typing the whole callback loosely) is what
+ * keeps the many call sites below simple.
+ */
+function mockWithProgressReporting(
+  onReport: (value: { message?: string; increment?: number }) => void
+): void {
+  const impl = async (
+    _options: vscode.ProgressOptions,
+    task: (
+      progress: vscode.Progress<{ message?: string; increment?: number }>,
+      token: vscode.CancellationToken
+    ) => Thenable<unknown>
+  ) => {
+    const token: vscode.CancellationToken = {
+      isCancellationRequested: false,
+      onCancellationRequested: vi.fn(),
+    };
+    return task({ report: onReport }, token);
+  };
+  vi.mocked(vscode.window.withProgress).mockImplementationOnce(
+    impl as unknown as typeof vscode.window.withProgress
+  );
+}
 
 describe('Progress', () => {
   beforeEach(() => {
@@ -127,13 +160,30 @@ describe('Progress', () => {
     it('should execute all steps in order', async () => {
       const executionOrder: number[] = [];
 
-      const steps: ProgressStep<number>[] = [
-        { label: 'Step 1', task: async () => { executionOrder.push(1); return 1; } },
-        { label: 'Step 2', task: async () => { executionOrder.push(2); return 2; } },
-        { label: 'Step 3', task: async () => { executionOrder.push(3); return 3; } },
-      ];
-
-      const result = await withSteps('Test', steps);
+      const result = await withSteps(
+        { title: 'Test' },
+        {
+          label: 'Step 1',
+          task: async () => {
+            executionOrder.push(1);
+            return 1;
+          },
+        },
+        {
+          label: 'Step 2',
+          task: async () => {
+            executionOrder.push(2);
+            return 2;
+          },
+        },
+        {
+          label: 'Step 3',
+          task: async () => {
+            executionOrder.push(3);
+            return 3;
+          },
+        }
+      );
 
       expect(result.completed).toBe(true);
       expect(result.cancelled).toBe(false);
@@ -141,37 +191,40 @@ describe('Progress', () => {
     });
 
     it('should return results from all steps', async () => {
-      const steps: ProgressStep<string>[] = [
+      const result = await withSteps(
+        { title: 'Test' },
         { label: 'A', task: async () => 'result-a' },
-        { label: 'B', task: async () => 'result-b' },
-      ];
-
-      const result = await withSteps('Test', steps);
+        { label: 'B', task: async () => 'result-b' }
+      );
 
       expect(result.results).toEqual(['result-a', 'result-b']);
     });
 
-    it('should handle steps with different return types', async () => {
-      const steps = [
+    it('infers a precise per-step tuple type without needing `as const` (bug #15)', async () => {
+      // Regression: previously only compiled correctly if the steps array
+      // literal was annotated `as const`; passing steps as separate
+      // arguments (rest parameters) keeps per-step types intact natively.
+      const result = await withSteps(
+        { title: 'Test' },
         { label: 'Number', task: async () => 42 },
         { label: 'String', task: async () => 'hello' },
-        { label: 'Object', task: async () => ({ key: 'value' }) },
-      ] as const;
+        { label: 'Object', task: async () => ({ key: 'value' }) }
+      );
 
-      const result = await withSteps('Test', steps);
-
-      expect(result.results[0]).toBe(42);
-      expect(result.results[1]).toBe('hello');
-      expect(result.results[2]).toEqual({ key: 'value' });
+      const num: number = result.results[0];
+      const str: string = result.results[1];
+      const obj: { key: string } = result.results[2];
+      expect(num).toBe(42);
+      expect(str).toBe('hello');
+      expect(obj).toEqual({ key: 'value' });
     });
 
     it('should handle synchronous tasks', async () => {
-      const steps: ProgressStep<number>[] = [
+      const result = await withSteps(
+        { title: 'Test' },
         { label: 'Sync 1', task: () => 1 },
-        { label: 'Sync 2', task: () => 2 },
-      ];
-
-      const result = await withSteps('Test', steps);
+        { label: 'Sync 2', task: () => 2 }
+      );
 
       expect(result.completed).toBe(true);
       expect(result.results).toEqual([1, 2]);
@@ -180,18 +233,22 @@ describe('Progress', () => {
     it('should pass cancellation token to steps', async () => {
       let receivedToken: vscode.CancellationToken | undefined;
 
-      const steps: ProgressStep<void>[] = [
-        { label: 'Check Token', task: (token) => { receivedToken = token; } },
-      ];
-
-      await withSteps('Test', steps);
+      await withSteps(
+        { title: 'Test' },
+        {
+          label: 'Check Token',
+          task: (token) => {
+            receivedToken = token;
+          },
+        }
+      );
 
       expect(receivedToken).toBeDefined();
       expect(typeof receivedToken?.isCancellationRequested).toBe('boolean');
     });
 
-    it('should handle empty steps array', async () => {
-      const result = await withSteps('Test', []);
+    it('should handle zero steps', async () => {
+      const result = await withSteps({ title: 'Test' });
 
       expect(result.completed).toBe(true);
       expect(result.cancelled).toBe(false);
@@ -199,7 +256,11 @@ describe('Progress', () => {
     });
 
     it('should call vscode.window.withProgress with correct options', async () => {
-      await withSteps('Processing', [], { location: vscode.ProgressLocation.Window, cancellable: true });
+      await withSteps({
+        title: 'Processing',
+        location: vscode.ProgressLocation.Window,
+        cancellable: true,
+      });
 
       expect(vscode.window.withProgress).toHaveBeenCalledWith(
         {
@@ -212,11 +273,63 @@ describe('Progress', () => {
     });
 
     it('should propagate errors from steps', async () => {
-      const steps: ProgressStep<void>[] = [
-        { label: 'Failing Step', task: async () => { throw new Error('Step failed'); } },
-      ];
+      await expect(
+        withSteps(
+          { title: 'Test' },
+          {
+            label: 'Failing Step',
+            task: async () => {
+              throw new Error('Step failed');
+            },
+          }
+        )
+      ).rejects.toThrow('Step failed');
+    });
 
-      await expect(withSteps('Test', steps)).rejects.toThrow('Step failed');
+    it("reports increment proportional to each step's weight (default weight: 1)", async () => {
+      const reports: { message?: string; increment?: number }[] = [];
+      mockWithProgressReporting((value) => reports.push(value));
+
+      await withSteps(
+        { title: 'Test' },
+        { label: 'A', task: () => 'a' },
+        { label: 'B', task: () => 'b' }
+      );
+
+      // Equal weights (default 1 each) over 2 steps -> 50% each.
+      const increments = reports.filter((r) => r.increment !== undefined).map((r) => r.increment);
+      expect(increments).toEqual([50, 50]);
+    });
+
+    it('reports increment proportional to unequal explicit weights', async () => {
+      const reports: { message?: string; increment?: number }[] = [];
+      mockWithProgressReporting((value) => reports.push(value));
+
+      // weights 3 / 5 / 2 sum to 10 -> increments 30 / 50 / 20.
+      await withSteps(
+        { title: 'Test' },
+        { label: 'Downloading', task: () => undefined, weight: 3 },
+        { label: 'Processing', task: () => undefined, weight: 5 },
+        { label: 'Uploading', task: () => undefined, weight: 2 }
+      );
+
+      const increments = reports.filter((r) => r.increment !== undefined).map((r) => r.increment);
+      expect(increments).toEqual([30, 50, 20]);
+    });
+
+    it('reports each step label as the progress message before running it', async () => {
+      const messages: (string | undefined)[] = [];
+      mockWithProgressReporting((value) => {
+        if (value.message !== undefined) messages.push(value.message);
+      });
+
+      await withSteps(
+        { title: 'Test' },
+        { label: 'First', task: () => undefined },
+        { label: 'Second', task: () => undefined }
+      );
+
+      expect(messages).toEqual(['First', 'Second']);
     });
   });
 

@@ -1,10 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import * as vscode from 'vscode';
 import {
-  createMockTextEditor,
+  createMockTextEditor as createMockTextEditorWith,
+  createMockTextDocument as createMockTextDocumentWith,
+  createMockCancellationToken as createMockCancellationTokenWith,
+  createMockUri,
   Selection,
   Position,
   Range,
-} from './mocks/vscode.js';
+  WorkspaceEdit as MockWorkspaceEdit,
+} from '../src/testing/index.js';
 import {
   replaceText,
   getSelectedText,
@@ -19,16 +24,36 @@ import {
   selectRange,
   selectLine,
   selectWord,
-  getLineCount,
-  getDocumentText,
   getFilePath,
-  isDirty,
-  getLanguageId,
-} from '../src/editor.js';
+  rangeFromOffsets,
+  getTextInOffsetRange,
+  resolvePositionsBatch,
+  resolveOffsetsBatch,
+  applyEditsGrouped,
+  applyWorkspaceEdits,
+} from '../src/workspace/editor.js';
+
+// Thin local re-binds so the rest of this file — written against the
+// pre-testing-kit factories — doesn't need a `vi` argument at every call site.
+const createMockTextEditor = (content?: string, languageId?: string) =>
+  createMockTextEditorWith(vi, content, languageId);
+const createMockTextDocument = (content?: string, languageId?: string) =>
+  createMockTextDocumentWith(vi, content, languageId);
+const createMockCancellationToken = (isCancellationRequested?: boolean) =>
+  createMockCancellationTokenWith(vi, isCancellationRequested);
+const Uri = createMockUri(vi);
 
 describe('editor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // `WorkspaceEdit` and `workspace.applyEdit` aren't part of the shared
+    // vscode mock in tests/setup.ts, so they're injected here for the
+    // `applyWorkspaceEdits` tests. Cast through `Record<string, unknown>`
+    // because `vscode`/`vscode.workspace` are typed as read-only namespaces.
+    (vscode as unknown as Record<string, unknown>).WorkspaceEdit = MockWorkspaceEdit;
+    (vscode.workspace as unknown as Record<string, unknown>).applyEdit = vi
+      .fn()
+      .mockResolvedValue(true);
   });
 
   // ============================================
@@ -281,36 +306,69 @@ describe('editor', () => {
 
       expect(result).toBe(false);
     });
+
+    it('uses a custom word-matching regex when provided', () => {
+      const editor = createMockTextEditor('foo-bar baz');
+      editor.selection = new Selection(0, 5, 0, 5); // inside 'bar' of 'foo-bar'
+
+      const result = selectWord(editor as never, /[\w-]+/);
+
+      expect(result).toBe(true);
+      expect(getSelectedText(editor as never)).toBe('foo-bar');
+    });
+
+    it('falls back to the default word definition without a regex', () => {
+      const editor = createMockTextEditor('foo-bar baz');
+      editor.selection = new Selection(0, 5, 0, 5); // inside 'bar' of 'foo-bar'
+
+      selectWord(editor as never);
+
+      expect(getSelectedText(editor as never)).toBe('bar');
+    });
   });
 
   // ============================================
   // Document Info
   // ============================================
 
-  describe('getLineCount', () => {
-    it('returns line count', () => {
-      const editor = createMockTextEditor('line 1\nline 2\nline 3');
-
-      expect(getLineCount(editor as never)).toBe(3);
-    });
-  });
-
-  describe('getDocumentText', () => {
-    it('returns full document text', () => {
-      const content = 'hello\nworld';
-      const editor = createMockTextEditor(content);
-
-      expect(getDocumentText(editor as never)).toBe(content);
-    });
-  });
-
   describe('getFilePath', () => {
-    it('returns file path', () => {
+    it('returns fsPath and uri for local files', () => {
       const editor = createMockTextEditor('hello');
 
-      const path = getFilePath(editor as never);
+      const result = getFilePath(editor as never);
 
-      expect(path).toBe('/mock/document.txt');
+      expect(result).toEqual({ fsPath: '/mock/document.txt', uri: editor.document.uri });
+    });
+
+    it('returns fsPath and uri for Remote-SSH/WSL/Codespaces documents (vscode-remote scheme)', () => {
+      const editor = createMockTextEditor('hello');
+      editor.document.uri = {
+        scheme: 'vscode-remote',
+        fsPath: '/home/user/project/file.ts',
+        path: '/home/user/project/file.ts',
+        toString: () => 'vscode-remote://wsl+ubuntu/home/user/project/file.ts',
+      } as never;
+
+      const result = getFilePath(editor as never);
+
+      expect(result).toEqual({
+        fsPath: '/home/user/project/file.ts',
+        uri: editor.document.uri,
+      });
+    });
+
+    it('returns fsPath and uri for virtual file systems (vscode-vfs scheme)', () => {
+      const editor = createMockTextEditor('hello');
+      editor.document.uri = {
+        scheme: 'vscode-vfs',
+        fsPath: '/repo/file.ts',
+        path: '/repo/file.ts',
+        toString: () => 'vscode-vfs://github/owner/repo/file.ts',
+      } as never;
+
+      const result = getFilePath(editor as never);
+
+      expect(result).toEqual({ fsPath: '/repo/file.ts', uri: editor.document.uri });
     });
 
     it('returns undefined for untitled documents', () => {
@@ -323,22 +381,220 @@ describe('editor', () => {
     });
   });
 
-  describe('isDirty', () => {
-    it('returns dirty status', () => {
-      const editor = createMockTextEditor('hello');
+  // ============================================
+  // Offset / Position Utilities
+  // ============================================
 
-      expect(isDirty(editor as never)).toBe(false);
+  describe('rangeFromOffsets', () => {
+    it('builds a Range spanning two offsets', () => {
+      const document = createMockTextDocument('hello\nworld');
 
-      editor.document.isDirty = true;
-      expect(isDirty(editor as never)).toBe(true);
+      const range = rangeFromOffsets(document as never, 6, 11);
+
+      expect(range.start).toEqual(new Position(1, 0));
+      expect(range.end).toEqual(new Position(1, 5));
     });
   });
 
-  describe('getLanguageId', () => {
-    it('returns language id', () => {
-      const editor = createMockTextEditor('const x = 1;', 'typescript');
+  describe('getTextInOffsetRange', () => {
+    it('extracts text between two offsets', () => {
+      const document = createMockTextDocument('hello\nworld');
 
-      expect(getLanguageId(editor as never)).toBe('typescript');
+      expect(getTextInOffsetRange(document as never, 6, 11)).toBe('world');
+    });
+  });
+
+  describe('resolvePositionsBatch', () => {
+    it('resolves multiple offsets in a single pass', () => {
+      const document = createMockTextDocument('aaa\nbbb\nccc');
+
+      const positions = resolvePositionsBatch(document as never, [0, 4, 9]);
+
+      expect(positions).toEqual([new Position(0, 0), new Position(1, 0), new Position(2, 1)]);
+    });
+
+    it('returns an empty array for an empty input', () => {
+      const document = createMockTextDocument('abc');
+
+      expect(resolvePositionsBatch(document as never, [])).toEqual([]);
+    });
+
+    it('clamps out-of-range offsets like positionAt does', () => {
+      const document = createMockTextDocument('abc');
+
+      const [position] = resolvePositionsBatch(document as never, [999]);
+
+      expect(position).toEqual(new Position(0, 3));
+    });
+
+    it('throws a CancellationError when the token is already cancelled', () => {
+      const document = createMockTextDocument('abc');
+      const token = createMockCancellationToken(true);
+
+      expect(() => resolvePositionsBatch(document as never, [0], token as never)).toThrow();
+    });
+  });
+
+  describe('resolveOffsetsBatch', () => {
+    it('resolves multiple positions in a single pass', () => {
+      const document = createMockTextDocument('aaa\nbbb\nccc');
+
+      const offsets = resolveOffsetsBatch(document as never, [
+        new Position(0, 0),
+        new Position(1, 0),
+        new Position(2, 1),
+      ]);
+
+      expect(offsets).toEqual([0, 4, 9]);
+    });
+
+    it('round-trips with resolvePositionsBatch', () => {
+      const document = createMockTextDocument('one\ntwo\nthree');
+      const original = [0, 2, 4, 6, 9, 12];
+
+      const positions = resolvePositionsBatch(document as never, original);
+      const roundTripped = resolveOffsetsBatch(document as never, positions);
+
+      expect(roundTripped).toEqual(original);
+    });
+
+    it('returns an empty array for an empty input', () => {
+      const document = createMockTextDocument('abc');
+
+      expect(resolveOffsetsBatch(document as never, [])).toEqual([]);
+    });
+
+    it('throws a CancellationError when the token is already cancelled', () => {
+      const document = createMockTextDocument('abc');
+      const token = createMockCancellationToken(true);
+
+      expect(() =>
+        resolveOffsetsBatch(document as never, [new Position(0, 0)], token as never)
+      ).toThrow();
+    });
+  });
+
+  // ============================================
+  // Workspace Edits
+  // ============================================
+
+  describe('applyEditsGrouped', () => {
+    it('returns true without calling edit for an empty list', async () => {
+      const editor = createMockTextEditor('hello');
+
+      const result = await applyEditsGrouped(editor as never, []);
+
+      expect(result).toBe(true);
+      expect(editor.edit).not.toHaveBeenCalled();
+    });
+
+    it('groups multiple edit() calls with undo stops only at the ends', async () => {
+      const editor = createMockTextEditor('hello world');
+
+      const result = await applyEditsGrouped(editor as never, [
+        (eb) => eb.insert(new Position(0, 0), 'A'),
+        (eb) => eb.insert(new Position(0, 5), 'B'),
+        (eb) => eb.insert(new Position(0, 11), 'C'),
+      ]);
+
+      expect(result).toBe(true);
+      expect(editor.edit).toHaveBeenCalledTimes(3);
+      const calls = editor.edit.mock.calls;
+      expect(calls[0]?.[1]).toEqual({ undoStopBefore: true, undoStopAfter: false });
+      expect(calls[1]?.[1]).toEqual({ undoStopBefore: false, undoStopAfter: false });
+      expect(calls[2]?.[1]).toEqual({ undoStopBefore: false, undoStopAfter: true });
+    });
+
+    it('returns false if any edit in the sequence fails', async () => {
+      const editor = createMockTextEditor('hello');
+      editor.edit = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+
+      const result = await applyEditsGrouped(editor as never, [
+        (eb) => eb.insert(new Position(0, 0), 'A'),
+        (eb) => eb.insert(new Position(0, 1), 'B'),
+      ]);
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('applyWorkspaceEdits', () => {
+    it('applies edits across multiple files in one WorkspaceEdit', async () => {
+      const uriA = Uri.file('/a.ts') as never;
+      const uriB = Uri.file('/b.ts') as never;
+      const rangeA = new Range(0, 0, 0, 3);
+      const rangeB = new Range(1, 0, 1, 3);
+
+      const result = await applyWorkspaceEdits([
+        { uri: uriA, range: rangeA, newText: 'foo' },
+        { uri: uriB, range: rangeB, newText: 'bar' },
+      ]);
+
+      expect(result).toBe(true);
+      expect(vscode.workspace.applyEdit).toHaveBeenCalledTimes(1);
+
+      const appliedEdit = vi.mocked(vscode.workspace.applyEdit).mock
+        .calls[0]?.[0] as unknown as InstanceType<typeof MockWorkspaceEdit>;
+      expect(appliedEdit.size).toBe(2);
+      expect(appliedEdit._getEntries(uriA)).toEqual([
+        { range: rangeA, newText: 'foo', metadata: undefined },
+      ]);
+      expect(appliedEdit._getEntries(uriB)).toEqual([
+        { range: rangeB, newText: 'bar', metadata: undefined },
+      ]);
+    });
+
+    it('attaches label/needsConfirmation metadata to every entry', async () => {
+      const uri = Uri.file('/a.ts') as never;
+
+      await applyWorkspaceEdits([{ uri, range: new Range(0, 0, 0, 1), newText: 'x' }], {
+        label: 'Rename symbol across files',
+        needsConfirmation: true,
+      });
+
+      const appliedEdit = vi.mocked(vscode.workspace.applyEdit).mock
+        .calls[0]?.[0] as unknown as InstanceType<typeof MockWorkspaceEdit>;
+      expect(appliedEdit._getEntries(uri)[0]?.metadata).toEqual({
+        label: 'Rename symbol across files',
+        needsConfirmation: true,
+      });
+    });
+
+    it('passes isRefactoring through as applyEdit metadata', async () => {
+      const uri = Uri.file('/a.ts') as never;
+
+      await applyWorkspaceEdits([{ uri, range: new Range(0, 0, 0, 1), newText: 'x' }], {
+        isRefactoring: true,
+      });
+
+      expect(vscode.workspace.applyEdit).toHaveBeenCalledWith(expect.anything(), {
+        isRefactoring: true,
+      });
+    });
+
+    it('returns the boolean result of workspace.applyEdit', async () => {
+      (vscode.workspace as unknown as Record<string, unknown>).applyEdit = vi
+        .fn()
+        .mockResolvedValue(false);
+      const uri = Uri.file('/a.ts') as never;
+
+      const result = await applyWorkspaceEdits([
+        { uri, range: new Range(0, 0, 0, 1), newText: 'x' },
+      ]);
+
+      expect(result).toBe(false);
+    });
+
+    it('throws a CancellationError when the token is already cancelled, without calling applyEdit', async () => {
+      const uri = Uri.file('/a.ts') as never;
+      const token = createMockCancellationToken(true);
+
+      await expect(
+        applyWorkspaceEdits([{ uri, range: new Range(0, 0, 0, 1), newText: 'x' }], {
+          token: token as never,
+        })
+      ).rejects.toThrow();
+      expect(vscode.workspace.applyEdit).not.toHaveBeenCalled();
     });
   });
 });

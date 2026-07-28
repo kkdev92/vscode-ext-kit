@@ -1,466 +1,364 @@
-import * as os from 'node:os';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import * as vscode from 'vscode';
-import { createLogger } from '../src/logger.js';
+import { createLogger } from '../src/core/logger.js';
 
-describe('Logger', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+type Mock = ReturnType<typeof vi.fn>;
 
-  describe('createLogger', () => {
-    it('should create a logger with OutputChannel', () => {
-      const logger = createLogger('TestExtension');
+interface ChannelMock {
+  trace: Mock;
+  debug: Mock;
+  info: Mock;
+  warn: Mock;
+  error: Mock;
+  appendLine: Mock;
+  show: Mock;
+  dispose: Mock;
+}
 
-      expect(vscode.window.createOutputChannel).toHaveBeenCalledWith('TestExtension');
-      expect(logger).toBeDefined();
-      expect(typeof logger.trace).toBe('function');
-      expect(typeof logger.debug).toBe('function');
-      expect(typeof logger.info).toBe('function');
-      expect(typeof logger.warn).toBe('function');
-      expect(typeof logger.error).toBe('function');
-      expect(typeof logger.dispose).toBe('function');
-    });
+/** Returns the channel produced by the most recent createOutputChannel call. */
+function lastChannel(): ChannelMock {
+  const results = vi.mocked(vscode.window.createOutputChannel).mock.results;
+  return results[results.length - 1]!.value as unknown as ChannelMock;
+}
 
-    it('should log trace messages when level is trace', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
+describe('createLogger — log mode (default)', () => {
+  it('creates a LogOutputChannel', () => {
+    createLogger('TestExtension');
 
-      const logger = createLogger('TestExtension', { level: 'trace' });
-      logger.trace('Trace message');
-
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(
-        expect.stringMatching(/\[TRACE\].*Trace message/)
-      );
-    });
-
-    it('should not log trace messages when level is debug', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
-
-      const logger = createLogger('TestExtension', { level: 'debug' });
-      logger.trace('Trace message');
-
-      expect(mockChannel.appendLine).not.toHaveBeenCalled();
-    });
-
-    it('should log info messages when level is info or lower', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
-
-      const logger = createLogger('TestExtension', { level: 'info' });
-      logger.info('Test message');
-
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(
-        expect.stringMatching(/\[INFO\].*Test message/)
-      );
-    });
-
-    it('should not log debug messages when level is info', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
-
-      const logger = createLogger('TestExtension', { level: 'info' });
-      logger.debug('Debug message');
-
-      expect(mockChannel.appendLine).not.toHaveBeenCalled();
-    });
-
-    it('should log debug messages when level is debug', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
-
-      const logger = createLogger('TestExtension', { level: 'debug' });
-      logger.debug('Debug message');
-
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(
-        expect.stringMatching(/\[DEBUG\].*Debug message/)
-      );
-    });
-
-    it('should log warn messages', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
-
-      const logger = createLogger('TestExtension', { level: 'info' });
-      logger.warn('Warning message');
-
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(
-        expect.stringMatching(/\[WARN\].*Warning message/)
-      );
-    });
-
-    it('should show output channel on error when showOnError is true', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
-
-      const logger = createLogger('TestExtension', { showOnError: true });
-      logger.error('Error message');
-
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(
-        expect.stringMatching(/\[ERROR\].*Error message/)
-      );
-      expect(mockChannel.show).toHaveBeenCalledWith(true);
-    });
-
-    it('should not show output channel on error when showOnError is false', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
-
-      const logger = createLogger('TestExtension', { showOnError: false });
-      logger.error('Error message');
-
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(
-        expect.stringMatching(/\[ERROR\].*Error message/)
-      );
-      expect(mockChannel.show).not.toHaveBeenCalled();
-    });
-
-    it('should include timestamp when timestamp option is true', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
-
-      const logger = createLogger('TestExtension', { timestamp: true });
-      logger.info('Test message');
-
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(
-        expect.stringMatching(/\[INFO\] \[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z\] Test message/)
-      );
-    });
-
-    it('should not include timestamp when timestamp option is false', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
-
-      const logger = createLogger('TestExtension', { timestamp: false });
-      logger.info('Test message');
-
-      expect(mockChannel.appendLine).toHaveBeenCalledWith('[INFO] Test message');
-    });
-
-    it('should format Error objects with stack trace', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
-
-      const logger = createLogger('TestExtension', { timestamp: false });
-      const error = new Error('Test error');
-      logger.error('Operation failed', error);
-
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('[ERROR]'));
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Operation failed'));
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Test error'));
-    });
-
-    it('should format object meta as JSON', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
-
-      const logger = createLogger('TestExtension', { timestamp: false });
-      const meta = { key: 'value', num: 42 };
-      logger.info('Test message', meta);
-
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('[INFO]'));
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('"key": "value"'));
-    });
-
-    it('should handle multiple arguments', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
-
-      const logger = createLogger('TestExtension', { timestamp: false });
-      logger.info('Test message', 'arg1', 42, { key: 'value' });
-
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('[INFO]'));
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Test message'));
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('arg1'));
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('42'));
-    });
-
-    it('should handle Error object as first argument to error()', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
-
-      const logger = createLogger('TestExtension', { timestamp: false });
-      const error = new Error('Direct error');
-      logger.error(error);
-
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('[ERROR]'));
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Direct error'));
+    expect(vscode.window.createOutputChannel).toHaveBeenCalledWith('TestExtension', {
+      log: true,
     });
   });
 
-  describe('setLevel', () => {
-    it('should change log level dynamically', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
+  it('delegates each level to the channel without manual prefixes', () => {
+    const logger = createLogger('Test');
+    const channel = lastChannel();
 
-      const logger = createLogger('TestExtension', { level: 'info' });
+    logger.trace('t');
+    logger.debug('d');
+    logger.info('i');
+    logger.warn('w');
+    logger.error('e');
 
-      // Initially, debug should not be logged
-      logger.debug('Debug 1');
-      expect(mockChannel.appendLine).not.toHaveBeenCalled();
-
-      // Change level to debug
-      logger.setLevel('debug');
-      logger.debug('Debug 2');
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(
-        expect.stringMatching(/\[DEBUG\].*Debug 2/)
-      );
-    });
-
-    it('should suppress all logs when level is silent', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
-
-      const logger = createLogger('TestExtension', { level: 'info' });
-      logger.setLevel('silent');
-
-      logger.debug('Debug');
-      logger.info('Info');
-      logger.warn('Warn');
-      logger.error('Error');
-
-      expect(mockChannel.appendLine).not.toHaveBeenCalled();
-    });
+    expect(channel.trace).toHaveBeenCalledWith('t');
+    expect(channel.debug).toHaveBeenCalledWith('d');
+    expect(channel.info).toHaveBeenCalledWith('i');
+    expect(channel.warn).toHaveBeenCalledWith('w');
+    expect(channel.error).toHaveBeenCalledWith('e');
+    expect(channel.appendLine).not.toHaveBeenCalled();
   });
 
-  describe('dispose', () => {
-    it('should dispose the output channel', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
+  it('defaults to pass-through (trace) so the Output panel does the filtering', () => {
+    const logger = createLogger('Test');
+    const channel = lastChannel();
 
-      const logger = createLogger('TestExtension');
-      logger.dispose();
+    logger.trace('visible');
 
-      expect(mockChannel.dispose).toHaveBeenCalled();
-    });
+    expect(channel.trace).toHaveBeenCalledWith('visible');
   });
 
-  describe('configSection', () => {
-    it('should read initial level from VSCode config', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
+  it('applies an explicit level gate on top of the channel', () => {
+    const logger = createLogger('Test', { level: 'warn' });
+    const channel = lastChannel();
 
-      // Mock getConfiguration to return config with 'debug' level
-      const mockConfig = {
-        get: vi.fn().mockReturnValue('debug'),
-        has: vi.fn(),
-        inspect: vi.fn(),
-        update: vi.fn(),
-      };
-      vi.mocked(vscode.workspace.getConfiguration).mockReturnValue(mockConfig as unknown as vscode.WorkspaceConfiguration);
+    logger.info('hidden');
+    logger.warn('shown');
 
-      const logger = createLogger('TestExtension', {
-        level: 'info', // fallback
-        configSection: 'myExtension.logLevel',
-      });
-
-      // Should log debug because config returns 'debug'
-      logger.debug('Debug message');
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(
-        expect.stringMatching(/\[DEBUG\].*Debug message/)
-      );
-    });
-
-    it('should use fallback level when config returns undefined', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
-
-      // Mock getConfiguration to return undefined
-      const mockConfig = {
-        get: vi.fn().mockReturnValue(undefined),
-        has: vi.fn(),
-        inspect: vi.fn(),
-        update: vi.fn(),
-      };
-      vi.mocked(vscode.workspace.getConfiguration).mockReturnValue(mockConfig as unknown as vscode.WorkspaceConfiguration);
-
-      const logger = createLogger('TestExtension', {
-        level: 'info', // fallback
-        configSection: 'myExtension.logLevel',
-      });
-
-      // Should not log debug because fallback is 'info'
-      logger.debug('Debug message');
-      expect(mockChannel.appendLine).not.toHaveBeenCalled();
-    });
-
-    it('should register config change listener', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
-
-      createLogger('TestExtension', {
-        configSection: 'myExtension.logLevel',
-      });
-
-      expect(vscode.workspace.onDidChangeConfiguration).toHaveBeenCalled();
-    });
-
-    it('should not register config change listener without configSection', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
-
-      vi.mocked(vscode.workspace.onDidChangeConfiguration).mockClear();
-
-      createLogger('TestExtension', { level: 'info' });
-
-      expect(vscode.workspace.onDidChangeConfiguration).not.toHaveBeenCalled();
-    });
-
-    it('should update level when config changes', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
-
-      // Mock config that will change its return value
-      let configValue = 'info';
-      const mockConfig = {
-        get: vi.fn(() => configValue),
-        has: vi.fn(),
-        inspect: vi.fn(),
-        update: vi.fn(),
-      };
-      vi.mocked(vscode.workspace.getConfiguration).mockReturnValue(mockConfig as unknown as vscode.WorkspaceConfiguration);
-
-      // Capture the config change callback
-      let configChangeCallback: ((e: vscode.ConfigurationChangeEvent) => void) | undefined;
-      vi.mocked(vscode.workspace.onDidChangeConfiguration).mockImplementation((callback) => {
-        configChangeCallback = callback as (e: vscode.ConfigurationChangeEvent) => void;
-        return { dispose: vi.fn() };
-      });
-
-      const logger = createLogger('TestExtension', {
-        level: 'error', // fallback
-        configSection: 'myExtension.logLevel',
-      });
-
-      // Initially debug should not be logged (level is 'info')
-      logger.debug('Debug 1');
-      expect(mockChannel.appendLine).not.toHaveBeenCalled();
-
-      // Simulate config change to 'debug'
-      configValue = 'debug';
-      configChangeCallback?.({
-        affectsConfiguration: (section: string) => section === 'myExtension.logLevel',
-      } as vscode.ConfigurationChangeEvent);
-
-      // Now debug should be logged
-      logger.debug('Debug 2');
-      expect(mockChannel.appendLine).toHaveBeenCalledWith(
-        expect.stringMatching(/\[DEBUG\].*Debug 2/)
-      );
-    });
-
-    it('should dispose config listener on dispose', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
-
-      const mockDispose = vi.fn();
-      vi.mocked(vscode.workspace.onDidChangeConfiguration).mockReturnValue({
-        dispose: mockDispose,
-      });
-
-      const logger = createLogger('TestExtension', {
-        configSection: 'myExtension.logLevel',
-      });
-
-      logger.dispose();
-
-      expect(mockDispose).toHaveBeenCalled();
-      expect(mockChannel.dispose).toHaveBeenCalled();
-    });
+    expect(channel.info).not.toHaveBeenCalled();
+    expect(channel.warn).toHaveBeenCalledWith('shown');
   });
 
-  describe('showOnErrorThrottleMs', () => {
-    it('throttles channel.show within the configured window', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
+  it('serializes structured fields as JSON', () => {
+    const logger = createLogger('Test');
+    const channel = lastChannel();
 
-      const dateNowSpy = vi.spyOn(Date, 'now');
+    logger.info('sync done', { files: 3, ok: true });
 
-      const logger = createLogger('TestExtension', { showOnErrorThrottleMs: 5000 });
+    expect(channel.info).toHaveBeenCalledWith('sync done {"files":3,"ok":true}');
+  });
 
-      dateNowSpy.mockReturnValue(1_000);
+  it('survives circular fields', () => {
+    const logger = createLogger('Test');
+    const channel = lastChannel();
+    const circular: Record<string, unknown> = {};
+    circular['self'] = circular;
+
+    logger.info('msg', circular);
+
+    expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('[Circular]'));
+  });
+
+  it('logs Error objects with their stack', () => {
+    const logger = createLogger('Test');
+    const channel = lastChannel();
+    const error = new Error('kaboom');
+
+    logger.error(error);
+
+    const logged = channel.error.mock.calls[0]![0] as string;
+    expect(logged).toContain('kaboom');
+    expect(logged).toContain(error.stack!.split('\n')[1]!.trim());
+  });
+
+  it('silent level suppresses everything', () => {
+    const logger = createLogger('Test', { level: 'silent' });
+    const channel = lastChannel();
+
+    logger.error('nope');
+
+    expect(channel.error).not.toHaveBeenCalled();
+    expect(channel.show).not.toHaveBeenCalled();
+  });
+});
+
+describe('createLogger — plain mode', () => {
+  it('creates a regular OutputChannel', () => {
+    createLogger('Test', { channelMode: 'plain' });
+
+    expect(vscode.window.createOutputChannel).toHaveBeenCalledWith('Test');
+  });
+
+  it('formats level prefix and ISO timestamp manually', () => {
+    const logger = createLogger('Test', { channelMode: 'plain', level: 'info' });
+    const channel = lastChannel();
+
+    logger.info('hello');
+
+    expect(channel.appendLine).toHaveBeenCalledWith(
+      expect.stringMatching(/^\[INFO\] \[\d{4}-\d{2}-\d{2}T[\d:.]+Z\] hello$/)
+    );
+  });
+
+  it('defaults the gate to info', () => {
+    const logger = createLogger('Test', { channelMode: 'plain' });
+    const channel = lastChannel();
+
+    logger.debug('hidden');
+    logger.info('shown');
+
+    expect(channel.appendLine).toHaveBeenCalledTimes(1);
+    expect(channel.appendLine).toHaveBeenCalledWith(expect.stringContaining('shown'));
+  });
+});
+
+describe('child loggers', () => {
+  it('prefixes messages with the scope', () => {
+    const logger = createLogger('Test');
+    const channel = lastChannel();
+
+    logger.child('git').info('status');
+
+    expect(channel.info).toHaveBeenCalledWith('[git] status');
+  });
+
+  it('composes nested scopes with a colon', () => {
+    const logger = createLogger('Test');
+    const channel = lastChannel();
+
+    logger.child('sync').child('push').debug('go');
+
+    expect(channel.debug).toHaveBeenCalledWith('[sync:push] go');
+  });
+
+  it('shares the level state with the root', () => {
+    const logger = createLogger('Test');
+    const channel = lastChannel();
+    const child = logger.child('scope');
+
+    logger.setLevel('error');
+    child.info('hidden');
+    expect(channel.info).not.toHaveBeenCalled();
+
+    child.setLevel('info');
+    logger.info('now visible');
+    expect(channel.info).toHaveBeenCalledWith('now visible');
+  });
+
+  it('child dispose is a no-op; only the root disposes the channel', () => {
+    const logger = createLogger('Test');
+    const channel = lastChannel();
+
+    logger.child('scope').dispose();
+    expect(channel.dispose).not.toHaveBeenCalled();
+
+    logger.dispose();
+    expect(channel.dispose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('setLevel / level', () => {
+  it('exposes the current level and updates dynamically', () => {
+    const logger = createLogger('Test', { level: 'info' });
+    const channel = lastChannel();
+
+    expect(logger.level).toBe('info');
+
+    logger.setLevel('error');
+    expect(logger.level).toBe('error');
+
+    logger.warn('hidden');
+    expect(channel.warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('showOnError', () => {
+  it('shows the channel on error by default', () => {
+    const logger = createLogger('Test');
+    const channel = lastChannel();
+
+    logger.error('boom');
+
+    expect(channel.show).toHaveBeenCalledWith(true);
+  });
+
+  it('does not show when disabled', () => {
+    const logger = createLogger('Test', { showOnError: false });
+    const channel = lastChannel();
+
+    logger.error('boom');
+
+    expect(channel.show).not.toHaveBeenCalled();
+  });
+
+  it('throttles repeated shows within the window', () => {
+    vi.useFakeTimers();
+    try {
+      const logger = createLogger('Test', { showOnErrorThrottleMs: 5000 });
+      const channel = lastChannel();
+
       logger.error('first');
-      dateNowSpy.mockReturnValue(2_000);
-      logger.error('second'); // 1s later, should be throttled
-      dateNowSpy.mockReturnValue(4_999);
-      logger.error('third'); // still inside the 5s window
+      logger.error('second');
+      expect(channel.show).toHaveBeenCalledTimes(1);
 
-      expect(mockChannel.show).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(5000);
+      logger.error('third');
+      expect(channel.show).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
 
-      dateNowSpy.mockReturnValue(7_000); // 6s after first → outside window
-      logger.error('fourth');
+describe('configSection', () => {
+  it('reads the initial level from configuration', () => {
+    vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+      get: vi.fn(() => 'error'),
+    } as never);
 
-      expect(mockChannel.show).toHaveBeenCalledTimes(2);
+    const logger = createLogger('Test', { configSection: 'myExt.logLevel' });
 
-      dateNowSpy.mockRestore();
-    });
+    expect(logger.level).toBe('error');
+  });
 
-    it('shows on every error when throttle is 0 (default)', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
+  it('follows configuration changes', () => {
+    const getMock = vi.fn(() => 'info');
+    vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({ get: getMock } as never);
 
-      const logger = createLogger('TestExtension');
+    const logger = createLogger('Test', { configSection: 'myExt.logLevel' });
+    expect(logger.level).toBe('info');
 
-      logger.error('a');
-      logger.error('b');
-      logger.error('c');
+    getMock.mockReturnValue('debug');
+    const listener = vi.mocked(vscode.workspace.onDidChangeConfiguration).mock.calls[0]![0];
+    listener({ affectsConfiguration: (section: string) => section === 'myExt.logLevel' } as never);
 
-      expect(mockChannel.show).toHaveBeenCalledTimes(3);
+    expect(logger.level).toBe('debug');
+  });
+
+  it('ignores unrelated configuration changes', () => {
+    const getMock = vi.fn(() => 'info');
+    vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({ get: getMock } as never);
+
+    const logger = createLogger('Test', { configSection: 'myExt.logLevel' });
+
+    getMock.mockReturnValue('debug');
+    const listener = vi.mocked(vscode.workspace.onDidChangeConfiguration).mock.calls[0]![0];
+    listener({ affectsConfiguration: () => false } as never);
+
+    expect(logger.level).toBe('info');
+  });
+});
+
+describe('telemetry', () => {
+  function createSender(): vscode.TelemetrySender {
+    return { sendEventData: vi.fn(), sendErrorData: vi.fn() };
+  }
+
+  function lastTelemetryLogger(): { logError: Mock; dispose: Mock } {
+    const results = vi.mocked(vscode.env.createTelemetryLogger).mock.results;
+    return results[results.length - 1]!.value as unknown as { logError: Mock; dispose: Mock };
+  }
+
+  it('wraps the sender with the native TelemetryLogger', () => {
+    const sender = createSender();
+
+    createLogger('Test', { telemetry: sender });
+
+    expect(vscode.env.createTelemetryLogger).toHaveBeenCalledWith(sender);
+  });
+
+  it('reports errors through logError with fields and scope', () => {
+    const sender = createSender();
+    const logger = createLogger('Test', { telemetry: sender });
+    const error = new Error('boom');
+
+    logger.child('sync').error(error, { attempt: 2 });
+
+    expect(lastTelemetryLogger().logError).toHaveBeenCalledWith(error, {
+      attempt: 2,
+      scope: 'sync',
     });
   });
 
-  describe('redactStackPaths', () => {
-    it('redacts the OS home directory from telemetry stack/message', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
+  it('wraps string errors in an Error for telemetry', () => {
+    const logger = createLogger('Test', { telemetry: createSender() });
 
-      const homedir = os.homedir();
-      // Skip on the unlikely environment where homedir() returns ''.
-      if (!homedir) return;
+    logger.error('plain message');
 
-      const reporter = {
-        sendTelemetryEvent: vi.fn(),
-        sendTelemetryErrorEvent: vi.fn(),
-      };
+    const [reported] = lastTelemetryLogger().logError.mock.calls[0]!;
+    expect(reported).toBeInstanceOf(Error);
+    expect((reported as Error).message).toBe('plain message');
+  });
 
-      const error = new Error(`failed reading ${homedir}/secret.txt`);
-      error.stack = `Error: boom\n    at fn (${homedir}/code/file.ts:10:5)`;
+  it('does not report below-error levels to telemetry', () => {
+    const logger = createLogger('Test', { telemetry: createSender() });
 
-      const logger = createLogger('TestExtension', {
-        telemetryReporter: reporter,
-        redactStackPaths: true,
-      });
-      logger.error(error);
+    logger.warn('just a warning');
 
-      expect(reporter.sendTelemetryErrorEvent).toHaveBeenCalledTimes(1);
-      const props = reporter.sendTelemetryErrorEvent.mock.calls[0]![1];
-      expect(props.errorStack).toContain('~/code/file.ts');
-      expect(props.errorStack).not.toContain(homedir);
-      expect(props.errorMessage).toContain('~/secret.txt');
-      expect(props.errorMessage).not.toContain(homedir);
-    });
+    expect(lastTelemetryLogger().logError).not.toHaveBeenCalled();
+  });
 
-    it('leaves telemetry properties untouched when redactStackPaths is false', () => {
-      const mockChannel = vscode.window.createOutputChannel('Test');
-      vi.mocked(vscode.window.createOutputChannel).mockReturnValue(mockChannel);
+  it('disposes the telemetry logger with the logger', () => {
+    const logger = createLogger('Test', { telemetry: createSender() });
 
-      const homedir = os.homedir();
-      if (!homedir) return;
+    logger.dispose();
 
-      const reporter = {
-        sendTelemetryEvent: vi.fn(),
-        sendTelemetryErrorEvent: vi.fn(),
-      };
+    expect(lastTelemetryLogger().dispose).toHaveBeenCalledTimes(1);
+  });
+});
 
-      const error = new Error('boom');
-      error.stack = `Error: boom\n    at fn (${homedir}/code/file.ts:10:5)`;
+describe('dispose', () => {
+  it('disposes the channel and config listener once', () => {
+    const configDispose = vi.fn();
+    vi.mocked(vscode.workspace.onDidChangeConfiguration).mockReturnValue({
+      dispose: configDispose,
+    } as never);
 
-      const logger = createLogger('TestExtension', { telemetryReporter: reporter });
-      logger.error(error);
+    const logger = createLogger('Test', { configSection: 'x.y' });
+    const channel = lastChannel();
 
-      const props = reporter.sendTelemetryErrorEvent.mock.calls[0]![1];
-      expect(props.errorStack).toContain(homedir);
-    });
+    logger.dispose();
+    logger.dispose();
+
+    expect(channel.dispose).toHaveBeenCalledTimes(1);
+    expect(configDispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('supports Symbol.dispose (using)', () => {
+    const logger = createLogger('Test');
+    const channel = lastChannel();
+
+    logger[Symbol.dispose]();
+
+    expect(channel.dispose).toHaveBeenCalledTimes(1);
   });
 });
