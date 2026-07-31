@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as vscode from 'vscode';
-import { createLogger } from '../src/core/logger.js';
+import { createLogger } from '../../src/core/logger.js';
 
 type Mock = ReturnType<typeof vi.fn>;
 

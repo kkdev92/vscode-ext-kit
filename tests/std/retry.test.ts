@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { retry, RetryExhaustedError } from '../src/std/retry.js';
-import { TimeoutError } from '../src/std/timing.js';
+import { retry, RetryExhaustedError } from '../../src/std/retry.js';
+import { TimeoutError } from '../../src/std/timing.js';
 
 describe('retry', () => {
   beforeEach(() => {

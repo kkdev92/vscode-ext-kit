@@ -6,6 +6,78 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 From 1.0.0 onward this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0 releases followed it in spirit; their breaking changes are marked **Breaking**.
 
+## [2.0.0] - 2026-07-31
+
+Follows the current VS Code release line. `engines.vscode` and the
+`@types/vscode` the library compiles against are now the same version, which is
+what keeps the declared floor honest — and raising the floor is what makes the
+VS Code APIs added since 1.96 usable without feature detection.
+
+Major rather than minor: raising `engines.vscode` cascades to every extension
+that depends on this library.
+
+### Added
+
+- **`toPickButton(icon, opts?)`** builds a `vscode.QuickInputButton`, accepting a
+  codicon name in place of a hand-built `ThemeIcon` exactly as `toPickItem` does
+  for item icons. `opts.location` places the button in the title bar, inline, or
+  inside the input box (`QuickInputButtonLocation`, stable since 1.109);
+  `opts.toggled` makes it an on/off toggle (`QuickInputButton.toggle`, also
+  1.109). VS Code flips `toggle.checked` in place on the button you passed it
+  before firing the trigger event, so read the state back off the same object.
+  Note that `location` is ignored for buttons attached to an item via
+  `PickItemDisplay.buttons` — VS Code always renders those inline.
+- **`prompt` on `pickOne`/`pickMany`** (new `PickOptions`, extending
+  `vscode.QuickPickOptions`) shows instructional text below the filter box and
+  above the items (`QuickPick.prompt`, stable since 1.108). `showQuickPick` has
+  no prompt, so passing one routes the picker through `createQuickPick` — the
+  same path async items already take. That path does not honor
+  `onDidSelectItem`. A synchronous list is assigned before `show()` and never
+  raises `busy`, so it does not flash empty.
+- `createVSCodeMock` gained `QuickInputButtonLocation` and `secrets.keys()`.
+
+### Changed
+
+- **Breaking:** `engines.vscode` raised from `^1.96.0` to `^1.125.0`. Extensions
+  depending on this library must raise their own `engines.vscode` to match.
+  `^1.125.0` is a minimum, so hosts on the current 1.131 line are covered.
+- `@types/vscode` stays at `~1.125.0` — the newest published type package.
+  Note that VS Code moved from monthly to weekly releases in March 2026 and
+  DefinitelyTyped no longer publishes a package per release, so `@types/vscode`
+  trails the stable channel (1.125 was published 2026-06-17 against a 1.131
+  stable). The floor tracks the types, not the stable channel.
+
+### Fixed
+
+- **`pickOne`/`pickMany` swallowed the error when an async item list rejected.**
+  Disposing a *visible* quick pick makes VS Code fire `onDidHide`
+  (`ExtHostQuickInput.dispose` calls `_fireDidHide`), so the teardown on the
+  rejection path re-entered the hide handler and resolved the promise with
+  `undefined` before `reject` ran. Callers saw a plain cancellation instead of
+  the failure. The exit paths now claim the promise before tearing down, the
+  same way `wizard.ts` already did. `createVSCodeMock`'s `hide()`/`dispose()`
+  were inert, which is why no test caught this; they now fire `onDidHide` on a
+  visible quick input like the real API, so the whole class of bug is testable.
+- **The declared `^1.96.0` floor had been inaccurate since 1.0.0.** The UI/views
+  redesign added `resourceUri` to `PickItemDisplay`/`toPickItem`, but
+  `QuickPickItem.resourceUri` only exists from VS Code **1.108** — building the
+  library against `@types/vscode@1.96.0` fails with `TS2353`. On hosts older than
+  1.108 the property was silently dropped, so `resourceUri` quietly did nothing
+  rather than failing loudly. Because `engines.vscode` now matches the types the
+  library compiles against, the compiler enforces the floor and this class of
+  drift cannot recur unnoticed.
+
+### Removed
+
+- `SecretStore.keys()` no longer feature-detects `SecretStorage.keys()` at call
+  time. That API is stable from VS Code ~1.105, which the new floor guarantees,
+  so the runtime probe and its `requires VS Code 1.105+` rejection are gone —
+  calls that previously rejected on old hosts now just work. `SecretStore.keys()`
+  never resolved to a wrong value, so no behavior change on supported hosts.
+- The wizard's `QuickPickStepConfig.prompt` no longer feature-detects
+  `QuickPick.prompt`. It was already accepted and silently dropped on hosts
+  below 1.108; the new floor guarantees it, so it is assigned directly.
+
 ## [1.1.0] - 2026-07-28
 
 Fixes and additions from the first real 1.0 adoption, all reported from a
@@ -253,6 +325,7 @@ platform support, toolchain currency, and release supply chain.
 
 Initial public release.
 
+[2.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v1.1.0...v2.0.0
 [1.1.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v0.5.0...v1.0.0
 [0.5.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v0.4.0...v0.5.0

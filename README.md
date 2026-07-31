@@ -92,7 +92,7 @@ A zero-dependency, type-safe utility library for VS Code extension development, 
 npm install @kkdev92/vscode-ext-kit
 ```
 
-> Requires VS Code `^1.96.0` and Node.js `>=22.0.0`. Zero runtime dependencies; the published package uses no Node.js APIs, so it also runs in the web/remote extension host.
+> Requires VS Code `^1.125.0` and Node.js `>=22.0.0`. Zero runtime dependencies; the published package uses no Node.js APIs, so it also runs in the web/remote extension host.
 
 Four entry points are published:
 
@@ -344,13 +344,16 @@ const branch = await pickOne(
   fetchBranches().then((names) => names.map((n) => toPickItem(n, { label: n })))
 );
 
+// `prompt` adds a line of instructional text above the list.
+await pickOne(items, { prompt: 'This rewrites history and cannot be undone.' });
+
 const name = await inputText({
   prompt: 'Enter project name',
   validate: (value) => (/^[a-z-]+$/.test(value) ? undefined : 'Use lowercase letters and hyphens only'),
 });
 ```
 
-`toPickItem(value, display)` separates the returned **value** from what's displayed (`label`/`description`/`detail`/`icon`/`resourceUri`/...); `pickMany` mirrors `pickOne` for multi-selection. Both accept a plain array or a `Thenable` of items. `toPickSeparator(label?)` inserts a non-selectable group divider. `inputText`'s `InputTextOptions` adds `password` and `ignoreFocusOut` to the usual prompt/placeholder/`validate`.
+`toPickItem(value, display)` separates the returned **value** from what's displayed (`label`/`description`/`detail`/`icon`/`resourceUri`/...); `pickMany` mirrors `pickOne` for multi-selection. Both accept a plain array or a `Thenable` of items, and `PickOptions` adds `prompt` on top of `vscode.QuickPickOptions`. `toPickSeparator(label?)` inserts a non-selectable group divider. `toPickButton(icon, opts?)` builds a `QuickInputButton` — taking a codicon name like `toPickItem` does — with `location` (title / inline / inside the input box) and `toggled` for on/off toggle buttons whose `toggle.checked` VS Code flips in place. `inputText`'s `InputTextOptions` adds `password` and `ignoreFocusOut` to the usual prompt/placeholder/`validate`.
 
 ### Wizard
 

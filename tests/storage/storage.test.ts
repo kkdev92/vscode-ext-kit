@@ -1,23 +1,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { s } from '../src/core/schema.js';
+import { s } from '../../src/core/schema.js';
 import {
   createGlobalStorage,
   createWorkspaceStorage,
   createSecretStore,
   createSecretStorage,
   listStorageKeys,
-} from '../src/storage/index.js';
+} from '../../src/storage/index.js';
 
 // ============================================
 // Local mocks
 //
 // tests/factories.js's createMockExtensionContext only stubs
 // `subscriptions`, and tests/mocks/vscode.js's Memento/SecretStorage mocks
-// don't have everything this redesign needs (setKeysForSync, a feature-
-// detectable keys()). Building minimal in-memory mocks locally keeps this
-// suite in full control of exactly what the real APIs guarantee: Memento
-// reads are synchronous, update() is spy-able for call-count assertions,
-// and SecretStorage.keys() can be present or absent per test.
+// don't have everything this redesign needs (setKeysForSync). Building
+// minimal in-memory mocks locally keeps this suite in full control of
+// exactly what the real APIs guarantee: Memento reads are synchronous and
+// update() is spy-able for call-count assertions.
 //
 // Every call site below passes `context as never` into the real storage
 // factories (matching the previous version of this suite), so these mocks
@@ -44,11 +43,12 @@ function createMockMemento() {
 /** Minimal shape shared by test code that reaches into a mock secrets object to simulate a native change event. */
 type Fireable = { _fire: (key: string) => void };
 
-function createMockSecretStorage(opts: { withKeys?: boolean } = {}) {
+function createMockSecretStorage() {
   const data = new Map<string, string>();
   const listeners: ((e: { key: string }) => void)[] = [];
 
-  const base = {
+  return {
+    keys: vi.fn(async () => [...data.keys()]),
     get: vi.fn(async (k: string) => data.get(k)),
     store: vi.fn(async (k: string, value: string) => {
       data.set(k, value);
@@ -62,16 +62,14 @@ function createMockSecretStorage(opts: { withKeys?: boolean } = {}) {
     }),
     _fire: (key: string) => listeners.forEach((l) => l({ key })),
   };
-
-  return opts.withKeys ? Object.assign(base, { keys: vi.fn(async () => [...data.keys()]) }) : base;
 }
 
-function createMockContext(secretOpts: { withKeys?: boolean } = {}) {
+function createMockContext() {
   return {
     subscriptions: [] as { dispose(): void }[],
     globalState: createMockMemento(),
     workspaceState: createMockMemento(),
-    secrets: createMockSecretStorage(secretOpts),
+    secrets: createMockSecretStorage(),
   };
 }
 
@@ -823,9 +821,8 @@ describe('storage', () => {
     });
 
     describe('keys()', () => {
-      it('resolves the stored key list when the host supports SecretStorage.keys() (1.105+)', async () => {
-        const withKeysContext = createMockContext({ withKeys: true });
-        const store = createSecretStore(withKeysContext as never);
+      it('resolves the stored key list', async () => {
+        const store = createSecretStore(context as never);
 
         await store.set('a', '1');
         await store.set('b', '2');
@@ -833,11 +830,10 @@ describe('storage', () => {
         expect((await store.keys()).sort()).toEqual(['a', 'b']);
       });
 
-      it('rejects with a clear error when the host predates 1.105', async () => {
-        // Default mock context has no `keys` method, simulating VS Code < 1.105.
+      it('resolves an empty list when nothing has been stored', async () => {
         const store = createSecretStore(context as never);
 
-        await expect(store.keys()).rejects.toThrow(/1\.105/);
+        expect(await store.keys()).toEqual([]);
       });
     });
   });

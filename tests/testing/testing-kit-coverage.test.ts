@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createVSCodeMock } from '../src/testing/index.js';
+import { createVSCodeMock } from '../../src/testing/index.js';
 
 /**
  * Regression test for the class of bug described in
@@ -21,7 +21,7 @@ import { createVSCodeMock } from '../src/testing/index.js';
  * treated as one.
  */
 
-const SRC_DIR = fileURLToPath(new URL('../src', import.meta.url));
+const SRC_DIR = fileURLToPath(new URL('../../src', import.meta.url));
 
 const MOCK_NAMESPACES = ['window', 'workspace', 'commands', 'languages', 'env', 'l10n'] as const;
 type MockNamespace = (typeof MOCK_NAMESPACES)[number];

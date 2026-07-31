@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createMockWebview as createMockWebviewWith } from '../src/testing/index.js';
-import { createWebviewRpc } from '../src/views/webview/rpc.js';
+import { createMockWebview as createMockWebviewWith } from '../../../src/testing/index.js';
+import { createWebviewRpc } from '../../../src/views/webview/rpc.js';
 
 // Thin local re-bind so the rest of this file doesn't need a `vi` argument
 // at every call site.

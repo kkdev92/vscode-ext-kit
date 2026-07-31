@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as vscode from 'vscode';
-import { createMockFileSystemWatcher as createMockFileSystemWatcherWith } from '../src/testing/index.js';
-import { createFileWatcher, watchFile } from '../src/workspace/filewatcher.js';
+import { createMockFileSystemWatcher as createMockFileSystemWatcherWith } from '../../src/testing/index.js';
+import { createFileWatcher, watchFile } from '../../src/workspace/filewatcher.js';
 
 // Thin local re-bind so the rest of this file doesn't need a `vi` argument
 // at every call site.

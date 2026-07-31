@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
-import { field, defineConfigSchema, watchSetting } from '../src/config/index.js';
-import { s, type StandardSchemaV1 } from '../src/core/schema.js';
+import { field, defineConfigSchema, watchSetting } from '../../src/config/index.js';
+import { s, type StandardSchemaV1 } from '../../src/core/schema.js';
 
 type Mock = ReturnType<typeof vi.fn>;
 

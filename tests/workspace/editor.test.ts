@@ -9,7 +9,7 @@ import {
   Position,
   Range,
   WorkspaceEdit as MockWorkspaceEdit,
-} from '../src/testing/index.js';
+} from '../../src/testing/index.js';
 import {
   replaceText,
   getSelectedText,
@@ -31,7 +31,7 @@ import {
   resolveOffsetsBatch,
   applyEditsGrouped,
   applyWorkspaceEdits,
-} from '../src/workspace/editor.js';
+} from '../../src/workspace/editor.js';
 
 // Thin local re-binds so the rest of this file — written against the
 // pre-testing-kit factories — doesn't need a `vi` argument at every call site.

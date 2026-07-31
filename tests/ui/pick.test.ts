@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
-import { pickOne, pickMany, toPickItem, toPickSeparator, type PickItem } from '../src/ui/pick.js';
+import {
+  pickOne,
+  pickMany,
+  toPickItem,
+  toPickSeparator,
+  toPickButton,
+  type PickItem,
+} from '../../src/ui/pick.js';
 
 type MockQuickPick<T extends vscode.QuickPickItem> = vscode.QuickPick<T> & {
   _accept: (selection?: T[]) => void;
@@ -73,6 +80,56 @@ describe('pick', () => {
 
     it('defaults to an empty label', () => {
       expect(toPickSeparator().label).toBe('');
+    });
+  });
+
+  describe('toPickButton', () => {
+    it('converts a string icon name to a ThemeIcon', () => {
+      const button = toPickButton('refresh', { tooltip: 'Reload' });
+
+      expect(button.iconPath).toBeInstanceOf(vscode.ThemeIcon);
+      expect((button.iconPath as vscode.ThemeIcon).id).toBe('refresh');
+      expect(button.tooltip).toBe('Reload');
+    });
+
+    it('passes an explicit icon path through unchanged', () => {
+      const icon = new vscode.ThemeIcon('eye');
+      expect(toPickButton(icon).iconPath).toBe(icon);
+    });
+
+    it('carries the render location through', () => {
+      const button = toPickButton('eye', {
+        location: vscode.QuickInputButtonLocation.Input,
+      });
+
+      expect(button.location).toBe(vscode.QuickInputButtonLocation.Input);
+    });
+
+    it('omits toggle entirely for a non-toggle button', () => {
+      const button = toPickButton('refresh');
+
+      expect(button.toggle).toBeUndefined();
+      expect('toggle' in button).toBe(false);
+    });
+
+    it('creates a toggle for toggled: false, not just toggled: true', () => {
+      // `toggle`'s presence is what makes a button a toggle, so an initially
+      // unchecked toggle must still get the object.
+      const off = toPickButton('eye', { toggled: false });
+      const on = toPickButton('eye', { toggled: true });
+
+      expect(off.toggle).toEqual({ checked: false });
+      expect(on.toggle).toEqual({ checked: true });
+    });
+
+    it('exposes a mutable checked flag, matching how VS Code flips it in place', () => {
+      const button = toPickButton('eye', { toggled: false });
+
+      // VS Code mutates `checked` on the extension's own object before firing
+      // the trigger event; callers read it back off the same button.
+      button.toggle!.checked = true;
+
+      expect(button.toggle?.checked).toBe(true);
     });
   });
 
@@ -155,13 +212,55 @@ describe('pick', () => {
         expect(quickPick.dispose).toHaveBeenCalled();
       });
 
-      it('rejects if the items promise rejects', async () => {
+      it('rejects if the items promise rejects, even though tearing down fires onDidHide', async () => {
+        // Regression guard: disposing a *visible* quick pick makes VS Code fire
+        // `onDidHide`, whose handler resolves with `undefined`. Without a
+        // settled-guard that hide wins the race and the rejection is silently
+        // swallowed — the caller sees a plain cancellation instead of the error.
         const failure = new Error('boom');
         const itemsPromise = Promise.reject(failure);
 
         const resultPromise = pickOne(itemsPromise);
+        const quickPick = latestQuickPick<PickItem<number>>();
 
         await expect(resultPromise).rejects.toBe(failure);
+        expect(quickPick.dispose).toHaveBeenCalled();
+      });
+    });
+
+    describe('with a prompt', () => {
+      it('routes a plain array through createQuickPick, since showQuickPick has no prompt', async () => {
+        const items = [toPickItem(1, { label: 'One' })];
+
+        const resultPromise = pickOne(items, { prompt: 'Cannot be undone.' });
+
+        expect(vscode.window.showQuickPick).not.toHaveBeenCalled();
+        const quickPick = latestQuickPick<PickItem<number>>();
+        expect(quickPick.prompt).toBe('Cannot be undone.');
+
+        quickPick._accept([items[0] as PickItem<number>]);
+        await expect(resultPromise).resolves.toBe(items[0]);
+      });
+
+      it('assigns a synchronous list before show() and never raises busy', async () => {
+        const items = [toPickItem(1, { label: 'One' })];
+
+        const resultPromise = pickOne(items, { prompt: 'Pick' });
+        const quickPick = latestQuickPick<PickItem<number>>();
+
+        expect(quickPick.busy).toBe(false);
+        expect(quickPick.items).toEqual(items);
+        expect(quickPick.show).toHaveBeenCalled();
+
+        quickPick._hide();
+        await expect(resultPromise).resolves.toBeUndefined();
+      });
+
+      it('still uses showQuickPick when no prompt is given', async () => {
+        await pickOne([toPickItem(1, { label: 'One' })], { placeHolder: 'p' });
+
+        expect(vscode.window.showQuickPick).toHaveBeenCalled();
+        expect(vscode.window.createQuickPick).not.toHaveBeenCalled();
       });
     });
   });
@@ -210,6 +309,21 @@ describe('pick', () => {
         quickPick._accept(items);
         await expect(resultPromise).resolves.toEqual(items);
       });
+    });
+
+    it('routes through createQuickPick with canSelectMany when a prompt is given', async () => {
+      const items = [toPickItem(1, { label: 'One' }), toPickItem(2, { label: 'Two' })];
+
+      const resultPromise = pickMany(items, { prompt: 'Choose any' });
+
+      expect(vscode.window.showQuickPick).not.toHaveBeenCalled();
+      const quickPick = latestQuickPick<PickItem<number>>();
+      expect(quickPick.prompt).toBe('Choose any');
+      expect(quickPick.canSelectMany).toBe(true);
+      expect(quickPick.items).toEqual(items);
+
+      quickPick._accept(items);
+      await expect(resultPromise).resolves.toEqual(items);
     });
   });
 });

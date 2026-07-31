@@ -8,7 +8,7 @@ import {
   createMockWebviewViewResolveContext,
   createMockCancellationToken as createMockCancellationTokenWith,
   ViewColumn,
-} from '../src/testing/index.js';
+} from '../../../src/testing/index.js';
 import {
   createWebviewPanel,
   registerWebviewPanelSerializer,
@@ -19,7 +19,7 @@ import {
   escapeHtml,
   loadHtmlTemplate,
   type ManagedWebviewView,
-} from '../src/views/webview/index.js';
+} from '../../../src/views/webview/index.js';
 
 // loadHtmlTemplate reads templates through vscode.workspace.fs (mocked in setup.ts)
 const mockedReadFile = vi.mocked(vscode.workspace.fs.readFile);

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as vscode from 'vscode';
-import { createExtensionKit } from '../src/core/kit.js';
-import { createMockExtensionContext } from './factories.js';
+import { createExtensionKit } from '../../src/core/kit.js';
+import { createMockExtensionContext } from '../factories.js';
 
 type Mock = ReturnType<typeof vi.fn>;
 

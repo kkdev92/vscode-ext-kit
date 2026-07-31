@@ -6,8 +6,8 @@ import {
   inputStep,
   WizardStepError,
   type WizardBuilder,
-} from '../src/ui/wizard.js';
-import { toPickItem, type PickItem } from '../src/ui/pick.js';
+} from '../../src/ui/wizard.js';
+import { toPickItem, type PickItem } from '../../src/ui/pick.js';
 
 type MockQuickPick<T extends vscode.QuickPickItem> = vscode.QuickPick<T> & {
   _accept: (selection?: T[]) => void;

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DisposableCollection, createScope } from '../src/core/disposable.js';
-import { createMockExtensionContext } from './factories.js';
+import { DisposableCollection, createScope } from '../../src/core/disposable.js';
+import { createMockExtensionContext } from '../factories.js';
 
 describe('DisposableCollection', () => {
   let collection: DisposableCollection;

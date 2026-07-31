@@ -64,10 +64,7 @@ export class WizardStepError extends Error {
 export interface QuickPickStepConfig<S, V> {
   /** Placeholder text shown in the empty filter box. */
   placeholder?: string;
-  /**
-   * Instructional text shown below the input box and above the items
-   * (VS Code 1.108+; silently ignored on older hosts via feature detection).
-   */
+  /** Instructional text shown below the input box and above the items. */
   prompt?: string;
   /**
    * Items to choose from. May be computed from the accumulated state of
@@ -81,16 +78,6 @@ export interface QuickPickStepConfig<S, V> {
   matchOnDetail?: boolean;
   /** Allow selecting more than one item. */
   canPickMany?: boolean;
-}
-
-/** Applies the feature-detectable `QuickPick.prompt` (1.108+) without requiring `engines.vscode` to be raised. */
-function applyQuickPickPrompt(
-  quickPick: vscode.QuickPick<vscode.QuickPickItem>,
-  prompt: string | undefined
-): void {
-  if (prompt !== undefined && 'prompt' in quickPick) {
-    quickPick.prompt = prompt;
-  }
 }
 
 /**
@@ -139,7 +126,7 @@ export function quickpickStep<S, V>(
         quickPick.totalSteps = ctx.totalSteps;
         quickPick.ignoreFocusOut = ctx.ignoreFocusOut;
         quickPick.placeholder = config.placeholder;
-        applyQuickPickPrompt(quickPick, config.prompt);
+        quickPick.prompt = config.prompt;
         quickPick.matchOnDescription = config.matchOnDescription ?? false;
         quickPick.matchOnDetail = config.matchOnDetail ?? false;
         quickPick.canSelectMany = canPickMany;

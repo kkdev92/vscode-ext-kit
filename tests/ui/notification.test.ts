@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
-import { showInfo, showWarn, showError, confirm } from '../src/ui/notification.js';
+import { showInfo, showWarn, showError, confirm } from '../../src/ui/notification.js';
 
 // Get the mocked window object
 const mockedWindow = vscode.window as unknown as {
