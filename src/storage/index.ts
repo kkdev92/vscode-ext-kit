@@ -121,13 +121,7 @@ export interface SecretStore extends vscode.Disposable {
   set(key: string, value: string): Promise<void>;
   /** Deletes a secret. */
   delete(key: string): Promise<void>;
-  /**
-   * Lists every key this extension has stored secrets under.
-   *
-   * Requires VS Code 1.105+. This library's `engines.vscode` floor is not
-   * raised for it — this feature-detects at call time and rejects with a
-   * clear error on older hosts instead of pretending there are no secrets.
-   */
+  /** Lists every key this extension has stored secrets under. */
   keys(): Promise<string[]>;
   /** Fires with the affected key whenever a secret is stored or deleted. */
   onDidChange(listener: (key: string) => void): vscode.Disposable;
@@ -313,7 +307,6 @@ function registerSyncKey(context: vscode.ExtensionContext, key: string): void {
  *
  * secrets.onDidChange((key) => console.log(`${key} changed`));
  *
- * // Requires VS Code 1.105+; feature-detected internally.
  * const allKeys = await secrets.keys();
  *
  * context.subscriptions.push(secrets);
@@ -336,21 +329,8 @@ export function createSecretStore(context: vscode.ExtensionContext): SecretStore
       return Promise.resolve(context.secrets.delete(key));
     },
 
-    async keys(): Promise<string[]> {
-      // `@types/vscode` already types `SecretStorage.keys()` as always
-      // present (stable since 1.105), but this library's `engines.vscode`
-      // floor (^1.96.0) predates that — the type is ahead of the runtime
-      // guarantee, so this is the one storage API that still needs a real
-      // feature-detect instead of trusting the type. The cast goes through
-      // `unknown` first so the already-required type above doesn't defeat
-      // the optionality we're asserting here.
-      const secrets = context.secrets as unknown as { keys?: () => Thenable<string[]> };
-      if (typeof secrets.keys !== 'function') {
-        throw new Error(
-          'SecretStore.keys() requires VS Code 1.105+; feature-detect before calling.'
-        );
-      }
-      return secrets.keys();
+    keys(): Promise<string[]> {
+      return Promise.resolve(context.secrets.keys());
     },
 
     onDidChange(listener: (key: string) => void): vscode.Disposable {

@@ -66,6 +66,12 @@ export const QuickInputButtons = {
   Back: { iconPath: { id: 'arrow-left' }, tooltip: 'Back' },
 } as const;
 
+export const QuickInputButtonLocation = {
+  Title: 1,
+  Inline: 2,
+  Input: 3,
+} as const;
+
 export const LanguageStatusSeverity = {
   Information: 0,
   Warning: 1,
@@ -726,6 +732,14 @@ export function createMockQuickPick<T extends { label: string }>(framework: Mock
   const onDidTriggerItemButtonListeners: ((e: unknown) => void)[] = [];
   const onDidHideListeners: (() => void)[] = [];
   const onDidChangeValueListeners: ((value: string) => void)[] = [];
+  let visible = false;
+
+  /** Mirrors `ExtHostQuickInput._fireDidHide`: only a shown, not-yet-hidden input fires. */
+  const fireHide = (): void => {
+    if (!visible) return;
+    visible = false;
+    onDidHideListeners.forEach((l) => l());
+  };
 
   return {
     title: '',
@@ -781,9 +795,19 @@ export function createMockQuickPick<T extends { label: string }>(framework: Mock
       onDidHideListeners.push(listener);
       return { dispose: fn() };
     }),
-    show: fn(),
-    hide: fn(),
-    dispose: fn(),
+    show: fn(() => {
+      visible = true;
+    }),
+    // `hide()` and `dispose()` both fire `onDidHide` on a *visible* quick input
+    // in real VS Code (`ExtHostQuickInput.dispose` calls `_fireDidHide`). Code
+    // that disposes on its way out therefore re-enters its own hide handler —
+    // a mock that stayed silent here would hide that whole class of bug.
+    hide: fn(() => {
+      fireHide();
+    }),
+    dispose: fn(() => {
+      fireHide();
+    }),
     /** Test hook: simulates the user accepting the current selection. */
     _accept: (selection?: T[]) => {
       if (selection) selectedItems = selection;
@@ -795,7 +819,8 @@ export function createMockQuickPick<T extends { label: string }>(framework: Mock
     },
     /** Test hook: simulates the QuickPick being dismissed (Escape, focus loss, ...). */
     _hide: () => {
-      onDidHideListeners.forEach((l) => l());
+      visible = true;
+      fireHide();
     },
   };
 }
@@ -807,6 +832,14 @@ export function createMockInputBox(framework: MockFrameworkLike) {
   const onDidTriggerButtonListeners: ((button: unknown) => void)[] = [];
   const onDidHideListeners: (() => void)[] = [];
   const onDidChangeValueListeners: ((value: string) => void)[] = [];
+  let visible = false;
+
+  /** Mirrors `ExtHostQuickInput._fireDidHide`: only a shown, not-yet-hidden input fires. */
+  const fireHide = (): void => {
+    if (!visible) return;
+    visible = false;
+    onDidHideListeners.forEach((l) => l());
+  };
 
   return {
     title: '',
@@ -842,9 +875,17 @@ export function createMockInputBox(framework: MockFrameworkLike) {
       onDidChangeValueListeners.push(listener);
       return { dispose: fn() };
     }),
-    show: fn(),
-    hide: fn(),
-    dispose: fn(),
+    show: fn(() => {
+      visible = true;
+    }),
+    // See the note on `createMockQuickPick`: disposing a visible quick input
+    // fires `onDidHide` in real VS Code.
+    hide: fn(() => {
+      fireHide();
+    }),
+    dispose: fn(() => {
+      fireHide();
+    }),
     /** Test hook: simulates the user typing into the input box. */
     _setValue: (v: string) => {
       value = v;
@@ -860,7 +901,8 @@ export function createMockInputBox(framework: MockFrameworkLike) {
     },
     /** Test hook: simulates the input box being dismissed. */
     _hide: () => {
-      onDidHideListeners.forEach((l) => l());
+      visible = true;
+      fireHide();
     },
   };
 }
@@ -911,6 +953,7 @@ export function createMockSecretStorage(framework: MockFrameworkLike) {
   const { fn } = framework;
   const secrets = new Map<string, string>();
   return {
+    keys: fn((): Thenable<string[]> => Promise.resolve([...secrets.keys()])),
     get: fn((key: string): Thenable<string | undefined> => Promise.resolve(secrets.get(key))),
     store: fn((key: string, value: string): Thenable<void> => {
       secrets.set(key, value);
@@ -1337,6 +1380,7 @@ export function createVSCodeMock(framework: MockFrameworkLike) {
     TreeItemCheckboxState,
     QuickPickItemKind,
     QuickInputButtons,
+    QuickInputButtonLocation,
     LanguageStatusSeverity,
     ViewColumn,
     EventEmitter,

@@ -5,7 +5,7 @@ import {
   withSteps,
   toAbortSignal,
   type ProgressReporter,
-} from '../src/ui/progress.js';
+} from '../../src/ui/progress.js';
 
 /**
  * Overrides `vscode.window.withProgress` for exactly one call so a test can

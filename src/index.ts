@@ -146,6 +146,7 @@ export {
   pickMany,
   toPickItem,
   toPickSeparator,
+  toPickButton,
   inputText,
   wizard,
   quickpickStep,
@@ -155,6 +156,8 @@ export {
 export type {
   PickItem,
   PickItemDisplay,
+  PickButtonOptions,
+  PickOptions,
   InputTextOptions,
   StepOutcome,
   StepDefinition,

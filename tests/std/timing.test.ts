@@ -6,8 +6,8 @@ import {
   measureTime,
   withTimeout,
   TimeoutError,
-} from '../src/std/timing.js';
-import { createMockLogger } from './factories.js';
+} from '../../src/std/timing.js';
+import { createMockLogger } from '../factories.js';
 
 describe('debounce', () => {
   beforeEach(() => {

@@ -4,8 +4,9 @@ Version 1.0 is a ground-up redesign focused on type safety, performance and
 testability. It is intentionally **not** backwards compatible. This guide maps
 every 0.x API to its 1.0 replacement.
 
-Requirements are unchanged from 0.5: VS Code `^1.96.0`, Node `>=22` (for
-development). The library still has zero runtime dependencies.
+The API surface aside, note the host requirement: since 2.0 it is VS Code
+`^1.125.0`, where 0.5 and 1.x declared `^1.96.0` (see the CHANGELOG for why).
+Node `>=22` for development. The library still has zero runtime dependencies.
 
 ## The 5-minute version
 

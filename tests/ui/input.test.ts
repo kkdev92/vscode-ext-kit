@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
-import { inputText } from '../src/ui/input.js';
+import { inputText } from '../../src/ui/input.js';
 
 describe('inputText', () => {
   beforeEach(() => {

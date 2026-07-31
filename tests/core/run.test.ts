@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as vscode from 'vscode';
-import { run, tryRun, isCancellation } from '../src/core/run.js';
-import { createMockLogger } from './factories.js';
+import { run, tryRun, isCancellation } from '../../src/core/run.js';
+import { createMockLogger } from '../factories.js';
 
 describe('isCancellation', () => {
   it('detects vscode.CancellationError', () => {

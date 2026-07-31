@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as vscode from 'vscode';
-import { createStatusBarItem, showStatusMessage } from '../src/ui/statusbar.js';
+import { createStatusBarItem, showStatusMessage } from '../../src/ui/statusbar.js';
 
 describe('statusbar', () => {
   beforeEach(() => {

@@ -5,7 +5,7 @@ import {
   createMockTreeView as createMockTreeViewWith,
   TreeItemCollapsibleState,
   ThemeIcon,
-} from '../src/testing/index.js';
+} from '../../src/testing/index.js';
 import {
   BaseTreeDataProvider,
   SimpleTreeDataProvider,
@@ -14,7 +14,7 @@ import {
   withPagination,
   LOAD_MORE_ID,
   type TreeItemData,
-} from '../src/views/treeview.js';
+} from '../../src/views/treeview.js';
 
 // Thin local re-binds so the rest of this file — written against the
 // pre-testing-kit factories — doesn't need a `vi` argument at every call site.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { s, validateSchema } from '../src/core/schema.js';
+import { s, validateSchema } from '../../src/core/schema.js';
 
 describe('s.nullable', () => {
   it('accepts null', () => {

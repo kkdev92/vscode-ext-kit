@@ -8,14 +8,14 @@ import {
   formatNumber,
   formatDate,
   formatRelativeTime,
-} from '../src/l10n/index.js';
+} from '../../src/l10n/index.js';
 import {
   getOrCreateCached,
   pluralFor,
   formatNumberFor,
   formatDateFor,
   formatRelativeTimeFor,
-} from '../src/l10n/format.js';
+} from '../../src/l10n/format.js';
 
 describe('l10n', () => {
   beforeEach(() => {

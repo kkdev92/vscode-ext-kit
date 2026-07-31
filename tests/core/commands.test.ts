@@ -4,8 +4,8 @@ import {
   registerCommands,
   registerTextEditorCommands,
   executeCommand,
-} from '../src/core/commands.js';
-import { createMockLogger, createMockExtensionContext } from './factories.js';
+} from '../../src/core/commands.js';
+import { createMockLogger, createMockExtensionContext } from '../factories.js';
 
 type RegisteredCommand = {
   dispose: ReturnType<typeof vi.fn>;

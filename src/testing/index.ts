@@ -56,6 +56,7 @@ export {
   TreeItemCheckboxState,
   QuickPickItemKind,
   QuickInputButtons,
+  QuickInputButtonLocation,
   LanguageStatusSeverity,
   ViewColumn,
 } from './vscodeMock.js';
