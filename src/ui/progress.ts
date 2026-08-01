@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { ProgressOptions } from '../core/types.js';
+import { isCancellation } from '../core/run.js';
 
 /**
  * Progress reporter for reporting progress updates.
@@ -107,6 +108,13 @@ export async function withProgress<T>(
  * type (it widens to `T[]`); a rest parameter keeps each argument's literal
  * position and type intact.
  *
+ * Cancellation — whether the token trips between steps or a running step
+ * rejects because of it — comes back as `{ completed: false, cancelled: true }`
+ * with the results gathered so far, never as a thrown error. That holds for the
+ * `AbortError` a step gets from `toAbortSignal(token)` and for a
+ * `vscode.CancellationError` a step throws itself, matching how `run`/`tryRun`
+ * and `wizard` treat cancellation. Any other error propagates.
+ *
  * @param options - Progress title plus the usual progress options
  * @param steps - Steps to execute in order (as separate arguments, not an array)
  * @returns Result object containing completion status and results from each step
@@ -136,10 +144,17 @@ export async function withProgress<T>(
  * // Access individual step results — result.results[1] is typed as number
  * const [downloadResult, count, uploadResult] = result.results;
  *
- * // Handle cancellation
+ * // Handle cancellation — one branch covers both "cancelled between steps"
+ * // and "cancelled while a step was running"
  * if (result.cancelled) {
  *   console.log('Operation was cancelled');
  * }
+ *
+ * // A cancellable step forwarding the signal into the work it does
+ * await withSteps(
+ *   { title: 'Scanning...', cancellable: true },
+ *   { label: 'Reading', task: (token) => scan(toAbortSignal(token)) }
+ * );
  * ```
  */
 export async function withSteps<T extends readonly ProgressStep<unknown>[]>(
@@ -173,8 +188,25 @@ export async function withSteps<T extends readonly ProgressStep<unknown>[]>(
         // Report current step
         progress.report({ message: step.label });
 
-        // Execute the step
-        const result = await Promise.resolve(step.task(token));
+        // Execute the step. A step cancelled mid-flight rejects — with an
+        // `AbortError` when it was handed `toAbortSignal(token)`, or a
+        // `CancellationError` when it threw one itself — and that is a
+        // cancellation, not a failure. Report it the same way as a cancellation
+        // caught between steps, so callers branch on `cancelled` alone rather
+        // than on `cancelled` *and* a try/catch. Real errors still propagate.
+        let result: unknown;
+        try {
+          result = await Promise.resolve(step.task(token));
+        } catch (error) {
+          if (token.isCancellationRequested || isCancellation(error)) {
+            return {
+              completed: false,
+              cancelled: true,
+              results: results as StepsResult<T>['results'],
+            };
+          }
+          throw error;
+        }
         results.push(result);
 
         // Calculate and report progress
