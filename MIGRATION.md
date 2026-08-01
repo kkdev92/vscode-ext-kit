@@ -248,5 +248,10 @@ import { createVSCodeMock } from '@kkdev92/vscode-ext-kit/testing';
 vi.mock('vscode', () => createVSCodeMock(vi));
 ```
 
-Works with any framework exposing `fn()` (vitest, jest, bun:test). See the
-README's "Testing Your Extension" section.
+Works with any framework exposing `fn()` (vitest, jest, bun:test).
+
+Vitest users can skip the setup file entirely as of 2.1.0 by merging
+`vscodeExtKitVitestConfig` from
+`@kkdev92/vscode-ext-kit/testing/vitest-config`, which also reaches a prebuilt
+bundle that `vi.mock` cannot. See the README's "Testing Your Extension"
+section for both approaches.
