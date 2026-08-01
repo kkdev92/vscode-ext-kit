@@ -244,7 +244,13 @@ export {
   withPagination,
   LOAD_MORE_ID,
 } from './views/treeview.js';
-export type { TreeItemData, TreeCheckboxChange, TreeDragAndDropOptions } from './views/treeview.js';
+export type {
+  TreeItemData,
+  TreeCheckboxChange,
+  TreeDragAndDropOptions,
+  AddItemOptions,
+  PaginationOptions,
+} from './views/treeview.js';
 
 // ============================================
 // Webview
