@@ -293,18 +293,23 @@ export function createWebviewRpcClient<S extends WebviewRpcSchema = WebviewRpcSc
         return done as Promise<never>;
       }
 
+      let rejectAborted!: (reason: unknown) => void;
       const aborted = new Promise<never>((_resolve, reject) => {
-        signal.addEventListener(
-          'abort',
-          () => {
-            if (pending.delete(id)) {
-              vscodeApi.postMessage({ k: 'cancel', id } satisfies RpcEnvelope);
-            }
-            reject(signal.reason ?? new Error('Aborted'));
-          },
-          { once: true }
-        );
+        rejectAborted = reject;
       });
+      const onAbort = (): void => {
+        if (pending.delete(id)) {
+          vscodeApi.postMessage({ k: 'cancel', id } satisfies RpcEnvelope);
+        }
+        rejectAborted(signal.reason ?? new Error('Aborted'));
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      // Once the request settles (response arrived, or the client was
+      // disposed), the abort hook has nothing left to do — detach it so a
+      // signal reused across many requests doesn't collect one dead listener
+      // per request.
+      const detach = (): void => signal.removeEventListener('abort', onAbort);
+      void done.then(detach, detach);
       return Promise.race([done, aborted]) as Promise<never>;
     },
 

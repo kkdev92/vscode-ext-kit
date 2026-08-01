@@ -160,6 +160,31 @@ describe('createWebviewRpcClient', () => {
       return expect(promise).rejects.toBe(reason);
     });
 
+    it('removes its abort listener from the signal once the response arrives', async () => {
+      const env = createFakeWebviewEnvironment();
+      const rpc = createWebviewRpcClient({ vscodeApi: env.vscodeApi, target: env.target });
+      const controller = new AbortController();
+      const addSpy = vi.spyOn(controller.signal, 'addEventListener');
+      const removeSpy = vi.spyOn(controller.signal, 'removeEventListener');
+
+      const promise = rpc.request('x', undefined, { signal: controller.signal });
+      env.deliver({ k: 'res', id: sentEnvelope(env).id, ok: true, result: 1 });
+
+      await expect(promise).resolves.toBe(1);
+      await flush();
+      // Identity matters: removing any *other* function would be a no-op.
+      const added = addSpy.mock.calls.find((call) => call[0] === 'abort')?.[1];
+      expect(added).toBeDefined();
+      expect(removeSpy).toHaveBeenCalledWith('abort', added);
+
+      // The detachment is real, not cosmetic: aborting now must not post a
+      // stray cancel envelope for the already-settled request.
+      const postsBefore = env.posted.length;
+      controller.abort();
+      await flush();
+      expect(env.posted.length).toBe(postsBefore);
+    });
+
     it('aborting mid-flight rejects locally and notifies the host', async () => {
       const env = createFakeWebviewEnvironment();
       const rpc = createWebviewRpcClient({ vscodeApi: env.vscodeApi, target: env.target });

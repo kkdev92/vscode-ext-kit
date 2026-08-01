@@ -540,3 +540,39 @@ describe('Progress', () => {
     });
   });
 });
+
+describe('toAbortSignal: listener hygiene', () => {
+  it('returns the same signal for repeated calls on the same token', () => {
+    const subscribe = vi.fn(() => ({ dispose: vi.fn() }));
+    const token: vscode.CancellationToken = {
+      isCancellationRequested: false,
+      onCancellationRequested: subscribe as never,
+    };
+
+    const first = toAbortSignal(token);
+    const second = toAbortSignal(token);
+
+    // One token, one bridge: without memoization every call parks another
+    // never-disposed listener on a token that never fires.
+    expect(second).toBe(first);
+    expect(subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('still aborts the shared signal when the token fires', () => {
+    let fire: (() => void) | undefined;
+    const token: vscode.CancellationToken = {
+      isCancellationRequested: false,
+      onCancellationRequested: ((listener: () => void) => {
+        fire = listener;
+        return { dispose: vi.fn() };
+      }) as never,
+    };
+
+    const first = toAbortSignal(token);
+    const second = toAbortSignal(token);
+    fire?.();
+
+    expect(first.aborted).toBe(true);
+    expect(second.aborted).toBe(true);
+  });
+});

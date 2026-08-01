@@ -246,13 +246,27 @@ export function toAbortSignal(token: vscode.CancellationToken): AbortSignal {
     return AbortSignal.abort();
   }
 
+  // One bridge per token, remembered for the token's lifetime: without this,
+  // every call parks another cancellation listener on the token, and a token
+  // that never fires (the common case) accumulates them without bound. The
+  // WeakMap keeps the token itself collectable.
+  const cached = bridgedSignals.get(token);
+  if (cached) {
+    return cached;
+  }
+
   const controller = new AbortController();
-  // Dispose the event subscription once it fires, so repeated calls against
-  // a long-lived token don't accumulate listeners.
+  // Dispose the event subscription once it fires — after that the token is
+  // permanently cancelled and the cached AbortSignal.abort() path above (via
+  // isCancellationRequested) takes over for later callers.
   const subscription = token.onCancellationRequested(() => {
     subscription.dispose();
     controller.abort();
   });
 
+  bridgedSignals.set(token, controller.signal);
   return controller.signal;
 }
+
+/** Memoizes {@link toAbortSignal}'s token → signal bridges. */
+const bridgedSignals = new WeakMap<vscode.CancellationToken, AbortSignal>();

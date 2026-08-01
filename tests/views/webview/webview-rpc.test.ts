@@ -306,6 +306,36 @@ describe('createWebviewRpc', () => {
     });
   });
 
+  describe('abort listener hygiene', () => {
+    it('removes its listener from the signal once the response arrives', async () => {
+      const webview = createMockWebview();
+      const rpc = createWebviewRpc(webview as never);
+      const controller = new AbortController();
+      const addSpy = vi.spyOn(controller.signal, 'addEventListener');
+      const removeSpy = vi.spyOn(controller.signal, 'removeEventListener');
+
+      const promise = rpc.request('add', 1, { signal: controller.signal });
+      const { id } = sentEnvelope(webview);
+      webview._fireMessage({ k: 'res', id, ok: true, result: 2 });
+
+      await expect(promise).resolves.toBe(2);
+      await flush();
+      // Without this, a controller reused across many requests accumulates
+      // one dead listener per completed request until it finally aborts.
+      // Identity matters: removing any *other* function would be a no-op.
+      const added = addSpy.mock.calls.find((call) => call[0] === 'abort')?.[1];
+      expect(added).toBeDefined();
+      expect(removeSpy).toHaveBeenCalledWith('abort', added);
+
+      // And the detachment is real, not cosmetic: aborting now must not
+      // post a stray cancel envelope for the already-settled request.
+      const postsBefore = webview.postMessage.mock.calls.length;
+      controller.abort();
+      await flush();
+      expect(webview.postMessage.mock.calls.length).toBe(postsBefore);
+    });
+  });
+
   // ============================================
   // abort (AbortSignal)
   // ============================================
