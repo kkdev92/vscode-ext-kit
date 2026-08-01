@@ -154,7 +154,11 @@ export function createFileWatcher(options: FileWatcherOptions): ManagedFileWatch
     }
     const batch = [...pendingEvents.values()];
     pendingEvents.clear();
-    for (const listener of listeners) {
+    // Snapshot the listener list: a listener that unsubscribes itself (or an
+    // earlier one) during delivery would otherwise shift the live array and
+    // make the loop skip the next listener for this batch — the same
+    // snapshot-delivery contract VS Code's own EventEmitter has.
+    for (const listener of [...listeners]) {
       try {
         listener(batch);
       } catch {

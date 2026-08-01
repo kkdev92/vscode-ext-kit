@@ -257,6 +257,34 @@ describe('filewatcher', () => {
       watcher.dispose();
     });
 
+    it('a listener disposing itself during a flush does not starve later listeners', () => {
+      const watcher = createFileWatcher({ patterns: '**/*', debounceDelay: 50 });
+
+      const firstBatches: unknown[] = [];
+      const secondBatches: unknown[] = [];
+      const firstSub = watcher.onDidChange((events) => {
+        firstBatches.push(events);
+        firstSub.dispose(); // one-shot listener
+      });
+      watcher.onDidChange((events) => {
+        secondBatches.push(events);
+      });
+
+      mockWatcher._fireChange({
+        fsPath: '/test/a.ts',
+        path: '/test/a.ts',
+        toString: () => '/test/a.ts',
+      });
+      vi.advanceTimersByTime(50);
+
+      // The second listener was registered for this batch and must receive
+      // it even though the first listener unsubscribed itself mid-delivery.
+      expect(firstBatches).toHaveLength(1);
+      expect(secondBatches).toHaveLength(1);
+
+      watcher.dispose();
+    });
+
     it('matches dots in ignore patterns literally', () => {
       const watcher = createFileWatcher({
         patterns: '**/*',
