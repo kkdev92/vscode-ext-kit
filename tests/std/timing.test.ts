@@ -514,6 +514,48 @@ describe('withTimeout', () => {
     ).rejects.toBe(reason);
   });
 
+  it('claims the rejection of a pre-created promise when the signal is already aborted', async () => {
+    // Node reports unhandled rejections on a macrotask boundary, which the
+    // fake timers this suite installs would never reach.
+    vi.useRealTimers();
+
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled);
+
+    try {
+      const controller = new AbortController();
+      let rejectPending: (error: unknown) => void = () => {};
+      // Created at the call site, exactly as a caller's `exchange(...)` would be.
+      const pending = new Promise<string>((_resolve, reject) => {
+        rejectPending = reject;
+      });
+      controller.abort();
+
+      await expect(withTimeout(pending, 1000, { signal: controller.signal })).rejects.toBeTruthy();
+
+      // The caller's promise fails after `withTimeout` already threw.
+      rejectPending(new Error('worker exited'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+
+  it('does not start a function-shaped operation when the signal is already aborted', async () => {
+    const controller = new AbortController();
+    const reason = new Error('pre-aborted');
+    controller.abort(reason);
+    const operation = vi.fn(() => Promise.resolve('never'));
+
+    await expect(withTimeout(operation, 100, { signal: controller.signal })).rejects.toBe(reason);
+    expect(operation).not.toHaveBeenCalled();
+  });
+
   it('rejects with the external abort reason when it aborts before settling or timing out', async () => {
     const controller = new AbortController();
     const inner = new Promise<string>(() => {
