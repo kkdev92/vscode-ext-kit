@@ -488,6 +488,81 @@ describe('treeview', () => {
       });
     });
 
+    describe('collapsible state across partial updates', () => {
+      const expandedParent = (): SimpleItem[] => [
+        {
+          id: '1',
+          label: 'Favorites',
+          collapsibleState: TreeItemCollapsibleState.Expanded,
+          children: [{ id: '1.1', label: 'First' }],
+        },
+      ];
+
+      it('honors an explicit Expanded state on an item with children', async () => {
+        const provider = new SimpleTreeDataProvider<SimpleItem>(expandedParent());
+
+        const roots = await provider.getChildren();
+
+        expect(roots[0]!.collapsibleState).toBe(TreeItemCollapsibleState.Expanded);
+      });
+
+      it('forces None on a childless item even when Expanded is requested', async () => {
+        const provider = new SimpleTreeDataProvider<SimpleItem>([
+          { id: '1', label: 'Leaf', collapsibleState: TreeItemCollapsibleState.Expanded },
+        ]);
+
+        const roots = await provider.getChildren();
+
+        expect(roots[0]!.collapsibleState).toBe(TreeItemCollapsibleState.None);
+      });
+
+      it('keeps an Expanded parent expanded through setChildren', () => {
+        const provider = new SimpleTreeDataProvider<SimpleItem>(expandedParent());
+
+        provider.setChildren('1', [
+          { id: '1.2', label: 'Reordered' },
+          { id: '1.1', label: 'First' },
+        ]);
+
+        expect(provider.findItem('1')!.collapsibleState).toBe(TreeItemCollapsibleState.Expanded);
+      });
+
+      it('keeps an Expanded parent expanded through addItem', () => {
+        const provider = new SimpleTreeDataProvider<SimpleItem>(expandedParent());
+
+        provider.addItem({ id: '1.2', label: 'Second' }, '1');
+
+        expect(provider.findItem('1')!.collapsibleState).toBe(TreeItemCollapsibleState.Expanded);
+      });
+
+      it('promotes a childless parent to Collapsed when children arrive', () => {
+        const provider = new SimpleTreeDataProvider<SimpleItem>([{ id: '1', label: 'Group' }]);
+
+        provider.setChildren('1', [{ id: '1.1', label: 'Child' }]);
+
+        expect(provider.findItem('1')!.collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
+      });
+
+      it('drops an Expanded parent to None once its last child is removed', () => {
+        const provider = new SimpleTreeDataProvider<SimpleItem>(expandedParent());
+
+        provider.setChildren('1', []);
+
+        expect(provider.findItem('1')!.collapsibleState).toBe(TreeItemCollapsibleState.None);
+      });
+
+      it('does not re-collapse a parent the user expanded via updateItem', () => {
+        const provider = new SimpleTreeDataProvider<SimpleItem>([
+          { id: '1', label: 'Group', children: [{ id: '1.1', label: 'Child' }] },
+        ]);
+        provider.updateItem('1', { collapsibleState: TreeItemCollapsibleState.Expanded });
+
+        provider.addItem({ id: '1.2', label: 'Another' }, '1');
+
+        expect(provider.findItem('1')!.collapsibleState).toBe(TreeItemCollapsibleState.Expanded);
+      });
+    });
+
     describe('updateItem', () => {
       it('merges the patch into the existing item and refreshes it', () => {
         const provider = new SimpleTreeDataProvider<SimpleItem>([{ id: '1', label: 'Old label' }]);

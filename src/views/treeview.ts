@@ -269,6 +269,21 @@ export abstract class BaseTreeDataProvider<T extends TreeItemData>
 // ============================================
 
 /**
+ * Brings a parent's `collapsibleState` in line with whether it still has
+ * children, without discarding a state the caller chose deliberately. A node
+ * built as `Expanded` stays expanded across partial updates — collapsing it
+ * would defeat the point of a scoped refresh — and `Collapsed` is only ever
+ * assigned to a node that had no children at all.
+ */
+function reconcileCollapsibleState(parent: TreeItemData, hasChildren: boolean): void {
+  if (!hasChildren) {
+    parent.collapsibleState = vscode.TreeItemCollapsibleState.None;
+  } else if (parent.collapsibleState === vscode.TreeItemCollapsibleState.None) {
+    parent.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+  }
+}
+
+/**
  * A simple tree data provider backed by an in-memory item tree.
  *
  * Maintains its own id → item / id → parent / id → children indices, so
@@ -355,10 +370,7 @@ export class SimpleTreeDataProvider<
       this._childrenById.set(parentId, normalized);
     }
     if (parent) {
-      parent.collapsibleState =
-        normalized.length > 0
-          ? vscode.TreeItemCollapsibleState.Collapsed
-          : vscode.TreeItemCollapsibleState.None;
+      reconcileCollapsibleState(parent, normalized.length > 0);
     }
 
     this.refresh(parent);
@@ -389,7 +401,7 @@ export class SimpleTreeDataProvider<
       siblings.push(normalized);
       this._childrenById.set(parentId, siblings);
       if (parent) {
-        parent.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        reconcileCollapsibleState(parent, true);
       }
     }
 
@@ -493,19 +505,23 @@ export class SimpleTreeDataProvider<
 
   /**
    * Recursively indexes `item` (and any inline `children` it carries) and
-   * returns a normalized copy — a shallow copy with `collapsibleState`
-   * computed from whether it has children, so callers never have to set
-   * that field themselves. The copy is what gets stored and returned to VS
-   * Code; the caller's original object is never mutated.
+   * returns a normalized copy — a shallow copy whose `collapsibleState` is
+   * computed from whether it has children, so callers never have to set that
+   * field themselves. An explicit `collapsibleState` on an item that does
+   * have children is honored rather than overwritten: `Expanded` is a
+   * deliberate choice, and only the caller knows which groups should start
+   * open. A childless item is always `None` — there would be nothing behind
+   * the twistie. The copy is what gets stored and returned to VS Code; the
+   * caller's original object is never mutated.
    */
   private _normalize(item: T, parentId: string | undefined): T {
     const children = item.children;
+    const hasChildren = children !== undefined && children.length > 0;
     const normalized: T = {
       ...item,
-      collapsibleState:
-        children && children.length > 0
-          ? vscode.TreeItemCollapsibleState.Collapsed
-          : vscode.TreeItemCollapsibleState.None,
+      collapsibleState: hasChildren
+        ? (item.collapsibleState ?? vscode.TreeItemCollapsibleState.Collapsed)
+        : vscode.TreeItemCollapsibleState.None,
     };
 
     this._itemsById.set(normalized.id, normalized);
