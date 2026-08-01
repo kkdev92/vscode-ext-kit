@@ -123,3 +123,122 @@ describe('createVSCodeMock: consumer-facing surface', () => {
     });
   });
 });
+
+// ============================================
+// Fidelity to the real vscode value classes (verified against the
+// microsoft/vscode implementation, not assumed)
+// ============================================
+
+describe('createVSCodeMock: value-class fidelity', () => {
+  describe('Range normalization', () => {
+    it('swaps start and end when constructed reversed, as the real Range does', () => {
+      const mock = createVSCodeMock(vi);
+      const later = new mock.Position(2, 5);
+      const earlier = new mock.Position(1, 0);
+
+      const range = new mock.Range(later, earlier);
+
+      expect(range.start).toBe(earlier);
+      expect(range.end).toBe(later);
+    });
+
+    it('normalizes the numeric-overload form too', () => {
+      const mock = createVSCodeMock(vi);
+
+      const range = new mock.Range(3, 4, 1, 2);
+
+      expect(range.start.line).toBe(1);
+      expect(range.start.character).toBe(2);
+      expect(range.end.line).toBe(3);
+      expect(range.end.character).toBe(4);
+    });
+
+    it('a reversed Selection keeps anchor/active but exposes normalized start/end', () => {
+      const mock = createVSCodeMock(vi);
+      const anchor = new mock.Position(2, 0); // where the drag started (later)
+      const active = new mock.Position(0, 3); // where the cursor is (earlier)
+
+      const selection = new mock.Selection(anchor, active);
+
+      expect(selection.anchor).toBe(anchor);
+      expect(selection.active).toBe(active);
+      expect(selection.isReversed).toBe(true);
+      // Real vscode: start is always the earlier position.
+      expect(selection.start).toBe(active);
+      expect(selection.end).toBe(anchor);
+    });
+  });
+
+  describe('EventEmitter snapshot delivery', () => {
+    it('a listener disposing itself mid-fire does not starve later listeners', () => {
+      const mock = createVSCodeMock(vi);
+      const emitter = new mock.EventEmitter<string>();
+      const secondSaw: string[] = [];
+      const subscription = emitter.event(() => {
+        subscription.dispose(); // one-shot listener
+      });
+      emitter.event((value) => {
+        secondSaw.push(value);
+      });
+
+      emitter.fire('first');
+      emitter.fire('second');
+
+      // Real vscode delivers each fire to a snapshot of the listeners, so
+      // the self-removal must not skip the second listener.
+      expect(secondSaw).toEqual(['first', 'second']);
+    });
+  });
+
+  describe('QuickPick/InputBox subscription disposal', () => {
+    it('a disposed onDidAccept subscription stops receiving (QuickPick)', () => {
+      const mock = createVSCodeMock(vi);
+      const quickPick = mock.window.createQuickPick();
+      const listener = vi.fn();
+      const subscription = quickPick.onDidAccept(listener);
+
+      subscription.dispose();
+      quickPick._accept();
+
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('a disposed onDidChangeValue subscription stops receiving (InputBox)', () => {
+      const mock = createVSCodeMock(vi);
+      const inputBox = mock.window.createInputBox();
+      const listener = vi.fn();
+      const subscription = inputBox.onDidChangeValue(listener);
+
+      subscription.dispose();
+      inputBox._setValue('typed');
+
+      expect(listener).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Uri fidelity', () => {
+    it('joinPath resolves . and .. segments like the real Uri.joinPath', () => {
+      const mock = createVSCodeMock(vi);
+      const base = mock.Uri.file('/a/b/c.txt');
+
+      const parent = mock.Uri.joinPath(base, '..');
+      const sibling = mock.Uri.joinPath(base, '..', 'd.txt');
+      const dot = mock.Uri.joinPath(base, '.', 'e');
+
+      expect(parent.path).toBe('/a/b');
+      expect(sibling.path).toBe('/a/b/d.txt');
+      expect(dot.path).toBe('/a/b/c.txt/e');
+    });
+
+    it('parse extracts the scheme instead of hardcoding file', () => {
+      const mock = createVSCodeMock(vi);
+
+      const untitled = mock.Uri.parse('untitled:Untitled-1');
+      const plain = mock.Uri.parse('/just/a/path');
+
+      expect(untitled.scheme).toBe('untitled');
+      expect(untitled.path).toBe('Untitled-1');
+      expect(plain.scheme).toBe('file');
+    });
+  });
+});

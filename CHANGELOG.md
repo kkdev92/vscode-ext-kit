@@ -114,6 +114,21 @@ cancellation it previously threw.
   and now memoizes one bridge signal per token via a `WeakMap`, so repeated
   calls return the same `AbortSignal` instead of stacking listeners on a token
   that may never fire.
+- **File-watcher batches reach every listener even when one unsubscribes
+  mid-delivery.** `flushNow` iterated the live listener array, so a listener
+  disposing itself (a one-shot subscription) shifted the array and skipped the
+  next listener for that batch. Delivery now goes to a snapshot — the same
+  contract VS Code's own `EventEmitter` has.
+- **The testing kit's value classes now match the real `vscode` semantics**
+  (each verified against the microsoft/vscode implementation): `Range`
+  normalizes a reversed start/end pair by swapping (so a reversed `Selection`
+  exposes its `active` position as `start`, like the host does);
+  `EventEmitter.fire` delivers to a listener snapshot; QuickPick/InputBox
+  subscription `dispose()` actually unhooks the listener (it was a recorded
+  no-op); `Uri.joinPath` resolves `.`/`..` segments — which `watchFile()`'s
+  own parent-directory pattern relies on — and `Uri.parse` extracts the scheme
+  instead of hardcoding `file`. Each divergence let a test pass against
+  behavior the extension host would never produce.
 - **Typed storage reads pre-kit plain values instead of `undefined`.** A value
   stored before this kit was adopted isn't wrapped in the kit's storage
   envelope; `get()` read `.value` off it anyway, returning `undefined` on a
