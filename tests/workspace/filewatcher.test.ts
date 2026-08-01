@@ -188,6 +188,75 @@ describe('filewatcher', () => {
       watcher.dispose();
     });
 
+    it('anchors ignore globs so *.log does not swallow x.log.txt or foo.logs', () => {
+      const watcher = createFileWatcher({
+        patterns: '**/*',
+        ignorePatterns: ['*.log'],
+        debounceDelay: 50,
+      });
+
+      const listener = vi.fn();
+      watcher.onDidChange(listener);
+
+      // Neither of these matches the glob *.log — both must be reported.
+      mockWatcher._fireChange({
+        fsPath: '/test/x.log.txt',
+        path: '/test/x.log.txt',
+        toString: () => '/test/x.log.txt',
+      });
+      mockWatcher._fireChange({
+        fsPath: '/test/foo.logs',
+        path: '/test/foo.logs',
+        toString: () => '/test/foo.logs',
+      });
+      // This one does match and must be ignored.
+      mockWatcher._fireChange({
+        fsPath: '/test/app.log',
+        path: '/test/app.log',
+        toString: () => '/test/app.log',
+      });
+
+      vi.advanceTimersByTime(50);
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      const events = listener.mock.calls[0]![0];
+      expect(events.map((e: { uri: { fsPath: string } }) => e.uri.fsPath)).toEqual([
+        '/test/x.log.txt',
+        '/test/foo.logs',
+      ]);
+
+      watcher.dispose();
+    });
+
+    it('still ignores nested paths via **-patterns after anchoring', () => {
+      const watcher = createFileWatcher({
+        patterns: '**/*',
+        ignorePatterns: ['**/dist/**'],
+        debounceDelay: 50,
+      });
+
+      const listener = vi.fn();
+      watcher.onDidChange(listener);
+
+      mockWatcher._fireChange({
+        fsPath: '/repo/dist/out.js',
+        path: '/repo/dist/out.js',
+        toString: () => '/repo/dist/out.js',
+      });
+      mockWatcher._fireChange({
+        fsPath: '/repo/src/in.ts',
+        path: '/repo/src/in.ts',
+        toString: () => '/repo/src/in.ts',
+      });
+
+      vi.advanceTimersByTime(50);
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listener.mock.calls[0]![0]).toHaveLength(1);
+
+      watcher.dispose();
+    });
+
     it('matches dots in ignore patterns literally', () => {
       const watcher = createFileWatcher({
         patterns: '**/*',

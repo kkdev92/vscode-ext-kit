@@ -178,14 +178,18 @@ export function createFileWatcher(options: FileWatcherOptions): ManagedFileWatch
       const PLACEHOLDER = '<<<GLOBSTAR>>>';
       // Order matters: separators must be rewritten before single * expands
       // to a character class containing `/`, or that class gets corrupted.
-      const regex = new RegExp(
-        pattern
-          .replace(/[.+^${}()|[\]\\?]/g, '\\$&') // Escape regex specials (not * and /)
-          .replace(/\*\*/g, PLACEHOLDER) // Protect ** with placeholder
-          .replace(/\//g, '[/\\\\]') // Match both separator styles
-          .replace(/\*/g, '[^/\\\\]*') // Replace single *
-          .replace(new RegExp(PLACEHOLDER, 'g'), '.*') // Restore ** as .*
-      );
+      const body = pattern
+        .replace(/[.+^${}()|[\]\\?]/g, '\\$&') // Escape regex specials (not * and /)
+        .replace(/\*\*/g, PLACEHOLDER) // Protect ** with placeholder
+        .replace(/\//g, '[/\\\\]') // Match both separator styles
+        .replace(/\*/g, '[^/\\\\]*') // Replace single *
+        .replace(new RegExp(PLACEHOLDER, 'g'), '.*'); // Restore ** as .*
+      // Anchored to a segment boundary at the front and the path's end at the
+      // back — an unanchored `[^/\\]*\.log` would also match inside
+      // "x.log.txt"/"foo.logs" and silently swallow their events. Glob
+      // semantics: `*.log` means "a path segment ending the path", not "this
+      // substring appears somewhere".
+      const regex = new RegExp(`(^|[/\\\\])${body}$`);
       return (filePath) => regex.test(filePath);
     }
     return (filePath) => filePath.includes(pattern);
