@@ -29,8 +29,9 @@
  *        - item 3: does the published mock actually implement the vscode.*
  *          surface the kit's own runtime calls (e.g. `workspace.applyEdit`
  *          for `applyWorkspaceEdits`)?
- *        - do the `./testing`, `./timing`, `./retry` subpath exports resolve
- *          at all from outside this repo?
+ *        - do the subpath exports (`./testing`, `./testing/vitest`,
+ *          `./testing/vitest-config`, `./timing`, `./retry`, `./format`,
+ *          `./package.json`) resolve at all from outside this repo?
  *
  * The consumer project is deliberately created *inside* this repo (under
  * `.smoke-tmp/`, gitignored) rather than under the OS temp dir: nesting it
@@ -293,13 +294,53 @@ describe('subpath exports resolve from the installed package', () => {
     const value = await retry(async () => 'ok', { maxAttempts: 1 });
     expect(value).toBe('ok');
   });
+
+  it('./format (no vscode import)', async () => {
+    const { pluralFor, formatNumberFor } = await import('@kkdev92/vscode-ext-kit/format');
+    expect(pluralFor('en', 2, { one: '1 file', other: '{count} files' })).toBe('2 files');
+    expect(formatNumberFor('en', 1234)).toBe('1,234');
+  });
+
+  it('./package.json (needed to read the installed version at build time)', async () => {
+    const pkg = await import('@kkdev92/vscode-ext-kit/package.json', {
+      with: { type: 'json' },
+    });
+    expect(typeof pkg.default.version).toBe('string');
+  });
+
+  it('./testing/vitest-config carries both halves of the required setup', async () => {
+    const { vscodeExtKitVitestConfig } = await import(
+      '@kkdev92/vscode-ext-kit/testing/vitest-config'
+    );
+    expect(vscodeExtKitVitestConfig.resolve.alias.vscode).toBe(
+      '@kkdev92/vscode-ext-kit/testing/vitest'
+    );
+    expect(vscodeExtKitVitestConfig.test.server.deps.inline).toContain(
+      '@kkdev92/vscode-ext-kit'
+    );
+  });
+
+  it('./testing/vitest exposes the named exports "import * as vscode" needs', async () => {
+    const aliasModule = await import('@kkdev92/vscode-ext-kit/testing/vitest');
+    // A default export alone would leave every window/commands call undefined
+    // in the code under test, so assert on the named surface specifically.
+    expect(aliasModule.window).toBeTruthy();
+    expect(aliasModule.commands).toBeTruthy();
+    expect(aliasModule.workspace).toBeTruthy();
+    expect(aliasModule.languages).toBeTruthy();
+    expect(aliasModule.env).toBeTruthy();
+    expect(aliasModule.l10n).toBeTruthy();
+    expect(typeof aliasModule.version).toBe('string');
+    expect(aliasModule.ColorThemeKind.Dark).toBe(2);
+    expect(typeof aliasModule.window.createOutputChannel).toBe('function');
+  });
 });
 `
 );
 
 // A minimal tsconfig so "does this typecheck for a consumer" is exercised
 // too — moduleResolution NodeNext is what actually walks package.json's
-// "exports" map (root + ./testing + ./timing + ./retry), which a looser
+// "exports" map (root + every subpath asserted above), which a looser
 // resolution mode could paper over. Kept intentionally small: this one test
 // file is both the runtime (vitest) and compile-time (tsc) fixture.
 writeFileSync(

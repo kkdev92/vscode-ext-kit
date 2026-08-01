@@ -1,6 +1,6 @@
 {
   "name": "@kkdev92/vscode-ext-kit",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "A lightweight utility library for VS Code extension development",
   "author": "kkdev92",
   "license": "MIT",
@@ -36,11 +36,27 @@
       "import": "./dist/std/retry.js",
       "default": "./dist/std/retry.js"
     },
+    "./format": {
+      "types": "./dist/l10n/format.d.ts",
+      "import": "./dist/l10n/format.js",
+      "default": "./dist/l10n/format.js"
+    },
     "./testing": {
       "types": "./dist/testing/index.d.ts",
       "import": "./dist/testing/index.js",
       "default": "./dist/testing/index.js"
-    }
+    },
+    "./testing/vitest": {
+      "types": "./dist/testing/vitest.d.ts",
+      "import": "./dist/testing/vitest.js",
+      "default": "./dist/testing/vitest.js"
+    },
+    "./testing/vitest-config": {
+      "types": "./dist/testing/vitestConfig.d.ts",
+      "import": "./dist/testing/vitestConfig.js",
+      "default": "./dist/testing/vitestConfig.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
@@ -53,6 +69,14 @@
   "engines": {
     "vscode": "^1.125.0",
     "node": ">=22.0.0"
+  },
+  "peerDependencies": {
+    "vitest": ">=2"
+  },
+  "peerDependenciesMeta": {
+    "vitest": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
