@@ -263,6 +263,79 @@ describe('pick', () => {
         expect(vscode.window.createQuickPick).not.toHaveBeenCalled();
       });
     });
+
+    describe('with buttons', () => {
+      it('routes through createQuickPick and assigns the title-bar buttons', async () => {
+        const refresh = toPickButton('refresh', { tooltip: 'Reload' });
+        const items = [toPickItem(1, { label: 'One' })];
+
+        const resultPromise = pickOne(items, { buttons: [refresh] });
+
+        expect(vscode.window.showQuickPick).not.toHaveBeenCalled();
+        const quickPick = latestQuickPick<PickItem<number>>();
+        expect(quickPick.buttons).toEqual([refresh]);
+
+        quickPick._hide();
+        await expect(resultPromise).resolves.toBeUndefined();
+      });
+
+      it('invokes onTriggerButton with the button and the live picker', async () => {
+        const refresh = toPickButton('refresh');
+        const seen: { button: unknown; samePicker: boolean }[] = [];
+
+        const resultPromise = pickOne([toPickItem(1, { label: 'One' })], {
+          buttons: [refresh],
+          onTriggerButton: (button, picker) => {
+            seen.push({ button, samePicker: picker === quickPick });
+          },
+        });
+        const quickPick = latestQuickPick<PickItem<number>>();
+
+        quickPick._triggerButton(refresh);
+
+        expect(seen).toEqual([{ button: refresh, samePicker: true }]);
+        // A press leaves the picker open.
+        expect(quickPick.dispose).not.toHaveBeenCalled();
+
+        quickPick._hide();
+        await expect(resultPromise).resolves.toBeUndefined();
+      });
+
+      it('invokes onTriggerItemButton with the row it belongs to', async () => {
+        const remove = toPickButton('trash');
+        const items = [
+          { ...toPickItem(1, { label: 'One' }), buttons: [remove] },
+          { ...toPickItem(2, { label: 'Two' }), buttons: [remove] },
+        ];
+        const removed: number[] = [];
+
+        const resultPromise = pickOne(items, {
+          onTriggerItemButton: (_button, item, picker) => {
+            removed.push(item.value);
+            picker.items = picker.items.filter((candidate) => candidate !== item);
+          },
+        });
+        const quickPick = latestQuickPick<(typeof items)[number]>();
+
+        (quickPick as unknown as { _triggerItemButton: (e: unknown) => void })._triggerItemButton({
+          button: remove,
+          item: items[0],
+        });
+
+        expect(removed).toEqual([1]);
+        expect(quickPick.items).toEqual([items[1]]);
+
+        quickPick._accept([items[1] as (typeof items)[number]]);
+        await expect(resultPromise).resolves.toBe(items[1]);
+      });
+
+      it('keeps using showQuickPick when neither buttons nor handlers are given', async () => {
+        await pickOne([toPickItem(1, { label: 'One' })]);
+
+        expect(vscode.window.showQuickPick).toHaveBeenCalled();
+        expect(vscode.window.createQuickPick).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('pickMany', () => {
