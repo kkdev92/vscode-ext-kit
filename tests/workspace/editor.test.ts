@@ -435,6 +435,50 @@ describe('editor', () => {
     });
   });
 
+  describe('line-break handling (must match VS Code, which breaks on \\r\\n, \\n, and lone \\r)', () => {
+    /** A document stub exposing only what the batch resolvers read. */
+    const documentWithText = (text: string) => ({ getText: () => text }) as never;
+
+    it('treats CRLF like the editor does (regression guard)', () => {
+      // 'ab\r\ncd' — line 1 starts after the \r\n pair, at offset 4.
+      const document = documentWithText('ab\r\ncd');
+
+      const positions = resolvePositionsBatch(document, [0, 2, 4, 5]);
+
+      expect(positions).toEqual([
+        new Position(0, 0),
+        new Position(0, 2), // the \r itself is still on line 0
+        new Position(1, 0),
+        new Position(1, 1),
+      ]);
+    });
+
+    it('treats a lone \\r as a line break, as the VS Code buffer does', () => {
+      // 'a\rb\nc' — three lines: 'a' / 'b' / 'c' (line starts 0, 2, 4).
+      const document = documentWithText('a\rb\nc');
+
+      const positions = resolvePositionsBatch(document, [0, 1, 2, 3, 4]);
+
+      expect(positions).toEqual([
+        new Position(0, 0),
+        new Position(0, 1), // the \r itself
+        new Position(1, 0), // 'b' is on its own line
+        new Position(1, 1), // the \n
+        new Position(2, 0), // 'c'
+      ]);
+    });
+
+    it('round-trips offsets through resolveOffsetsBatch on a lone-\\r document', () => {
+      const document = documentWithText('a\rb\nc');
+      const offsets = [0, 2, 4];
+
+      const positions = resolvePositionsBatch(document, offsets);
+      const roundTripped = resolveOffsetsBatch(document, positions);
+
+      expect(roundTripped).toEqual(offsets);
+    });
+  });
+
   describe('resolveOffsetsBatch', () => {
     it('resolves multiple positions in a single pass', () => {
       const document = createMockTextDocument('aaa\nbbb\nccc');

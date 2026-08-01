@@ -397,11 +397,23 @@ export function getFilePath(editor: vscode.TextEditor): FilePathInfo | undefined
  * over the document text. Backs {@link resolvePositionsBatch} and
  * {@link resolveOffsetsBatch} so resolving many offsets/positions costs one
  * document scan instead of one internal lookup per item.
+ *
+ * Line breaks are `\r\n`, `\n`, and a lone `\r` — the same three VS Code's
+ * own text buffer recognizes (`createLineStartsFast` in the piece tree).
+ * Splitting on `\n` alone would agree with `TextDocument.positionAt` for LF
+ * and CRLF documents but silently disagree on any document containing a bare
+ * carriage return.
  */
 function buildLineStartOffsets(text: string): number[] {
   const starts = [0];
   for (let i = 0; i < text.length; i++) {
-    if (text.charCodeAt(i) === 10 /* '\n' */) {
+    const code = text.charCodeAt(i);
+    if (code === 13 /* '\r' */) {
+      if (i + 1 < text.length && text.charCodeAt(i + 1) === 10 /* '\n' */) {
+        i++; // \r\n is a single break
+      }
+      starts.push(i + 1);
+    } else if (code === 10 /* '\n' */) {
       starts.push(i + 1);
     }
   }
