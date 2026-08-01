@@ -32,6 +32,19 @@ cancellation it previously threw.
   `activate()` can be tested for real. `@kkdev92/vscode-ext-kit/testing` itself
   stays runner-agnostic; only the two new subpaths import `vitest` (declared as
   an optional peer).
+- **`@kkdev92/vscode-ext-kit/webview-client`** ships the webview-side end of
+  `createWebviewRpc` — previously a 51-line reference implementation in a JSDoc
+  comment that every adopter copied into their webview bundle by hand, untyped
+  and frozen at whatever version they copied. `createWebviewRpcClient<S>()` is
+  written against the same `WebviewRpcSchema` as the host (both sides now build
+  on a shared, vscode-free `protocol.ts`), so the contract cannot drift, and it
+  mirrors the host's semantics: `request` with `timeoutMs`/`signal` whose
+  cancellation propagates across the wire, `onRequest` handlers with an
+  aborting `ctx.signal`, `emit`/`onEvent`, and `dispose`. Pass
+  `{ vscodeApi: acquireVsCodeApi() }` when your webview already acquired the
+  API — VS Code allows exactly one call — or omit it and the client acquires it.
+  Wire compatibility is pinned by loopback tests running the published client
+  against the published host in both directions.
 - **`@kkdev92/vscode-ext-kit/format`** exposes the vscode-free `Intl` core
   (`pluralFor`, `formatNumberFor`, `formatDateFor`, `formatRelativeTimeFor`,
   `getOrCreateCached`) as a subpath alongside `./timing` and `./retry`. These
@@ -78,8 +91,28 @@ cancellation it previously threw.
   simply didn't mention them, so a test using one didn't typecheck. `results`
   includes the `'incomplete'` variant both runners emit for an in-flight call.
 
+### Fixed
+
+- **Typed storage reads pre-kit plain values instead of `undefined`.** A value
+  stored before this kit was adopted isn't wrapped in the kit's storage
+  envelope; `get()` read `.value` off it anyway, returning `undefined` on a
+  non-nullable `T` while `has()` said `true` — adopting typed storage over
+  existing extension state silently read back nothing. A non-envelope value now
+  reads as **schema version 0**: `migrations[0]` can convert it, and without one
+  it flows into validation unchanged. Either way it's re-persisted in envelope
+  form after the first read.
+
 ### Changed
 
+- **`engines.node` raised from `>=22.0.0` to `>=22.12.0`** — the honest floor:
+  consuming this native-ESM package from a CommonJS extension without a bundler
+  relies on `require(esm)`, which Node stabilized in 22.12. ESM/bundled
+  consumers were fine on 22.0, but the field describes what every supported
+  consumption mode needs. README now documents the bundler-free CJS path.
+- **`WebviewRpcSchema` and `WebviewRpcRequestOptions` moved to a shared,
+  vscode-free `protocol.ts`** so the new webview client is typed against the
+  exact same contract as the host. Both are re-exported from their previous
+  home — every existing import keeps working.
 - **`withSteps` reports mid-step cancellation as `cancelled` instead of
   throwing.** Only the gap *between* steps was checked, so a step handed
   `toAbortSignal(token)` — the usage the JSDoc recommends — rejected with an

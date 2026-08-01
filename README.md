@@ -14,7 +14,7 @@ A zero-dependency, type-safe utility library for VS Code extension development, 
 - **Typed webview RPC** — [`createWebviewRpc`](#webview) gives webviews an awaitable request/response + event channel over `postMessage`, with timeouts and `AbortSignal` support.
 - **Zero runtime dependencies, no Node.js API usage** — works in the web/remote extension host as well as desktop.
 
-> **Requires VS Code `^1.125.0`** (and Node.js `>=22.0.0` to build). This floor
+> **Requires VS Code `^1.125.0`** (and Node.js `>=22.12.0` to build). This floor
 > propagates: an extension depending on this library has to declare the same
 > `engines.vscode`, which drops hosts older than roughly June 2026. See
 > [Installation](#installation) for the `@types/vscode` caveat that comes with it.
@@ -97,11 +97,17 @@ A zero-dependency, type-safe utility library for VS Code extension development, 
 npm install @kkdev92/vscode-ext-kit
 ```
 
-> Requires VS Code `^1.125.0` and Node.js `>=22.0.0`. Zero runtime dependencies; the published package uses no Node.js APIs, so it also runs in the web/remote extension host.
+> Requires VS Code `^1.125.0` and Node.js `>=22.12.0`. Zero runtime dependencies; the published package uses no Node.js APIs, so it also runs in the web/remote extension host.
 
 Because `engines.vscode` is a floor your own extension inherits, raising it is a
 user-visible change for anyone depending on you — set the same `^1.125.0` in your
 manifest rather than a lower value you can't honor.
+
+**Native ESM, but no bundler required.** A CommonJS extension compiled with
+plain `tsc` can `require()` this package directly — Node's `require(esm)`
+handles it (Node **22.12+**, which is why `engines.node` says `>=22.12.0`).
+Bundled (esbuild/webpack) and ESM extensions have no version wrinkle beyond
+that. Nothing about the package assumes a bundler exists.
 
 One wrinkle to expect: `@types/vscode` lags the VS Code release line, since
 DefinitelyTyped doesn't publish on VS Code's weekly cadence. This library pins
@@ -119,6 +125,7 @@ The published entry points:
 | `@kkdev92/vscode-ext-kit/timing` | `debounce`/`throttle`/`withTimeout`/... only, no `vscode` import — safe for a webview bundle |
 | `@kkdev92/vscode-ext-kit/retry` | `retry`/`RetryExhaustedError` only, no `vscode` import |
 | `@kkdev92/vscode-ext-kit/format` | `pluralFor`/`formatNumberFor`/`formatDateFor`/`formatRelativeTimeFor` — the `Intl` core behind `l10n`, no `vscode` import |
+| `@kkdev92/vscode-ext-kit/webview-client` | The webview-side end of [`createWebviewRpc`](#webview), no `vscode` import — bundle it into your webview code |
 | `@kkdev92/vscode-ext-kit/testing` | `vscode` mocks for unit tests, runner-agnostic — see [Testing Your Extension](#testing-your-extension) |
 | `@kkdev92/vscode-ext-kit/testing/vitest` | A ready-made `vscode` module stand-in to alias, for Vitest |
 | `@kkdev92/vscode-ext-kit/testing/vitest-config` | The Vitest config that setup needs, as a mergeable value |
@@ -147,6 +154,8 @@ The kit is sugar, not a framework: every module below (config, storage, UI, ...)
 ## API Reference
 
 Every export below is available from the package root (`@kkdev92/vscode-ext-kit`) unless noted otherwise; see [`src/index.ts`](src/index.ts) for the complete list.
+
+**Disposal convention.** `createExtensionKit`, `createScope`, `createTreeView`, `createWebviewPanel`, `registerWebviewPanelSerializer`, and `registerWebviewView` add themselves to `context.subscriptions` — there is nothing to push. Everything else returns a `Disposable` you own and push yourself (or hand to a kit's `disposables`): that includes the storage factories — which take a `context` only to reach `globalState`/`secrets`, **not** to self-register — and the context-free factories (`createLogger`, `createStatusBarItem`, `createLanguageStatusItem`, `createFileWatcher`, `watchSetting`, ...).
 
 ### Extension Kit
 
@@ -637,7 +646,23 @@ panel.rpc.emit('theme', { kind: 'dark' });
 
 `createWebviewPanel<S, TIn, TOut>(context, options: WebviewOptions)` returns a `ManagedWebviewPanel`: `setHtml`/`setHtmlFromTemplate`, raw `postMessage`/`onMessage` (prefer `.rpc` for request/response), `onDidChangeViewState`, `onDidDispose`, `reveal`, `asWebviewUri`, and `.native`. `registerWebviewPanelSerializer` restores panels across editor restarts; `registerWebviewView` is the sidebar/panel-view equivalent, resolving to a `ManagedWebviewView` each time VS Code shows the view.
 
-`createWebviewRpc<S>(webview)` — also exposed as `.rpc` on both managed wrappers, or callable directly on any raw `vscode.Webview` (e.g. inside `registerWebviewView`'s resolve callback) — layers a typed, awaitable `request`/`onRequest`/`emit`/`onEvent` channel over the webview's raw `postMessage`. A `WebviewRpcSchema` declares `webviewRequests`/`hostRequests`/`hostEvents`/`webviewEvents`. Request fields are named after the side that **answers** the request — `hostRequests` are the ones you bind with `rpc.onRequest`, `webviewRequests` the ones you send with `rpc.request` — while event fields are named after the side that **sends** them. `request(method, params, { signal?, timeoutMs? })` rejects on timeout, abort, an error response, or the RPC being disposed (e.g. the panel closes) while in flight. This library ships only the extension-host side — copy the small webview-side counterpart from `createWebviewRpc`'s JSDoc example in [`src/views/webview/rpc.ts`](src/views/webview/rpc.ts) into your webview bundle.
+`createWebviewRpc<S>(webview)` — also exposed as `.rpc` on both managed wrappers, or callable directly on any raw `vscode.Webview` (e.g. inside `registerWebviewView`'s resolve callback) — layers a typed, awaitable `request`/`onRequest`/`emit`/`onEvent` channel over the webview's raw `postMessage`. A `WebviewRpcSchema` declares `webviewRequests`/`hostRequests`/`hostEvents`/`webviewEvents`. Request fields are named after the side that **answers** the request — `hostRequests` are the ones you bind with `rpc.onRequest`, `webviewRequests` the ones you send with `rpc.request` — while event fields are named after the side that **sends** them. `request(method, params, { signal?, timeoutMs? })` rejects on timeout, abort, an error response, or the RPC being disposed (e.g. the panel closes) while in flight.
+
+The webview side is one import — `createWebviewRpcClient` from `@kkdev92/vscode-ext-kit/webview-client` (no `vscode` import, so it bundles into webview code). It is written against the same `WebviewRpcSchema` as the host, so the two sides cannot drift, and it mirrors the host's semantics: `request`/`onRequest`/`emit`/`onEvent`, `timeoutMs`/`signal` cancellation that propagates across the wire, and `dispose`.
+
+```typescript
+// Webview bundle:
+import { createWebviewRpcClient } from '@kkdev92/vscode-ext-kit/webview-client';
+
+const vscodeApi = acquireVsCodeApi(); // keep it for getState/setState
+const rpc = createWebviewRpcClient<MyRpcSchema>({ vscodeApi });
+
+rpc.onRequest('getSelection', () => ({ text: document.getSelection()?.toString() ?? '' }));
+rpc.onEvent('theme', ({ kind }) => applyTheme(kind));
+const { ok } = await rpc.request('save', { content: editor.value }, { timeoutMs: 5000 });
+```
+
+Pass `vscodeApi` whenever your webview already calls `acquireVsCodeApi()` itself — VS Code allows exactly one call per session. Omit it and the client calls it for you.
 
 `generateCSP(webview, options?)` builds a strict-by-default CSP string — `allowInlineStyles`/`allowAnyHttpsImages` are opt-in, both `false` by default; `generateNonce()` makes a random nonce. `loadHtmlTemplate`/`createWebviewHtml`/`escapeHtml` cover simple `{{variable}}` templating (`{{raw:variable}}` for unescaped, `{{webviewUri:path}}` for resolved URIs) and HTML escaping.
 

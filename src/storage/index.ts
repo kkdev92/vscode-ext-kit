@@ -218,6 +218,10 @@ function isExpired(envelope: StorageEnvelope<unknown>): boolean {
 /**
  * Creates a type-safe wrapper for global extension storage.
  *
+ * The returned store is a `Disposable` **you** own — it is not added to
+ * `context.subscriptions` automatically; `context` is only how it reaches
+ * `globalState`. Push it yourself, as the example does.
+ *
  * @param context - Extension context
  * @param key - Storage key
  * @param options - Storage options
@@ -261,6 +265,10 @@ export function createGlobalStorage<T>(
 
 /**
  * Creates a type-safe wrapper for workspace-specific storage.
+ *
+ * The returned store is a `Disposable` **you** own — it is not added to
+ * `context.subscriptions` automatically; `context` is only how it reaches
+ * `workspaceState`. Push it yourself.
  *
  * @param context - Extension context
  * @param key - Storage key
@@ -318,6 +326,10 @@ function registerSyncKey(context: vscode.ExtensionContext, key: string): void {
 /**
  * Creates a store spanning every secret this extension owns.
  *
+ * The returned store is a `Disposable` **you** own — it is not added to
+ * `context.subscriptions` automatically; `context` is only how it reaches
+ * `secrets`. Push it yourself, as the example does.
+ *
  * @param context - Extension context
  * @returns A secret store interface
  *
@@ -374,6 +386,9 @@ export function createSecretStore(context: vscode.ExtensionContext): SecretStore
 /**
  * Creates a wrapper for a single secret, with change notification. Built on
  * top of {@link createSecretStore}.
+ *
+ * The returned wrapper is a `Disposable` **you** own — it is not added to
+ * `context.subscriptions` automatically. Push it yourself.
  *
  * @param context - Extension context
  * @param key - Secret key
