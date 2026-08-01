@@ -41,6 +41,11 @@
       "import": "./dist/l10n/format.js",
       "default": "./dist/l10n/format.js"
     },
+    "./webview-client": {
+      "types": "./dist/views/webview/client.d.ts",
+      "import": "./dist/views/webview/client.js",
+      "default": "./dist/views/webview/client.js"
+    },
     "./testing": {
       "types": "./dist/testing/index.d.ts",
       "import": "./dist/testing/index.js",

@@ -301,6 +301,21 @@ describe('subpath exports resolve from the installed package', () => {
     expect(formatNumberFor('en', 1234)).toBe('1,234');
   });
 
+  it('./webview-client (no vscode import)', async () => {
+    const { createWebviewRpcClient } = await import('@kkdev92/vscode-ext-kit/webview-client');
+    const posted: unknown[] = [];
+    const rpc = createWebviewRpcClient({
+      vscodeApi: { postMessage: (message) => void posted.push(message) },
+      target: {
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      },
+    });
+    rpc.emit('ping', 1);
+    expect(posted).toEqual([{ k: 'ev', event: 'ping', payload: 1 }]);
+    rpc.dispose();
+  });
+
   it('./package.json (needed to read the installed version at build time)', async () => {
     const pkg = await import('@kkdev92/vscode-ext-kit/package.json', {
       with: { type: 'json' },
