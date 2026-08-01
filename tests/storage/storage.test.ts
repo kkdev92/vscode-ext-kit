@@ -429,6 +429,92 @@ describe('storage', () => {
   });
 
   // ============================================
+  // Pre-kit plain values (treated as schema version 0)
+  // ============================================
+
+  describe('pre-kit plain values', () => {
+    it('reads a plain value written before the kit as-is (no schema)', () => {
+      // What an extension stored before adopting typed storage: no envelope.
+      void context.globalState.update('greeting', 'hello');
+
+      const storage = createGlobalStorage<string>(context as never, 'greeting', {
+        defaultValue: 'DEFAULT',
+      });
+
+      expect(storage.get()).toBe('hello');
+    });
+
+    it('has() and get() agree on a plain value', () => {
+      void context.globalState.update('greeting', 'hello');
+
+      const storage = createGlobalStorage<string>(context as never, 'greeting', {
+        defaultValue: 'DEFAULT',
+      });
+
+      expect(storage.has()).toBe(true);
+      expect(storage.get()).toBe('hello');
+    });
+
+    it('validates a plain value against the schema', () => {
+      void context.globalState.update('greeting', 'hello');
+
+      const storage = createGlobalStorage<string>(context as never, 'greeting', {
+        defaultValue: 'DEFAULT',
+        schema: s.string(),
+      });
+
+      expect(storage.get()).toBe('hello');
+    });
+
+    it('falls back to the default with an issue when a plain value fails the schema', () => {
+      void context.globalState.update('greeting', 42);
+
+      const storage = createGlobalStorage<string>(context as never, 'greeting', {
+        defaultValue: 'DEFAULT',
+        schema: s.string(),
+      });
+
+      const result = storage.tryGet();
+      expect(storage.get()).toBe('DEFAULT');
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error[0]?.stage).toBe('validate');
+      }
+    });
+
+    it('runs migrations[0] to convert a plain value to the current shape', () => {
+      // The pre-kit extension stored a bare string; the kit version wants an object.
+      void context.globalState.update('profile', 'ada');
+
+      const storage = createGlobalStorage<{ name: string }>(context as never, 'profile', {
+        defaultValue: { name: '' },
+        version: 1,
+        migrations: {
+          0: (old) => ({ name: old as string }),
+        },
+      });
+
+      expect(storage.get()).toEqual({ name: 'ada' });
+    });
+
+    it('re-persists a plain value as an envelope after the first read', async () => {
+      void context.globalState.update('greeting', 'hello');
+      context.globalState.update.mockClear();
+
+      const storage = createGlobalStorage<string>(context as never, 'greeting', {
+        defaultValue: 'DEFAULT',
+      });
+      storage.get();
+      await new Promise((r) => setImmediate(r));
+
+      expect(context.globalState.update).toHaveBeenCalledWith('greeting', {
+        v: 1,
+        value: 'hello',
+      });
+    });
+  });
+
+  // ============================================
   // tryGet(): Result-based observability
   // ============================================
 

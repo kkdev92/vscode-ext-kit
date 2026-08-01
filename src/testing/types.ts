@@ -58,19 +58,41 @@ export interface MockFn<TArgs extends unknown[] = unknown[], TReturn = unknown> 
   (...args: TArgs): TReturn;
   /** Sets the value returned on every future call. */
   mockReturnValue(value: TReturn): this;
+  /** Sets the value returned by the next call only. */
+  mockReturnValueOnce(value: TReturn): this;
   /** Sets the value resolved (via `Promise.resolve`) on every future call. */
   mockResolvedValue(value: Awaited<TReturn>): this;
+  /** Sets the value resolved by the next call only. */
+  mockResolvedValueOnce(value: Awaited<TReturn>): this;
+  /** Makes every future call return a promise rejected with `reason`. */
+  mockRejectedValue(reason: unknown): this;
+  /** Makes the next call only return a promise rejected with `reason`. */
+  mockRejectedValueOnce(reason: unknown): this;
   /** Replaces the mock's implementation. */
   mockImplementation(fn: (...args: TArgs) => TReturn): this;
+  /** Replaces the implementation for the next call only. */
+  mockImplementationOnce(fn: (...args: TArgs) => TReturn): this;
   /** Clears recorded calls/results/instances without touching the implementation. */
   mockClear(): this;
   /**
-   * Recorded invocations, matching `vi.fn()`/`jest.fn()`'s own `.mock.calls`.
-   * Each call's arguments are kept as `unknown[]` rather than `TArgs` on
-   * purpose: a test overriding one of this kit's mock fields with a fresh,
-   * more loosely typed `vi.fn()`/`jest.fn()` (a common per-test override)
-   * must stay assignable, and callers reading `.mock.calls` almost always
-   * either `toEqual(...)` the result or cast it explicitly anyway.
+   * Recorded invocations and their outcomes, matching `vi.fn()`/`jest.fn()`'s
+   * own `.mock` object.
+   *
+   * Arguments and returned values are kept as `unknown` rather than
+   * `TArgs`/`TReturn` on purpose: a test overriding one of this kit's mock
+   * fields with a fresh, more loosely typed `vi.fn()`/`jest.fn()` (a common
+   * per-test override) must stay assignable, and callers reading these almost
+   * always either `toEqual(...)` the result or cast it explicitly anyway.
+   *
+   * `results` is what makes a factory-shaped mock testable: it's the only way
+   * to reach the object a call *returned* — e.g. the channel handed back by
+   * `window.createOutputChannel` — so assertions can be made against it.
+   * `'incomplete'` is part of the union because both runners use it for a call
+   * that is still in flight; narrow on `type === 'return'` before trusting
+   * `value`.
    */
-  mock: { calls: unknown[][] };
+  mock: {
+    calls: unknown[][];
+    results: { type: 'return' | 'throw' | 'incomplete'; value: unknown }[];
+  };
 }

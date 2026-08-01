@@ -112,9 +112,10 @@ Schema v1 library with synchronous validation (zod, valibot, ...).
 - `migrate()` failures no longer crash `get()` — the default value wins.
 - New: TTL (`ttlMs`), `syncable` (Settings Sync via `setKeysForSync`),
   `tryGet()`, typed `onDidChange`, optional schema validation.
-- New `createSecretStore(context)`: multi-key secret management with
-  feature-detected `keys()` (VS Code 1.105+). `createSecretStorage` (single
-  key) remains.
+- New `createSecretStore(context)`: multi-key secret management, including
+  `keys()` (`SecretStorage.keys`, stable since VS Code 1.105 — below this
+  library's `^1.125.0` floor, so it is called directly with no feature
+  detection). `createSecretStorage` (single key) remains.
 
 ## UI
 
@@ -247,5 +248,10 @@ import { createVSCodeMock } from '@kkdev92/vscode-ext-kit/testing';
 vi.mock('vscode', () => createVSCodeMock(vi));
 ```
 
-Works with any framework exposing `fn()` (vitest, jest, bun:test). See the
-README's "Testing Your Extension" section.
+Works with any framework exposing `fn()` (vitest, jest, bun:test).
+
+Vitest users can skip the setup file entirely as of 2.1.0 by merging
+`vscodeExtKitVitestConfig` from
+`@kkdev92/vscode-ext-kit/testing/vitest-config`, which also reaches a prebuilt
+bundle that `vi.mock` cannot. See the README's "Testing Your Extension"
+section for both approaches.

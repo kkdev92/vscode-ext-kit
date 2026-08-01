@@ -59,6 +59,8 @@ export {
   QuickInputButtonLocation,
   LanguageStatusSeverity,
   ViewColumn,
+  ColorThemeKind,
+  TextEditorRevealType,
 } from './vscodeMock.js';
 
 export {

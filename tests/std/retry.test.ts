@@ -485,3 +485,39 @@ describe('retry', () => {
     });
   });
 });
+
+describe('retry: abort listener hygiene', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('removes its abort listener from the signal once a wait completes', async () => {
+    const controller = new AbortController();
+    const addSpy = vi.spyOn(controller.signal, 'addEventListener');
+    const removeSpy = vi.spyOn(controller.signal, 'removeEventListener');
+    const fn = vi
+      .fn<(ctx: { attempt: number }) => Promise<string>>()
+      .mockRejectedValueOnce(new Error('first'))
+      .mockResolvedValue('ok');
+
+    const resultPromise = retry(fn, {
+      maxAttempts: 2,
+      delay: 100,
+      jitter: 'none',
+      signal: controller.signal,
+    });
+    await vi.advanceTimersByTimeAsync(100);
+
+    await expect(resultPromise).resolves.toBe('ok');
+    // Without this, a long-lived signal accumulates one dead listener per
+    // retry wait for as long as it stays un-aborted. Identity matters:
+    // removing any *other* function would be a no-op.
+    const added = addSpy.mock.calls.find((call) => call[0] === 'abort')?.[1];
+    expect(added).toBeDefined();
+    expect(removeSpy).toHaveBeenCalledWith('abort', added);
+  });
+});

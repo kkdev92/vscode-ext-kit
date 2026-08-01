@@ -272,6 +272,136 @@ describe('Progress', () => {
       );
     });
 
+    describe('cancellation', () => {
+      /**
+       * Replaces the `withProgress` mock with one whose token can actually be
+       * tripped, since the default fixture's token is permanently
+       * un-cancelled.
+       */
+      function useCancellableProgress(): { cancel: () => void } {
+        const token = {
+          isCancellationRequested: false,
+          onCancellationRequested: vi.fn(() => ({ dispose: vi.fn() })),
+        };
+        vi.mocked(vscode.window.withProgress).mockImplementation((async (
+          _options: vscode.ProgressOptions,
+          task: (
+            progress: vscode.Progress<{ message?: string; increment?: number }>,
+            token: vscode.CancellationToken
+          ) => Thenable<unknown>
+        ): Promise<unknown> => {
+          const progress = { report: vi.fn() };
+          return await task(progress, token as unknown as vscode.CancellationToken);
+        }) as never);
+        return {
+          cancel: () => {
+            token.isCancellationRequested = true;
+          },
+        };
+      }
+
+      it('reports an AbortError from a running step as cancelled, not as a failure', async () => {
+        const progress = useCancellableProgress();
+
+        const result = await withSteps(
+          { title: 'Scanning', cancellable: true },
+          { label: 'First', task: () => 'done' },
+          {
+            label: 'Second',
+            task: () => {
+              progress.cancel();
+              // What `toAbortSignal(token)` produces once the token trips.
+              const error = new Error('aborted');
+              error.name = 'AbortError';
+              return Promise.reject(error);
+            },
+          }
+        );
+
+        expect(result.cancelled).toBe(true);
+        expect(result.completed).toBe(false);
+        // Results gathered before the cancellation are still returned.
+        expect(result.results).toEqual(['done']);
+      });
+
+      it('reports a CancellationError thrown by a step as cancelled', async () => {
+        useCancellableProgress();
+
+        const result = await withSteps(
+          { title: 'Scanning', cancellable: true },
+          {
+            label: 'Only',
+            task: () => {
+              throw new vscode.CancellationError();
+            },
+          }
+        );
+
+        expect(result.cancelled).toBe(true);
+        expect(result.results).toEqual([]);
+      });
+
+      it('treats any rejection as cancelled once the token itself is cancelled', async () => {
+        const progress = useCancellableProgress();
+
+        const result = await withSteps(
+          { title: 'Scanning', cancellable: true },
+          {
+            label: 'Only',
+            task: () => {
+              progress.cancel();
+              // A plain error raised because the work was torn down.
+              return Promise.reject(new Error('worker exited'));
+            },
+          }
+        );
+
+        expect(result.cancelled).toBe(true);
+      });
+
+      it('stops before the next step once the token is cancelled', async () => {
+        const progress = useCancellableProgress();
+        const ran: string[] = [];
+
+        const result = await withSteps(
+          { title: 'Scanning', cancellable: true },
+          {
+            label: 'First',
+            task: () => {
+              ran.push('first');
+              progress.cancel();
+              return 1;
+            },
+          },
+          {
+            label: 'Second',
+            task: () => {
+              ran.push('second');
+              return 2;
+            },
+          }
+        );
+
+        expect(ran).toEqual(['first']);
+        expect(result.cancelled).toBe(true);
+        expect(result.results).toEqual([1]);
+      });
+
+      it('still throws a real error when the token was never cancelled', async () => {
+        useCancellableProgress();
+
+        await expect(
+          withSteps(
+            { title: 'Scanning', cancellable: true },
+            {
+              label: 'Only',
+              task: () => Promise.reject(new Error('genuine failure')),
+            }
+          )
+        ).rejects.toThrow('genuine failure');
+      });
+    });
+
     it('should propagate errors from steps', async () => {
       await expect(
         withSteps(
@@ -408,5 +538,41 @@ describe('Progress', () => {
       expect(signal.aborted).toBe(true);
       expect(dispose).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe('toAbortSignal: listener hygiene', () => {
+  it('returns the same signal for repeated calls on the same token', () => {
+    const subscribe = vi.fn(() => ({ dispose: vi.fn() }));
+    const token: vscode.CancellationToken = {
+      isCancellationRequested: false,
+      onCancellationRequested: subscribe as never,
+    };
+
+    const first = toAbortSignal(token);
+    const second = toAbortSignal(token);
+
+    // One token, one bridge: without memoization every call parks another
+    // never-disposed listener on a token that never fires.
+    expect(second).toBe(first);
+    expect(subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('still aborts the shared signal when the token fires', () => {
+    let fire: (() => void) | undefined;
+    const token: vscode.CancellationToken = {
+      isCancellationRequested: false,
+      onCancellationRequested: ((listener: () => void) => {
+        fire = listener;
+        return { dispose: vi.fn() };
+      }) as never,
+    };
+
+    const first = toAbortSignal(token);
+    const second = toAbortSignal(token);
+    fire?.();
+
+    expect(first.aborted).toBe(true);
+    expect(second.aborted).toBe(true);
   });
 });

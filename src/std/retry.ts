@@ -223,14 +223,17 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     return Promise.reject(signal.reason);
   }
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timer);
-        reject(signal.reason);
-      },
-      { once: true }
-    );
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      reject(signal?.reason);
+    };
+    const timer = setTimeout(() => {
+      // Detach the abort hook once the wait is over — a long-lived signal
+      // would otherwise collect one dead listener per retry wait until it
+      // finally aborts (or is garbage collected).
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
 }

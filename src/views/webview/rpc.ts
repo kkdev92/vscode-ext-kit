@@ -1,78 +1,22 @@
 import * as vscode from 'vscode';
+import {
+  isRpcEnvelope,
+  serializeError,
+  reviveError,
+  combineAbortSignals,
+  type RpcEnvelope,
+  type WebviewRpcSchema,
+  type WebviewRpcRequestOptions,
+} from './protocol.js';
 
-// ============================================
-// Schema
-// ============================================
-
-/**
- * Contract for a {@link createWebviewRpc} channel. Define one interface per
- * webview and reference it from both the extension host code and the
- * webview-side counterpart — see {@link createWebviewRpc}'s `@example` for a
- * full webview-side reference implementation.
- */
-export interface WebviewRpcSchema {
-  /** Webview → Host. Requests that expect a response. */
-  webviewRequests?: Record<string, { params: unknown; result: unknown }>;
-  /** Host → Webview. Requests that expect a response. */
-  hostRequests?: Record<string, { params: unknown; result: unknown }>;
-  /** Host → Webview. One-way events (no response expected). */
-  hostEvents?: Record<string, unknown>;
-  /** Webview → Host. One-way events (no response expected). */
-  webviewEvents?: Record<string, unknown>;
-}
-
-// ============================================
-// Wire protocol (internal — not part of the public API)
-// ============================================
-
-interface SerializedError {
-  name: string;
-  message: string;
-  stack?: string;
-}
-
-type RpcEnvelope =
-  | { k: 'req'; id: string; method: string; params: unknown }
-  | { k: 'res'; id: string; ok: true; result: unknown }
-  | { k: 'res'; id: string; ok: false; error: SerializedError }
-  | { k: 'ev'; event: string; payload: unknown }
-  | { k: 'cancel'; id: string };
-
-function isRpcEnvelope(value: unknown): value is RpcEnvelope {
-  return (
-    typeof value === 'object' && value !== null && typeof (value as { k?: unknown }).k === 'string'
-  );
-}
-
-function serializeError(error: unknown): SerializedError {
-  if (error instanceof Error) {
-    return { name: error.name, message: error.message, stack: error.stack };
-  }
-  return { name: 'Error', message: String(error) };
-}
-
-function reviveError(error: SerializedError): Error {
-  const revived = new Error(error.message);
-  revived.name = error.name;
-  if (error.stack !== undefined) {
-    revived.stack = error.stack;
-  }
-  return revived;
-}
+// The schema and request-option types live in `protocol.ts` (shared,
+// vscode-free) so the webview-side client can be written against the same
+// contract; re-exported here so the extension-host import path is unchanged.
+export type { WebviewRpcSchema, WebviewRpcRequestOptions } from './protocol.js';
 
 // ============================================
 // createWebviewRpc
 // ============================================
-
-/**
- * Options accepted by {@link WebviewRpc.request}.
- */
-export interface WebviewRpcRequestOptions {
-  /** Aborts the request, rejecting it locally and best-effort notifying the peer. */
-  signal?: AbortSignal;
-  /** Convenience for a timeout-only abort; combined with `signal` if both are given. */
-  timeoutMs?: number;
-}
 
 /**
  * A typed, bidirectional request/response + event channel layered over a
@@ -131,11 +75,12 @@ export interface WebviewRpc<S extends WebviewRpcSchema = WebviewRpcSchema>
  * share the same `Webview` shape), and `ManagedWebviewPanel`/
  * `ManagedWebviewView` both expose this automatically as `.rpc`.
  *
- * Only the extension host side is implemented by this library (it has no
- * runtime dependencies and ships no browser bundle). The webview side is a
- * small amount of code you copy into your own webview bundle — see the
- * second code block in the example below for a complete, minimal
- * counterpart.
+ * The webview-side counterpart ships as
+ * `@kkdev92/vscode-ext-kit/webview-client` — vscode-free, so it bundles into
+ * webview code — and is written against the same {@link WebviewRpcSchema},
+ * which is what keeps the two sides from drifting. If you'd rather not
+ * bundle anything, the wire contract lives in `protocol.ts` and is small
+ * enough to implement by hand.
  *
  * @param webview - The webview to layer the RPC channel over
  *
@@ -162,56 +107,17 @@ export interface WebviewRpc<S extends WebviewRpcSchema = WebviewRpcSchema>
  * const { text } = await rpc.request('getSelection', undefined, { timeoutMs: 5000 });
  * ```
  *
- * ```js
- * // media/rpc-client.js — minimal webview-side counterpart (not shipped by
- * // this library; copy and adapt into your own webview bundle).
- * const vscodeApi = acquireVsCodeApi();
- * const pending = new Map();
- * const requestHandlers = new Map();
- * const eventHandlers = new Map();
- * const inFlight = new Map();
- * let nextId = 0;
+ * ```typescript
+ * // Webview side (bundled into your webview code):
+ * import { createWebviewRpcClient } from '@kkdev92/vscode-ext-kit/webview-client';
  *
- * window.addEventListener('message', ({ data: msg }) => {
- *   if (msg.k === 'res') {
- *     const p = pending.get(msg.id);
- *     if (!p) return;
- *     pending.delete(msg.id);
- *     msg.ok ? p.resolve(msg.result) : p.reject(new Error(msg.error.message));
- *   } else if (msg.k === 'req') {
- *     const handler = requestHandlers.get(msg.method);
- *     if (!handler) {
- *       vscodeApi.postMessage({ k: 'res', id: msg.id, ok: false, error: { name: 'Error', message: `Unknown method: ${msg.method}` } });
- *       return;
- *     }
- *     const controller = new AbortController();
- *     inFlight.set(msg.id, controller);
- *     Promise.resolve(handler(msg.params, { signal: controller.signal })).then(
- *       (result) => vscodeApi.postMessage({ k: 'res', id: msg.id, ok: true, result }),
- *       (error) => vscodeApi.postMessage({ k: 'res', id: msg.id, ok: false, error: { name: error?.name ?? 'Error', message: String(error?.message ?? error) } })
- *     ).finally(() => inFlight.delete(msg.id));
- *   } else if (msg.k === 'ev') {
- *     for (const fn of eventHandlers.get(msg.event) ?? []) fn(msg.payload);
- *   } else if (msg.k === 'cancel') {
- *     inFlight.get(msg.id)?.abort();
- *     inFlight.delete(msg.id);
- *   }
- * });
+ * const rpc = createWebviewRpcClient<MyRpcSchema>({ vscodeApi: acquireVsCodeApi() });
  *
- * export function request(method, params) {
- *   const id = String(nextId++);
- *   return new Promise((resolve, reject) => {
- *     pending.set(id, { resolve, reject });
- *     vscodeApi.postMessage({ k: 'req', id, method, params });
- *   });
- * }
- * export function onRequest(method, handler) { requestHandlers.set(method, handler); }
- * export function emit(event, payload) { vscodeApi.postMessage({ k: 'ev', event, payload }); }
- * export function onEvent(event, handler) {
- *   const set = eventHandlers.get(event) ?? new Set();
- *   set.add(handler);
- *   eventHandlers.set(event, set);
- * }
+ * rpc.onRequest('getSelection', () => ({ text: window.getSelection()?.toString() ?? '' }));
+ * rpc.onEvent('theme', ({ kind }) => document.body.dataset.theme = kind);
+ * rpc.emit('dirty', { isDirty: true });
+ *
+ * const { ok } = await rpc.request('save', { content: editor.value });
  * ```
  */
 export function createWebviewRpc<S extends WebviewRpcSchema = WebviewRpcSchema>(
@@ -303,20 +209,7 @@ export function createWebviewRpc<S extends WebviewRpcSchema = WebviewRpcSchema>(
         return Promise.reject(new Error('WebviewRpc has been disposed'));
       }
 
-      const signals: AbortSignal[] = [];
-      if (options?.signal) {
-        signals.push(options.signal);
-      }
-      if (options?.timeoutMs !== undefined) {
-        signals.push(AbortSignal.timeout(options.timeoutMs));
-      }
-      const signal =
-        signals.length === 0
-          ? undefined
-          : signals.length === 1
-            ? signals[0]
-            : AbortSignal.any(signals);
-
+      const signal = combineAbortSignals(options);
       if (signal?.aborted) {
         return Promise.reject(signal.reason ?? new Error('Aborted'));
       }
@@ -336,18 +229,22 @@ export function createWebviewRpc<S extends WebviewRpcSchema = WebviewRpcSchema>(
         return done as Promise<never>;
       }
 
+      let rejectAborted!: (reason: unknown) => void;
       const aborted = new Promise<never>((_resolve, reject) => {
-        signal.addEventListener(
-          'abort',
-          () => {
-            if (pending.delete(id)) {
-              void webview.postMessage({ k: 'cancel', id } satisfies RpcEnvelope);
-            }
-            reject(signal.reason ?? new Error('Aborted'));
-          },
-          { once: true }
-        );
+        rejectAborted = reject;
       });
+      const onAbort = (): void => {
+        if (pending.delete(id)) {
+          void webview.postMessage({ k: 'cancel', id } satisfies RpcEnvelope);
+        }
+        rejectAborted(signal.reason ?? new Error('Aborted'));
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      // Once the request settles (response arrived, or the RPC was disposed),
+      // the abort hook has nothing left to do — detach it so a signal reused
+      // across many requests doesn't collect one dead listener per request.
+      const detach = (): void => signal.removeEventListener('abort', onAbort);
+      void done.then(detach, detach);
       return Promise.race([done, aborted]) as Promise<never>;
     },
 

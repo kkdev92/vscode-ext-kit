@@ -268,6 +268,45 @@ export abstract class BaseTreeDataProvider<T extends TreeItemData>
 // SimpleTreeDataProvider
 // ============================================
 
+/** Options for the object form of {@link SimpleTreeDataProvider.addItem}. */
+export interface AddItemOptions {
+  /** Existing item id to nest under. Omit to add at the root. */
+  parentId?: string;
+  /**
+   * Position among the siblings. Clamped to the list, so `0` is always first
+   * and a value past the end appends. Omit to append.
+   */
+  index?: number;
+}
+
+/**
+ * Splices `item` into `list` at `index`, treating an out-of-range or omitted
+ * index as "append" so callers never have to bounds-check a position they
+ * computed.
+ */
+function insertAt<T>(list: T[], item: T, index: number | undefined): void {
+  if (index === undefined || index >= list.length) {
+    list.push(item);
+    return;
+  }
+  list.splice(Math.max(0, index), 0, item);
+}
+
+/**
+ * Brings a parent's `collapsibleState` in line with whether it still has
+ * children, without discarding a state the caller chose deliberately. A node
+ * built as `Expanded` stays expanded across partial updates — collapsing it
+ * would defeat the point of a scoped refresh — and `Collapsed` is only ever
+ * assigned to a node that had no children at all.
+ */
+function reconcileCollapsibleState(parent: TreeItemData, hasChildren: boolean): void {
+  if (!hasChildren) {
+    parent.collapsibleState = vscode.TreeItemCollapsibleState.None;
+  } else if (parent.collapsibleState === vscode.TreeItemCollapsibleState.None) {
+    parent.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+  }
+}
+
 /**
  * A simple tree data provider backed by an in-memory item tree.
  *
@@ -355,10 +394,7 @@ export class SimpleTreeDataProvider<
       this._childrenById.set(parentId, normalized);
     }
     if (parent) {
-      parent.collapsibleState =
-        normalized.length > 0
-          ? vscode.TreeItemCollapsibleState.Collapsed
-          : vscode.TreeItemCollapsibleState.None;
+      reconcileCollapsibleState(parent, normalized.length > 0);
     }
 
     this.refresh(parent);
@@ -375,7 +411,32 @@ export class SimpleTreeDataProvider<
    * @param parentId - Existing item id to nest under; omit to add at the root
    * @returns `false` if `parentId` was given but doesn't refer to a known item
    */
-  addItem(item: T, parentId?: string): boolean {
+  addItem(item: T, parentId?: string): boolean;
+  /**
+   * Adds an item at a chosen position, rather than at the end.
+   *
+   * This is the way to introduce a group that has to stay on top — a
+   * "Favorites" node, say — without going through {@link setItems}, which
+   * rebuilds the tree and collapses all of it.
+   *
+   * @param item - Item to add (may itself carry nested `children`)
+   * @param options - `parentId` to nest under (omit for the root) and `index`
+   *   to insert at; `index` is clamped to the sibling list, so `0` always
+   *   means first and anything past the end appends
+   * @returns `false` if `parentId` was given but doesn't refer to a known item
+   *
+   * @example
+   * ```typescript
+   * // Keep the favorites group pinned above everything else.
+   * provider.addItem({ id: 'favorites', label: 'Favorites', children }, { index: 0 });
+   * ```
+   */
+  addItem(item: T, options: AddItemOptions): boolean;
+  addItem(item: T, parentIdOrOptions?: string | AddItemOptions): boolean {
+    const { parentId, index } =
+      typeof parentIdOrOptions === 'string'
+        ? { parentId: parentIdOrOptions, index: undefined }
+        : { parentId: parentIdOrOptions?.parentId, index: parentIdOrOptions?.index };
     const parent = parentId !== undefined ? this._itemsById.get(parentId) : undefined;
     if (parentId !== undefined && !parent) {
       return false;
@@ -383,13 +444,13 @@ export class SimpleTreeDataProvider<
 
     const normalized = this._normalize(item, parentId);
     if (parentId === undefined) {
-      this._roots.push(normalized);
+      insertAt(this._roots, normalized, index);
     } else {
       const siblings = this._childrenById.get(parentId) ?? [];
-      siblings.push(normalized);
+      insertAt(siblings, normalized, index);
       this._childrenById.set(parentId, siblings);
       if (parent) {
-        parent.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        reconcileCollapsibleState(parent, true);
       }
     }
 
@@ -493,19 +554,23 @@ export class SimpleTreeDataProvider<
 
   /**
    * Recursively indexes `item` (and any inline `children` it carries) and
-   * returns a normalized copy — a shallow copy with `collapsibleState`
-   * computed from whether it has children, so callers never have to set
-   * that field themselves. The copy is what gets stored and returned to VS
-   * Code; the caller's original object is never mutated.
+   * returns a normalized copy — a shallow copy whose `collapsibleState` is
+   * computed from whether it has children, so callers never have to set that
+   * field themselves. An explicit `collapsibleState` on an item that does
+   * have children is honored rather than overwritten: `Expanded` is a
+   * deliberate choice, and only the caller knows which groups should start
+   * open. A childless item is always `None` — there would be nothing behind
+   * the twistie. The copy is what gets stored and returned to VS Code; the
+   * caller's original object is never mutated.
    */
   private _normalize(item: T, parentId: string | undefined): T {
     const children = item.children;
+    const hasChildren = children !== undefined && children.length > 0;
     const normalized: T = {
       ...item,
-      collapsibleState:
-        children && children.length > 0
-          ? vscode.TreeItemCollapsibleState.Collapsed
-          : vscode.TreeItemCollapsibleState.None,
+      collapsibleState: hasChildren
+        ? (item.collapsibleState ?? vscode.TreeItemCollapsibleState.Collapsed)
+        : vscode.TreeItemCollapsibleState.None,
     };
 
     this._itemsById.set(normalized.id, normalized);
@@ -540,43 +605,77 @@ export class SimpleTreeDataProvider<
 /** Sentinel id used by {@link withPagination}'s "Load more…" placeholder. */
 export const LOAD_MORE_ID = '__loadMore__';
 
+/** Options for {@link withPagination}'s placeholder row. */
+export interface PaginationOptions {
+  /**
+   * Label for the placeholder item.
+   * @default 'Load more…'
+   */
+  label?: string;
+  /**
+   * Command run when the row is clicked — pass one and the row becomes
+   * clickable, which is what makes pagination work without the caller
+   * matching on {@link LOAD_MORE_ID} by hand.
+   *
+   * Your handler is responsible for widening the page (raise the `pageSize`
+   * you pass in, or track an offset) and refreshing the parent.
+   */
+  command?: vscode.Command;
+  /**
+   * Icon for the placeholder item.
+   * @default a `ThemeIcon('ellipsis')`
+   */
+  iconPath?: TreeItemData['iconPath'];
+}
+
 /**
  * Caps a children array at `pageSize`, appending a "Load more…" placeholder
- * item when there's more data than that. A pure formatting helper — your
- * `getChildrenOf` implementation is responsible for recognizing
- * `element.id === LOAD_MORE_ID` (e.g. in the item's `command`) and loading
- * the next page.
+ * item when there's more data than that.
  *
  * Useful when a lazily-loaded node (e.g. a directory with tens of thousands
  * of files) would otherwise force VS Code to serialize an enormous array
  * across the extension host boundary in one call.
  *
+ * Pass a `command` and the placeholder is clickable on its own. Without one
+ * it's inert, and `getChildrenOf` has to recognize
+ * `element.id === LOAD_MORE_ID` itself.
+ *
  * @param items - The full list of children for this level
  * @param pageSize - Maximum number of real items to show before paginating
- * @param loadMoreLabel - Label for the placeholder item
+ * @param options - Placeholder label, command, and icon. A bare string is
+ *   accepted in place of the object as shorthand for `{ label }`.
  *
  * @example
  * ```typescript
  * class HugeDirProvider extends BaseTreeDataProvider<FileItem> {
  *   async getChildrenOf(element: FileItem): Promise<FileItem[]> {
  *     const allFiles = await listFiles(element.data!.path);
- *     return withPagination(allFiles, 500);
+ *     return withPagination(allFiles, this.pageSize, {
+ *       label: l10n.t('Load more…'),
+ *       command: { command: 'myext.loadMore', title: l10n.t('Load more…') },
+ *     });
  *   }
  * }
+ *
+ * // Inert placeholder — handle LOAD_MORE_ID yourself
+ * return withPagination(allFiles, 500);
  * ```
  */
 export function withPagination<T extends TreeItemData>(
   items: T[],
   pageSize: number,
-  loadMoreLabel = 'Load more…'
+  options: PaginationOptions | string = {}
 ): T[] {
   if (items.length <= pageSize) {
     return items;
   }
+  const resolved: PaginationOptions = typeof options === 'string' ? { label: options } : options;
+  const { label = 'Load more…', command, iconPath } = resolved;
   const sentinel = {
     id: LOAD_MORE_ID,
-    label: loadMoreLabel,
-    iconPath: new vscode.ThemeIcon('ellipsis'),
+    label,
+    iconPath: iconPath ?? new vscode.ThemeIcon('ellipsis'),
+    ...(command === undefined ? {} : { command }),
   } as unknown as T;
   return [...items.slice(0, pageSize), sentinel];
 }

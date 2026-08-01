@@ -46,6 +46,12 @@ export interface StorageOptions<T> {
    * to (but excluding) `version` — e.g. migrating from 1 to 4 runs
    * `migrations[1]`, then `migrations[2]`, then `migrations[3]`.
    *
+   * A plain value written before this kit was adopted (not wrapped in the
+   * kit's storage envelope) reads as **version 0**: provide `migrations[0]`
+   * to convert it, or leave it out and the value is used as-is (validated
+   * against `schema` when one is given). Either way it is re-persisted in
+   * envelope form after the first read.
+   *
    * A gap (a version with no registered step) stops the chain early: the
    * value as of that point is handed straight to validation instead of
    * guessing across the gap.
@@ -184,6 +190,23 @@ function runMigrations(
   return value;
 }
 
+/**
+ * Whether a stored value is one of this module's envelopes, as opposed to a
+ * plain value written before the kit was adopted. A legacy object that
+ * happens to carry a numeric `v` and a `value` key is indistinguishable from
+ * an envelope and will be read as one — acceptable, since such a value would
+ * also have to survive validation to be returned.
+ */
+function isEnvelope(value: unknown): value is StorageEnvelope<unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    typeof (value as { v?: unknown }).v === 'number' &&
+    'value' in value
+  );
+}
+
 function isExpired(envelope: StorageEnvelope<unknown>): boolean {
   return envelope.expiresAt !== undefined && Date.now() > envelope.expiresAt;
 }
@@ -194,6 +217,10 @@ function isExpired(envelope: StorageEnvelope<unknown>): boolean {
 
 /**
  * Creates a type-safe wrapper for global extension storage.
+ *
+ * The returned store is a `Disposable` **you** own — it is not added to
+ * `context.subscriptions` automatically; `context` is only how it reaches
+ * `globalState`. Push it yourself, as the example does.
  *
  * @param context - Extension context
  * @param key - Storage key
@@ -238,6 +265,10 @@ export function createGlobalStorage<T>(
 
 /**
  * Creates a type-safe wrapper for workspace-specific storage.
+ *
+ * The returned store is a `Disposable` **you** own — it is not added to
+ * `context.subscriptions` automatically; `context` is only how it reaches
+ * `workspaceState`. Push it yourself.
  *
  * @param context - Extension context
  * @param key - Storage key
@@ -295,6 +326,10 @@ function registerSyncKey(context: vscode.ExtensionContext, key: string): void {
 /**
  * Creates a store spanning every secret this extension owns.
  *
+ * The returned store is a `Disposable` **you** own — it is not added to
+ * `context.subscriptions` automatically; `context` is only how it reaches
+ * `secrets`. Push it yourself, as the example does.
+ *
  * @param context - Extension context
  * @returns A secret store interface
  *
@@ -351,6 +386,9 @@ export function createSecretStore(context: vscode.ExtensionContext): SecretStore
 /**
  * Creates a wrapper for a single secret, with change notification. Built on
  * top of {@link createSecretStore}.
+ *
+ * The returned wrapper is a `Disposable` **you** own — it is not added to
+ * `context.subscriptions` automatically. Push it yourself.
  *
  * @param context - Extension context
  * @param key - Secret key
@@ -440,8 +478,18 @@ function createTypedStorage<T>(
   const changeEmitter = new vscode.EventEmitter<T>();
 
   function resolve(): { value: T; issues?: readonly StorageIssue[] } {
-    const envelope = memento.get<StorageEnvelope<unknown>>(key);
-    if (envelope === undefined || isExpired(envelope)) {
+    const raw = memento.get<unknown>(key);
+    if (raw === undefined) {
+      return { value: defaultValue };
+    }
+
+    // A value written before this kit (or by anything else) isn't wrapped in
+    // an envelope. Treat it as schema version 0 rather than reading its
+    // (nonexistent) `.value`: `migrations[0]` can convert it, and without one
+    // it flows into validation unchanged — so adopting typed storage over
+    // existing state reads the old data instead of a silent `undefined`.
+    const envelope: StorageEnvelope<unknown> = isEnvelope(raw) ? raw : { v: 0, value: raw };
+    if (isExpired(envelope)) {
       return { value: defaultValue };
     }
 
@@ -527,8 +575,12 @@ function createTypedStorage<T>(
     },
 
     has(): boolean {
-      const envelope = memento.get<StorageEnvelope<unknown>>(key);
-      return envelope !== undefined && !isExpired(envelope);
+      const raw = memento.get<unknown>(key);
+      if (raw === undefined) {
+        return false;
+      }
+      // A plain pre-kit value has no expiry to check.
+      return !isEnvelope(raw) || !isExpired(raw);
     },
 
     async delete(): Promise<void> {

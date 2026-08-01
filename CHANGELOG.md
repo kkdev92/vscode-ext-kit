@@ -6,6 +6,203 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 From 1.0.0 onward this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0 releases followed it in spirit; their breaking changes are marked **Breaking**.
 
+## [2.1.0] - 2026-08-01
+
+The rest of the first downstream adopter's report: the places where the library
+worked as documented but made the caller write the boilerplate, or reach past it
+for the raw API. Nothing here is breaking, though `withSteps` now reports a
+cancellation it previously threw.
+
+### Added
+
+- **`@kkdev92/vscode-ext-kit/testing/vitest-config`** exports
+  `vscodeExtKitVitestConfig`, a mergeable Vitest config that is the entire
+  setup:
+
+  ```ts
+  export default mergeConfig(vscodeExtKitVitestConfig, defineConfig({ /* yours */ }));
+  ```
+
+  It pairs `resolve.alias` (pointing `vscode` at the new
+  `@kkdev92/vscode-ext-kit/testing/vitest`, which re-exports the mock as the
+  named exports `import * as vscode` reads) with the `server.deps.inline` entry
+  that keeps this kit from being externalized. Both halves are required and each
+  fails confusingly alone, which is why they now ship together. Unlike
+  `vi.mock('vscode', ...)`, an alias also reaches a prebuilt `dist/` bundle, so
+  `activate()` can be tested for real. `@kkdev92/vscode-ext-kit/testing` itself
+  stays runner-agnostic; only the two new subpaths import `vitest` (declared as
+  an optional peer).
+- **`@kkdev92/vscode-ext-kit/webview-client`** ships the webview-side end of
+  `createWebviewRpc` — previously a 51-line reference implementation in a JSDoc
+  comment that every adopter copied into their webview bundle by hand, untyped
+  and frozen at whatever version they copied. `createWebviewRpcClient<S>()` is
+  written against the same `WebviewRpcSchema` as the host (both sides now build
+  on a shared, vscode-free `protocol.ts`), so the contract cannot drift, and it
+  mirrors the host's semantics: `request` with `timeoutMs`/`signal` whose
+  cancellation propagates across the wire, `onRequest` handlers with an
+  aborting `ctx.signal`, `emit`/`onEvent`, and `dispose`. Pass
+  `{ vscodeApi: acquireVsCodeApi() }` when your webview already acquired the
+  API — VS Code allows exactly one call — or omit it and the client acquires it.
+  Wire compatibility is pinned by loopback tests running the published client
+  against the published host in both directions.
+- **`@kkdev92/vscode-ext-kit/format`** exposes the vscode-free `Intl` core
+  (`pluralFor`, `formatNumberFor`, `formatDateFor`, `formatRelativeTimeFor`,
+  `getOrCreateCached`) as a subpath alongside `./timing` and `./retry`. These
+  existed but were only reachable through the root barrel, which drags in
+  `vscode` — defeating the point for a webview bundle.
+- **`./package.json` is exported**, so `require('@kkdev92/vscode-ext-kit/package.json')`
+  works for build scripts that bake the resolved version into a bundle. Node's
+  ESM resolver rejects any subpath an `exports` map doesn't list, so this needed
+  saying explicitly.
+- **`PickOptions` gained `buttons`, `onTriggerButton`, and `onTriggerItemButton`.**
+  `toPickButton` shipped in 2.0.0 with nowhere to use it: `pickOne`/`pickMany`
+  resolve with the selection and exposed no trigger event, so a press could not
+  be handled without abandoning them for a raw `createQuickPick`. Both handlers
+  receive the live `QuickPick`, so a row action can rewrite `items`, set `busy`,
+  or `hide()`. Passing any of the three routes the picker through
+  `createQuickPick`, as `prompt` already did. `PickOptions` is now generic in the
+  item type (`PickOptions<T>`, defaulting to `vscode.QuickPickItem`) so
+  `onTriggerItemButton`'s `item` is typed; existing bare `PickOptions`
+  annotations still compile.
+- **`SimpleTreeDataProvider.addItem(item, { parentId?, index? })`** inserts at a
+  position instead of appending. Introducing a group that has to stay on top — a
+  "Favorites" node — previously meant `setItems`, which rebuilds the tree and
+  collapses all of it. `index` is clamped, so `0` is always first and anything
+  past the end appends. The `addItem(item, parentId)` form is unchanged.
+- **`withPagination(items, pageSize, { label?, command?, iconPath? })`** can put a
+  `command` on the "Load more…" row, making it clickable. Without one the row
+  stays inert and `getChildrenOf` matches `LOAD_MORE_ID` itself, as before —
+  every caller was writing the same `.map()` to graft a command on. A bare string
+  third argument still means `{ label }`.
+- **`createVSCodeMock` covers the APIs an extension reaches for and the kit
+  itself never calls**: `version` (the top-level one — `TextDocument.version` is
+  a document revision and was the only `version` present), `ColorThemeKind`,
+  `TextEditorRevealType`, `window.activeColorTheme`,
+  `window.onDidChangeActiveColorTheme`, `window.showOpenDialog`, and
+  `window.showSaveDialog`. `window._setColorTheme(kind)` is the test hook that
+  switches theme *and* notifies listeners. Theme detection plus a change
+  listener is close to universal in extensions that render anything, and none of
+  it was mockable.
+- **`MockFn` describes more of `vi.fn`/`jest.fn`**: `mock.results` (the only way
+  to assert on the object a factory mock *returned*, e.g. the channel from
+  `window.createOutputChannel`), plus `mockReturnValueOnce`,
+  `mockResolvedValueOnce`, `mockRejectedValue`, `mockRejectedValueOnce`, and
+  `mockImplementationOnce`. Both runners already had all of these; the interface
+  simply didn't mention them, so a test using one didn't typecheck. `results`
+  includes the `'incomplete'` variant both runners emit for an in-flight call.
+
+### Fixed
+
+- **`resolvePositionsBatch`/`resolveOffsetsBatch` recognize the same line
+  breaks as VS Code.** The one-pass line-start table split on `\n` only, but
+  VS Code's text buffer also treats a lone `\r` as a line terminator — so on a
+  document containing a bare carriage return, the batch helpers disagreed with
+  `TextDocument.positionAt`/`offsetAt` about every position after it, producing
+  ranges that edit the wrong text. LF and CRLF documents were always correct
+  and are unchanged.
+- **File-watcher ignore globs are anchored.** `*.log` compiled to an unanchored
+  regex that also matched inside `x.log.txt` and `foo.logs`, silently swallowing
+  their events. Glob patterns now match a whole path segment at the end of the
+  path, as glob semantics say they should; `**/`-style patterns behave as
+  before.
+- **Settled requests detach their abort listeners.** `retry`'s inter-attempt
+  wait and both webview RPC endpoints (`request` on the host and the client)
+  registered an `abort` listener on the caller's `AbortSignal` and never
+  removed it on the success path — an `AbortController` reused across many
+  operations accumulated one dead listener per call for as long as it stayed
+  un-aborted. `toAbortSignal` had the same shape (one token listener per call)
+  and now memoizes one bridge signal per token via a `WeakMap`, so repeated
+  calls return the same `AbortSignal` instead of stacking listeners on a token
+  that may never fire.
+- **File-watcher batches reach every listener even when one unsubscribes
+  mid-delivery.** `flushNow` iterated the live listener array, so a listener
+  disposing itself (a one-shot subscription) shifted the array and skipped the
+  next listener for that batch. Delivery now goes to a snapshot — the same
+  contract VS Code's own `EventEmitter` has.
+- **The testing kit's value classes now match the real `vscode` semantics**
+  (each verified against the microsoft/vscode implementation): `Range`
+  normalizes a reversed start/end pair by swapping (so a reversed `Selection`
+  exposes its `active` position as `start`, like the host does);
+  `EventEmitter.fire` delivers to a listener snapshot; QuickPick/InputBox
+  subscription `dispose()` actually unhooks the listener (it was a recorded
+  no-op); `Uri.joinPath` resolves `.`/`..` segments — which `watchFile()`'s
+  own parent-directory pattern relies on — and `Uri.parse` extracts the scheme
+  instead of hardcoding `file`. Each divergence let a test pass against
+  behavior the extension host would never produce.
+- **Typed storage reads pre-kit plain values instead of `undefined`.** A value
+  stored before this kit was adopted isn't wrapped in the kit's storage
+  envelope; `get()` read `.value` off it anyway, returning `undefined` on a
+  non-nullable `T` while `has()` said `true` — adopting typed storage over
+  existing extension state silently read back nothing. A non-envelope value now
+  reads as **schema version 0**: `migrations[0]` can convert it, and without one
+  it flows into validation unchanged. Either way it's re-persisted in envelope
+  form after the first read.
+
+### Changed
+
+- **`engines.node` raised from `>=22.0.0` to `>=22.12.0`** — the honest floor:
+  consuming this native-ESM package from a CommonJS extension without a bundler
+  relies on `require(esm)`, which Node stabilized in 22.12. ESM/bundled
+  consumers were fine on 22.0, but the field describes what every supported
+  consumption mode needs. README now documents the bundler-free CJS path.
+- **`WebviewRpcSchema` and `WebviewRpcRequestOptions` moved to a shared,
+  vscode-free `protocol.ts`** so the new webview client is typed against the
+  exact same contract as the host. Both are re-exported from their previous
+  home — every existing import keeps working.
+- **`withSteps` reports mid-step cancellation as `cancelled` instead of
+  throwing.** Only the gap *between* steps was checked, so a step handed
+  `toAbortSignal(token)` — the usage the JSDoc recommends — rejected with an
+  `AbortError` that passed straight through, leaving `result.cancelled` false and
+  forcing callers to write both a `cancelled` branch and a `try`/`catch` with
+  `isCancellation()`. Cancellation now always comes back as
+  `{ completed: false, cancelled: true }` with the results gathered so far,
+  matching `run`/`tryRun` and `wizard`. A `vscode.CancellationError` thrown by a
+  step is treated the same way, and any other error still propagates. Code that
+  only caught the rejection will now see a `completed: false` result rather than
+  an exception.
+
+## [2.0.1] - 2026-08-01
+
+Fixes found by the first downstream adopter to migrate a full extension onto
+2.0.0. Two real bugs, and documentation that sent readers the wrong way.
+
+### Fixed
+
+- **`withTimeout` no longer strands a caller's promise.** Passing an
+  already-aborted `options.signal` made it throw synchronously before attaching
+  any handler to a promise-form `operation` — and that promise was created back
+  at the call site, during argument evaluation. If it later rejected (a worker
+  exiting, say), nothing was there to catch it and the extension host logged an
+  unhandled rejection. Its rejection is now claimed before the throw.
+  Function-form operations were never affected and still aren't started when the
+  signal is already aborted.
+- **`SimpleTreeDataProvider` stops collapsing nodes you asked to be expanded.**
+  A `collapsibleState` of `Expanded` now survives `setChildren` and `addItem`,
+  and is honored when passed to the constructor, `setItems`, or either of those
+  mutators — previously all three paths overwrote it with `Collapsed`, so a group
+  built expanded either never opened or folded shut on every partial update. A
+  parent that had no children is still promoted to `Collapsed` when children
+  arrive, and still drops to `None` when its last one goes away.
+
+### Documentation
+
+- `WebviewRpcSchema`'s `webviewRequests`/`hostRequests` docs described the
+  wrong direction. Both fields are named after the side that *answers* the
+  request (`webviewRequests` are sent with `rpc.request`, `hostRequests` bound
+  with `rpc.onRequest`) — the types always worked this way. The convention, and
+  why it differs from the send-direction naming used for events, is now spelled
+  out on the interface and in the README.
+- `PickItemDisplay.buttons` and `toPickButton` now say plainly that item buttons
+  cannot be handled through `pickOne`/`pickMany`, which resolve with the
+  selection and expose no trigger event. Use `vscode.window.createQuickPick`
+  directly. (Making them work through `pickOne` is tracked for a later release.)
+- README states the `^1.125.0` VS Code requirement up front, notes that the floor
+  propagates to dependents, and explains the `@types/vscode` lag behind the
+  weekly VS Code release line.
+- MIGRATION.md claimed `createSecretStore`'s `keys()` was feature-detected. It
+  isn't, and doesn't need to be: `SecretStorage.keys` has been stable since
+  1.105, well under this library's floor.
+
 ## [2.0.0] - 2026-07-31
 
 Follows the current VS Code release line. `engines.vscode` and the
@@ -325,6 +522,8 @@ platform support, toolchain currency, and release supply chain.
 
 Initial public release.
 
+[2.1.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v2.0.1...v2.1.0
+[2.0.1]: https://github.com/kkdev92/vscode-ext-kit/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v1.1.0...v2.0.0
 [1.1.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v0.5.0...v1.0.0

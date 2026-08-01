@@ -441,6 +441,67 @@ describe('treeview', () => {
         expect(provider.findItem('a.1')).toBeDefined();
         expect(provider.getParentOf(provider.findItem('a.1')!)?.id).toBe('a');
       });
+
+      describe('with an options object', () => {
+        it('inserts a root at index 0 without rebuilding the tree', async () => {
+          const provider = new SimpleTreeDataProvider<SimpleItem>([{ id: 'all', label: 'All' }]);
+
+          const ok = provider.addItem({ id: 'favorites', label: 'Favorites' }, { index: 0 });
+
+          expect(ok).toBe(true);
+          const roots = await provider.getChildren();
+          expect(roots.map((r) => r.id)).toEqual(['favorites', 'all']);
+        });
+
+        it('inserts a child at a position under parentId', async () => {
+          const provider = new SimpleTreeDataProvider<SimpleItem>([
+            { id: '1', label: 'Parent', children: [{ id: '1.1', label: 'A' }] },
+          ]);
+
+          provider.addItem({ id: '1.0', label: 'Z' }, { parentId: '1', index: 0 });
+
+          const children = await provider.getChildren(provider.findItem('1'));
+          expect(children.map((c) => c.id)).toEqual(['1.0', '1.1']);
+        });
+
+        it('appends when index is past the end', async () => {
+          const provider = new SimpleTreeDataProvider<SimpleItem>([{ id: 'a', label: 'A' }]);
+
+          provider.addItem({ id: 'b', label: 'B' }, { index: 99 });
+
+          const roots = await provider.getChildren();
+          expect(roots.map((r) => r.id)).toEqual(['a', 'b']);
+        });
+
+        it('treats a negative index as first', async () => {
+          const provider = new SimpleTreeDataProvider<SimpleItem>([
+            { id: 'a', label: 'A' },
+            { id: 'b', label: 'B' },
+          ]);
+
+          provider.addItem({ id: 'z', label: 'Z' }, { index: -5 });
+
+          const roots = await provider.getChildren();
+          expect(roots.map((r) => r.id)).toEqual(['z', 'a', 'b']);
+        });
+
+        it('appends when no index is given', async () => {
+          const provider = new SimpleTreeDataProvider<SimpleItem>([{ id: 'a', label: 'A' }]);
+
+          provider.addItem({ id: 'b', label: 'B' }, {});
+
+          const roots = await provider.getChildren();
+          expect(roots.map((r) => r.id)).toEqual(['a', 'b']);
+        });
+
+        it('returns false for an unknown parentId', () => {
+          const provider = new SimpleTreeDataProvider<SimpleItem>([]);
+
+          expect(provider.addItem({ id: 'x', label: 'X' }, { parentId: 'nope', index: 0 })).toBe(
+            false
+          );
+        });
+      });
     });
 
     describe('setChildren', () => {
@@ -485,6 +546,81 @@ describe('treeview', () => {
         const provider = new SimpleTreeDataProvider<SimpleItem>([]);
 
         expect(provider.setChildren('nonexistent', [{ id: 'x', label: 'X' }])).toBe(false);
+      });
+    });
+
+    describe('collapsible state across partial updates', () => {
+      const expandedParent = (): SimpleItem[] => [
+        {
+          id: '1',
+          label: 'Favorites',
+          collapsibleState: TreeItemCollapsibleState.Expanded,
+          children: [{ id: '1.1', label: 'First' }],
+        },
+      ];
+
+      it('honors an explicit Expanded state on an item with children', async () => {
+        const provider = new SimpleTreeDataProvider<SimpleItem>(expandedParent());
+
+        const roots = await provider.getChildren();
+
+        expect(roots[0]!.collapsibleState).toBe(TreeItemCollapsibleState.Expanded);
+      });
+
+      it('forces None on a childless item even when Expanded is requested', async () => {
+        const provider = new SimpleTreeDataProvider<SimpleItem>([
+          { id: '1', label: 'Leaf', collapsibleState: TreeItemCollapsibleState.Expanded },
+        ]);
+
+        const roots = await provider.getChildren();
+
+        expect(roots[0]!.collapsibleState).toBe(TreeItemCollapsibleState.None);
+      });
+
+      it('keeps an Expanded parent expanded through setChildren', () => {
+        const provider = new SimpleTreeDataProvider<SimpleItem>(expandedParent());
+
+        provider.setChildren('1', [
+          { id: '1.2', label: 'Reordered' },
+          { id: '1.1', label: 'First' },
+        ]);
+
+        expect(provider.findItem('1')!.collapsibleState).toBe(TreeItemCollapsibleState.Expanded);
+      });
+
+      it('keeps an Expanded parent expanded through addItem', () => {
+        const provider = new SimpleTreeDataProvider<SimpleItem>(expandedParent());
+
+        provider.addItem({ id: '1.2', label: 'Second' }, '1');
+
+        expect(provider.findItem('1')!.collapsibleState).toBe(TreeItemCollapsibleState.Expanded);
+      });
+
+      it('promotes a childless parent to Collapsed when children arrive', () => {
+        const provider = new SimpleTreeDataProvider<SimpleItem>([{ id: '1', label: 'Group' }]);
+
+        provider.setChildren('1', [{ id: '1.1', label: 'Child' }]);
+
+        expect(provider.findItem('1')!.collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
+      });
+
+      it('drops an Expanded parent to None once its last child is removed', () => {
+        const provider = new SimpleTreeDataProvider<SimpleItem>(expandedParent());
+
+        provider.setChildren('1', []);
+
+        expect(provider.findItem('1')!.collapsibleState).toBe(TreeItemCollapsibleState.None);
+      });
+
+      it('does not re-collapse a parent the user expanded via updateItem', () => {
+        const provider = new SimpleTreeDataProvider<SimpleItem>([
+          { id: '1', label: 'Group', children: [{ id: '1.1', label: 'Child' }] },
+        ]);
+        provider.updateItem('1', { collapsibleState: TreeItemCollapsibleState.Expanded });
+
+        provider.addItem({ id: '1.2', label: 'Another' }, '1');
+
+        expect(provider.findItem('1')!.collapsibleState).toBe(TreeItemCollapsibleState.Expanded);
       });
     });
 
@@ -687,6 +823,53 @@ describe('treeview', () => {
       const paged = withPagination(items, 1, 'More…');
 
       expect(paged[1]!.label).toBe('More…');
+    });
+
+    it('accepts an options object with a label', () => {
+      const items: Item[] = Array.from({ length: 3 }, (_, i) => ({
+        id: String(i),
+        label: String(i),
+      }));
+
+      const paged = withPagination(items, 1, { label: 'More…' });
+
+      expect(paged[1]!.label).toBe('More…');
+    });
+
+    it('attaches a command to the placeholder so the row is clickable', () => {
+      const items: Item[] = Array.from({ length: 3 }, (_, i) => ({
+        id: String(i),
+        label: String(i),
+      }));
+      const command = { command: 'myext.loadMore', title: 'Load more' };
+
+      const paged = withPagination(items, 1, { command });
+
+      expect(paged[1]!.id).toBe(LOAD_MORE_ID);
+      expect(paged[1]!.command).toBe(command);
+    });
+
+    it('leaves command unset when none is given', () => {
+      const items: Item[] = Array.from({ length: 3 }, (_, i) => ({
+        id: String(i),
+        label: String(i),
+      }));
+
+      const paged = withPagination(items, 1);
+
+      expect(paged[1]!.command).toBeUndefined();
+    });
+
+    it('honors a custom icon', () => {
+      const items: Item[] = Array.from({ length: 3 }, (_, i) => ({
+        id: String(i),
+        label: String(i),
+      }));
+      const iconPath = new ThemeIcon('chevron-down');
+
+      const paged = withPagination(items, 1, { iconPath });
+
+      expect(paged[1]!.iconPath).toBe(iconPath);
     });
   });
 

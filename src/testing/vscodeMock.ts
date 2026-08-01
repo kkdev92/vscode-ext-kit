@@ -78,6 +78,20 @@ export const LanguageStatusSeverity = {
   Error: 2,
 } as const;
 
+export const ColorThemeKind = {
+  Light: 1,
+  Dark: 2,
+  HighContrast: 3,
+  HighContrastLight: 4,
+} as const;
+
+export const TextEditorRevealType = {
+  Default: 0,
+  InCenter: 1,
+  InCenterIfOutsideViewport: 2,
+  AtTop: 3,
+} as const;
+
 // `Four`..`Nine` included for parity with the real `vscode.ViewColumn` enum.
 export const ViewColumn = {
   Active: -1,
@@ -97,6 +111,14 @@ export const ViewColumn = {
 // Value classes (no framework dependency — plain logic, no mock functions)
 // ================================================================
 
+/** Splices one listener out of a mock's listener array; backs the subscriptions' dispose(). */
+function removeFrom<L>(listeners: L[], listener: L): void {
+  const index = listeners.indexOf(listener);
+  if (index >= 0) {
+    listeners.splice(index, 1);
+  }
+}
+
 export class EventEmitter<T> {
   private listeners: ((e: T) => void)[] = [];
 
@@ -106,7 +128,9 @@ export class EventEmitter<T> {
   };
 
   fire(data: T): void {
-    this.listeners.forEach((l) => l(data));
+    // Deliver to a snapshot, as the real Emitter does: a listener disposing
+    // itself (or another) mid-fire must not make this fire skip anyone.
+    [...this.listeners].forEach((l) => l(data));
   }
 
   dispose(): void {
@@ -216,13 +240,25 @@ export class Range {
     endLine?: number,
     endCharacter?: number
   ) {
+    let start: Position;
+    let end: Position;
     if (typeof startOrStartLine === 'number') {
-      this.start = new Position(startOrStartLine, endOrStartCharacter as number);
-      this.end = new Position(endLine!, endCharacter!);
+      start = new Position(startOrStartLine, endOrStartCharacter as number);
+      end = new Position(endLine!, endCharacter!);
     } else {
-      this.start = startOrStartLine;
-      this.end = endOrStartCharacter as Position;
+      start = startOrStartLine;
+      end = endOrStartCharacter as Position;
     }
+    // The real Range guarantees start <= end and swaps when handed a
+    // reversed pair — which is also what makes a reversed Selection expose
+    // its `active` (earlier) position as `start`. Without this, contains()/
+    // intersection()/getText(range) behave differently in tests than in the
+    // extension host.
+    if (start.isAfter(end)) {
+      [start, end] = [end, start];
+    }
+    this.start = start;
+    this.end = end;
   }
 
   get isEmpty(): boolean {
@@ -451,24 +487,44 @@ export class WorkspaceEdit {
 export function createMockUri(framework: MockFrameworkLike) {
   const { fn } = framework;
   return {
-    parse: fn((path: string) => ({
-      fsPath: path,
-      path,
-      scheme: 'file',
-      toString: () => path,
-    })),
+    parse: fn((value: string) => {
+      // Extract the scheme like the real Uri.parse ('untitled:Untitled-1'
+      // has scheme 'untitled', not 'file'); a bare path defaults to 'file'.
+      const match = /^([A-Za-z][A-Za-z0-9+.-]*):(.*)$/.exec(value);
+      const scheme = match?.[1] ?? 'file';
+      const path = (match?.[2] ?? value).replace(/^\/\//, '');
+      return {
+        fsPath: path,
+        path,
+        scheme,
+        toString: () => value,
+      };
+    }),
     file: fn((path: string) => ({
       fsPath: path,
       path,
       scheme: 'file',
       toString: () => path,
     })),
-    joinPath: fn((uri: { path: string }, ...segments: string[]) => {
-      const newPath = [uri.path, ...segments].join('/').replace(/\/+/g, '/');
+    joinPath: fn((uri: { path: string; scheme?: string }, ...segments: string[]) => {
+      // The real Uri.joinPath resolves '.' and '..' segments (posix join
+      // semantics) — watchFile() relies on `joinPath(uri, '..')` producing
+      // the parent directory, so a mock that merely concatenated would let
+      // tests pass against paths the host never produces.
+      const parts: string[] = [];
+      for (const part of [uri.path, ...segments].join('/').split('/')) {
+        if (part === '' || part === '.') continue;
+        if (part === '..') {
+          parts.pop();
+          continue;
+        }
+        parts.push(part);
+      }
+      const newPath = `/${parts.join('/')}`;
       return {
         fsPath: newPath,
         path: newPath,
-        scheme: 'file',
+        scheme: uri.scheme ?? 'file',
         toString: () => newPath,
       };
     }),
@@ -542,7 +598,7 @@ export function createMockFileSystemWatcher(framework: MockFrameworkLike) {
   const createEventEmitter = () => {
     const listeners: ((uri: unknown) => void)[] = [];
     return {
-      fire: (uri: unknown) => listeners.forEach((l) => l(uri)),
+      fire: (uri: unknown) => [...listeners].forEach((l) => l(uri)),
       event: fn((listener: (uri: unknown) => void) => {
         listeners.push(listener);
         return { dispose: fn(() => listeners.splice(listeners.indexOf(listener), 1)) };
@@ -602,7 +658,7 @@ export function createMockTreeView<T = unknown>(framework: MockFrameworkLike) {
     dispose: fn(),
     /** Test hook: simulates the user checking/unchecking boxes in the UI. */
     _fireCheckboxState: (items: readonly (readonly [T, number])[]) => {
-      checkboxListeners.forEach((l) => l({ items }));
+      [...checkboxListeners].forEach((l) => l({ items }));
     },
   };
 }
@@ -631,7 +687,7 @@ export function createMockWebview(framework: MockFrameworkLike) {
     postMessage: fn().mockResolvedValue(true),
     /** Test hook: simulates the webview content posting `message` back to the extension host. */
     _fireMessage: (message: unknown) => {
-      messageListeners.forEach((l) => l(message));
+      [...messageListeners].forEach((l) => l(message));
     },
   };
 }
@@ -738,7 +794,7 @@ export function createMockQuickPick<T extends { label: string }>(framework: Mock
   const fireHide = (): void => {
     if (!visible) return;
     visible = false;
-    onDidHideListeners.forEach((l) => l());
+    [...onDidHideListeners].forEach((l) => l());
   };
 
   return {
@@ -785,15 +841,15 @@ export function createMockQuickPick<T extends { label: string }>(framework: Mock
     buttons: [] as unknown[],
     onDidAccept: fn((listener: () => void) => {
       onDidAcceptListeners.push(listener);
-      return { dispose: fn() };
+      return { dispose: fn(() => removeFrom(onDidAcceptListeners, listener)) };
     }),
     onDidTriggerButton: fn((listener: (button: unknown) => void) => {
       onDidTriggerButtonListeners.push(listener);
-      return { dispose: fn() };
+      return { dispose: fn(() => removeFrom(onDidTriggerButtonListeners, listener)) };
     }),
     onDidHide: fn((listener: () => void) => {
       onDidHideListeners.push(listener);
-      return { dispose: fn() };
+      return { dispose: fn(() => removeFrom(onDidHideListeners, listener)) };
     }),
     show: fn(() => {
       visible = true;
@@ -811,11 +867,11 @@ export function createMockQuickPick<T extends { label: string }>(framework: Mock
     /** Test hook: simulates the user accepting the current selection. */
     _accept: (selection?: T[]) => {
       if (selection) selectedItems = selection;
-      onDidAcceptListeners.forEach((l) => l());
+      [...onDidAcceptListeners].forEach((l) => l());
     },
     /** Test hook: simulates clicking a title-bar button (e.g. the back button). */
     _triggerButton: (button: unknown) => {
-      onDidTriggerButtonListeners.forEach((l) => l(button));
+      [...onDidTriggerButtonListeners].forEach((l) => l(button));
     },
     /** Test hook: simulates the QuickPick being dismissed (Escape, focus loss, ...). */
     _hide: () => {
@@ -838,7 +894,7 @@ export function createMockInputBox(framework: MockFrameworkLike) {
   const fireHide = (): void => {
     if (!visible) return;
     visible = false;
-    onDidHideListeners.forEach((l) => l());
+    [...onDidHideListeners].forEach((l) => l());
   };
 
   return {
@@ -861,19 +917,19 @@ export function createMockInputBox(framework: MockFrameworkLike) {
     buttons: [] as unknown[],
     onDidAccept: fn((listener: () => void) => {
       onDidAcceptListeners.push(listener);
-      return { dispose: fn() };
+      return { dispose: fn(() => removeFrom(onDidAcceptListeners, listener)) };
     }),
     onDidTriggerButton: fn((listener: (button: unknown) => void) => {
       onDidTriggerButtonListeners.push(listener);
-      return { dispose: fn() };
+      return { dispose: fn(() => removeFrom(onDidTriggerButtonListeners, listener)) };
     }),
     onDidHide: fn((listener: () => void) => {
       onDidHideListeners.push(listener);
-      return { dispose: fn() };
+      return { dispose: fn(() => removeFrom(onDidHideListeners, listener)) };
     }),
     onDidChangeValue: fn((listener: (value: string) => void) => {
       onDidChangeValueListeners.push(listener);
-      return { dispose: fn() };
+      return { dispose: fn(() => removeFrom(onDidChangeValueListeners, listener)) };
     }),
     show: fn(() => {
       visible = true;
@@ -889,15 +945,15 @@ export function createMockInputBox(framework: MockFrameworkLike) {
     /** Test hook: simulates the user typing into the input box. */
     _setValue: (v: string) => {
       value = v;
-      onDidChangeValueListeners.forEach((l) => l(v));
+      [...onDidChangeValueListeners].forEach((l) => l(v));
     },
     /** Test hook: simulates the user pressing Enter. */
     _accept: () => {
-      onDidAcceptListeners.forEach((l) => l());
+      [...onDidAcceptListeners].forEach((l) => l());
     },
     /** Test hook: simulates clicking a title-bar button (e.g. the back button). */
     _triggerButton: (button: unknown) => {
-      onDidTriggerButtonListeners.forEach((l) => l(button));
+      [...onDidTriggerButtonListeners].forEach((l) => l(button));
     },
     /** Test hook: simulates the input box being dismissed. */
     _hide: () => {
@@ -1166,6 +1222,10 @@ export function createMockTextEditor(
 
 function createMockWindowNamespace(framework: MockFrameworkLike) {
   const { fn } = framework;
+  // Backs `activeColorTheme` / `onDidChangeActiveColorTheme` / `_setColorTheme`
+  // so a test can flip the theme and have listeners actually fire, the same way
+  // `_fireChange` works on the standalone fixtures.
+  const colorThemeEmitter = new EventEmitter<vscode.ColorTheme>();
   return {
     createOutputChannel: fn((name: string, options?: { log: true }) => {
       if (options?.log) {
@@ -1225,6 +1285,30 @@ function createMockWindowNamespace(framework: MockFrameworkLike) {
       }
       return Promise.resolve(editor);
     }),
+    /**
+     * `Dark` by default. A plain mutable field, so a test can assign it
+     * directly — use {@link _setColorTheme} instead when listeners registered
+     * through `onDidChangeActiveColorTheme` also need to fire.
+     */
+    activeColorTheme: { kind: ColorThemeKind.Dark } as vscode.ColorTheme,
+    onDidChangeActiveColorTheme: fn((listener: (theme: vscode.ColorTheme) => void) =>
+      colorThemeEmitter.event(listener)
+    ),
+    /**
+     * Test hook: switches the active theme and notifies
+     * `onDidChangeActiveColorTheme` listeners, as VS Code does when the user
+     * picks a different theme.
+     */
+    _setColorTheme(kind: (typeof ColorThemeKind)[keyof typeof ColorThemeKind]): void {
+      const theme = { kind } as vscode.ColorTheme;
+      this.activeColorTheme = theme;
+      colorThemeEmitter.fire(theme);
+    },
+    // `undefined` (the user cancelled) by default: a dialog that silently
+    // returned a path would make a test pass for the wrong reason. Set a
+    // return value explicitly with `mockResolvedValue([Uri.file('/x')])`.
+    showOpenDialog: fn().mockResolvedValue(undefined),
+    showSaveDialog: fn().mockResolvedValue(undefined),
   };
 }
 
@@ -1372,6 +1456,13 @@ function createMockL10nNamespace(framework: MockFrameworkLike) {
  */
 export function createVSCodeMock(framework: MockFrameworkLike) {
   return {
+    /**
+     * The running VS Code version, as `vscode.version` reports it. Set to this
+     * library's `engines.vscode` floor so a diagnostics command that prints it
+     * has something plausible to print; assign a different string when a test
+     * needs to exercise version-dependent behavior.
+     */
+    version: '1.125.0',
     LogLevel,
     ProgressLocation,
     ConfigurationTarget,
@@ -1383,6 +1474,8 @@ export function createVSCodeMock(framework: MockFrameworkLike) {
     QuickInputButtonLocation,
     LanguageStatusSeverity,
     ViewColumn,
+    ColorThemeKind,
+    TextEditorRevealType,
     EventEmitter,
     TreeItem,
     ThemeIcon,

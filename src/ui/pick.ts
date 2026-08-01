@@ -31,8 +31,10 @@ export interface PickItemDisplay {
   alwaysShow?: boolean;
   /**
    * Inline buttons rendered on this item. Build them with
-   * {@link toPickButton}. Only shown via the `createQuickPick` code path —
-   * see {@link pickOne}.
+   * {@link toPickButton} and handle presses with
+   * {@link PickOptions.onTriggerItemButton} — without a handler they render
+   * but do nothing, since VS Code reports presses through an event only a
+   * `QuickPick` exposes.
    */
   buttons?: readonly vscode.QuickInputButton[];
   /**
@@ -66,7 +68,8 @@ export interface PickButtonOptions {
 }
 
 /** Options accepted by {@link pickOne} and {@link pickMany}. */
-export interface PickOptions extends vscode.QuickPickOptions {
+export interface PickOptions<T extends vscode.QuickPickItem = vscode.QuickPickItem>
+  extends vscode.QuickPickOptions {
   /**
    * Instructional text shown below the filter box and above the items.
    *
@@ -75,6 +78,68 @@ export interface PickOptions extends vscode.QuickPickOptions {
    * does not honor {@link vscode.QuickPickOptions.onDidSelectItem}.
    */
   prompt?: string;
+  /**
+   * Buttons shown in the picker's title bar (or inside the input box, per each
+   * button's `location`). Build them with {@link toPickButton} and handle
+   * presses with {@link onTriggerButton}.
+   */
+  buttons?: readonly vscode.QuickInputButton[];
+  /**
+   * Called when one of {@link buttons} is pressed. The picker stays open —
+   * call `picker.hide()` to dismiss it, which resolves the pick with
+   * `undefined`.
+   *
+   * @param button - The button pressed; compare by identity against the one
+   *   you built to tell several apart
+   * @param picker - The live `QuickPick`, for reassigning `items`, toggling
+   *   `busy`, or hiding it
+   */
+  onTriggerButton?: (button: vscode.QuickInputButton, picker: vscode.QuickPick<T>) => void;
+  /**
+   * Called when an inline button on an item (see
+   * {@link PickItemDisplay.buttons}) is pressed. The picker stays open, so a
+   * row-level action can update the list in place.
+   *
+   * @param button - The button pressed
+   * @param item - The item it belongs to, typed as your item type
+   * @param picker - The live `QuickPick`, for reassigning `items`, toggling
+   *   `busy`, or hiding it
+   *
+   * @example
+   * ```typescript
+   * // A delete button on every row that removes it and leaves the picker open.
+   * const remove = toPickButton('trash', { tooltip: 'Delete' });
+   * const chosen = await pickOne(
+   *   keys.map((key) => ({ ...toPickItem(key, { label: key }), buttons: [remove] })),
+   *   {
+   *     onTriggerItemButton: async (_button, item, picker) => {
+   *       await secrets.delete(item.value);
+   *       picker.items = picker.items.filter((candidate) => candidate !== item);
+   *     },
+   *   }
+   * );
+   * ```
+   */
+  onTriggerItemButton?: (
+    button: vscode.QuickInputButton,
+    item: T,
+    picker: vscode.QuickPick<T>
+  ) => void;
+}
+
+/**
+ * Whether `opts` asks for something `showQuickPick` cannot express, so the
+ * picker has to be built with `createQuickPick` instead.
+ */
+function needsQuickPickPath<T extends vscode.QuickPickItem>(
+  opts: PickOptions<T> | undefined
+): boolean {
+  return (
+    opts?.prompt !== undefined ||
+    opts?.buttons !== undefined ||
+    opts?.onTriggerButton !== undefined ||
+    opts?.onTriggerItemButton !== undefined
+  );
 }
 
 // ============================================
@@ -143,6 +208,11 @@ export function toPickSeparator(label = ''): vscode.QuickPickItem {
  * of a hand-built {@link vscode.ThemeIcon} the same way {@link toPickItem}
  * does for item icons.
  *
+ * Pass the result to {@link PickOptions.buttons} (title bar / input box) or
+ * {@link PickItemDisplay.buttons} (inline on a row), and handle presses with
+ * {@link PickOptions.onTriggerButton} / {@link PickOptions.onTriggerItemButton}.
+ * A button with no handler renders but does nothing.
+ *
  * @param icon - A codicon name (e.g. `'refresh'`) or an explicit icon path
  * @param opts - Tooltip, render location, and toggle state
  * @returns A button usable as a `QuickPick`/`InputBox` button or a
@@ -193,7 +263,7 @@ function isThenable<T>(value: unknown): value is Thenable<T> {
 /** Applies the subset of `PickOptions` that map onto `QuickPick<T>` properties (naming differs between the two APIs — e.g. `placeHolder` vs `placeholder`). */
 function applyQuickPickOptions<T extends vscode.QuickPickItem>(
   quickPick: vscode.QuickPick<T>,
-  opts: PickOptions | undefined
+  opts: PickOptions<T> | undefined
 ): void {
   quickPick.title = opts?.title;
   quickPick.placeholder = opts?.placeHolder;
@@ -201,6 +271,9 @@ function applyQuickPickOptions<T extends vscode.QuickPickItem>(
   quickPick.matchOnDescription = opts?.matchOnDescription ?? false;
   quickPick.matchOnDetail = opts?.matchOnDetail ?? false;
   quickPick.ignoreFocusOut = opts?.ignoreFocusOut ?? false;
+  if (opts?.buttons !== undefined) {
+    quickPick.buttons = opts.buttons;
+  }
 }
 
 /**
@@ -212,7 +285,7 @@ function applyQuickPickOptions<T extends vscode.QuickPickItem>(
  */
 function pickFromQuickPick<T extends vscode.QuickPickItem>(
   items: readonly T[] | Thenable<readonly T[]>,
-  opts: PickOptions | undefined,
+  opts: PickOptions<T> | undefined,
   many: boolean
 ): Promise<T | T[] | undefined> {
   return new Promise((resolve, reject) => {
@@ -240,6 +313,19 @@ function pickFromQuickPick<T extends vscode.QuickPickItem>(
     quickPick.onDidHide(() => {
       settle(() => resolve(undefined));
     });
+
+    // Handing the picker to the callback is what makes buttons useful at all:
+    // a press usually has to mutate the list it was pressed in (drop the row,
+    // refresh it, mark it busy) and only the live QuickPick can do that.
+    const { onTriggerButton, onTriggerItemButton } = opts ?? {};
+    if (onTriggerButton) {
+      quickPick.onDidTriggerButton((button) => onTriggerButton(button, quickPick));
+    }
+    if (onTriggerItemButton) {
+      quickPick.onDidTriggerItemButton((event) =>
+        onTriggerItemButton(event.button, event.item, quickPick)
+      );
+    }
 
     if (!isThenable<readonly T[]>(items)) {
       // Assign before `show()` so a synchronous list never flashes empty, and
@@ -303,9 +389,9 @@ function pickFromQuickPick<T extends vscode.QuickPickItem>(
  */
 export async function pickOne<T extends vscode.QuickPickItem>(
   items: readonly T[] | Thenable<readonly T[]>,
-  opts?: PickOptions
+  opts?: PickOptions<T>
 ): Promise<T | undefined> {
-  if (isThenable<readonly T[]>(items) || opts?.prompt !== undefined) {
+  if (isThenable<readonly T[]>(items) || needsQuickPickPath(opts)) {
     return (await pickFromQuickPick(items, opts, false)) as T | undefined;
   }
   return vscode.window.showQuickPick(items, { ...opts, canPickMany: false }) as Promise<
@@ -339,9 +425,9 @@ export async function pickOne<T extends vscode.QuickPickItem>(
  */
 export async function pickMany<T extends vscode.QuickPickItem>(
   items: readonly T[] | Thenable<readonly T[]>,
-  opts?: PickOptions
+  opts?: PickOptions<T>
 ): Promise<T[] | undefined> {
-  if (isThenable<readonly T[]>(items) || opts?.prompt !== undefined) {
+  if (isThenable<readonly T[]>(items) || needsQuickPickPath(opts)) {
     return (await pickFromQuickPick(items, opts, true)) as T[] | undefined;
   }
   return vscode.window.showQuickPick(items, { ...opts, canPickMany: true }) as Promise<

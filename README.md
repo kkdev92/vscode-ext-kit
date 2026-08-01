@@ -14,6 +14,11 @@ A zero-dependency, type-safe utility library for VS Code extension development, 
 - **Typed webview RPC** — [`createWebviewRpc`](#webview) gives webviews an awaitable request/response + event channel over `postMessage`, with timeouts and `AbortSignal` support.
 - **Zero runtime dependencies, no Node.js API usage** — works in the web/remote extension host as well as desktop.
 
+> **Requires VS Code `^1.125.0`** (and Node.js `>=22.12.0` to build). This floor
+> propagates: an extension depending on this library has to declare the same
+> `engines.vscode`, which drops hosts older than roughly June 2026. See
+> [Installation](#installation) for the `@types/vscode` caveat that comes with it.
+
 > **Status:** Active (best-effort maintenance)
 >
 > **Quick Links:** [Installation](#installation) | [Quick Start](#quick-start) | [API Reference](#api-reference) | [Migration from 0.x](#migration-from-0x)
@@ -92,16 +97,41 @@ A zero-dependency, type-safe utility library for VS Code extension development, 
 npm install @kkdev92/vscode-ext-kit
 ```
 
-> Requires VS Code `^1.125.0` and Node.js `>=22.0.0`. Zero runtime dependencies; the published package uses no Node.js APIs, so it also runs in the web/remote extension host.
+> Requires VS Code `^1.125.0` and Node.js `>=22.12.0`. Zero runtime dependencies; the published package uses no Node.js APIs, so it also runs in the web/remote extension host.
 
-Four entry points are published:
+Because `engines.vscode` is a floor your own extension inherits, raising it is a
+user-visible change for anyone depending on you — set the same `^1.125.0` in your
+manifest rather than a lower value you can't honor.
+
+**Native ESM, but no bundler required.** A CommonJS extension compiled with
+plain `tsc` can `require()` this package directly — Node's `require(esm)`
+handles it (Node **22.12+**, which is why `engines.node` says `>=22.12.0`).
+Bundled (esbuild/webpack) and ESM extensions have no version wrinkle beyond
+that. Nothing about the package assumes a bundler exists.
+
+One wrinkle to expect: `@types/vscode` lags the VS Code release line, since
+DefinitelyTyped doesn't publish on VS Code's weekly cadence. This library pins
+`~1.125.0`, the newest available at release time, and compiles against exactly
+the version it declares. If your extension targets a newer host than the types
+cover, the API you're reaching for may be absent from the types while being
+present at runtime; pin `@types/vscode` to the newest published version and
+declare `engines.vscode` to match it.
+
+The published entry points:
 
 | Import | Contents |
 | --- | --- |
 | `@kkdev92/vscode-ext-kit` | The full API — everything in this document |
 | `@kkdev92/vscode-ext-kit/timing` | `debounce`/`throttle`/`withTimeout`/... only, no `vscode` import — safe for a webview bundle |
 | `@kkdev92/vscode-ext-kit/retry` | `retry`/`RetryExhaustedError` only, no `vscode` import |
-| `@kkdev92/vscode-ext-kit/testing` | `vscode` mocks for unit tests — see [Testing Your Extension](#testing-your-extension) |
+| `@kkdev92/vscode-ext-kit/format` | `pluralFor`/`formatNumberFor`/`formatDateFor`/`formatRelativeTimeFor` — the `Intl` core behind `l10n`, no `vscode` import |
+| `@kkdev92/vscode-ext-kit/webview-client` | The webview-side end of [`createWebviewRpc`](#webview), no `vscode` import — bundle it into your webview code |
+| `@kkdev92/vscode-ext-kit/testing` | `vscode` mocks for unit tests, runner-agnostic — see [Testing Your Extension](#testing-your-extension) |
+| `@kkdev92/vscode-ext-kit/testing/vitest` | A ready-made `vscode` module stand-in to alias, for Vitest |
+| `@kkdev92/vscode-ext-kit/testing/vitest-config` | The Vitest config that setup needs, as a mergeable value |
+
+`./package.json` is exported too, for build scripts that bake the resolved
+version into a bundle.
 
 ## Quick Start
 
@@ -124,6 +154,8 @@ The kit is sugar, not a framework: every module below (config, storage, UI, ...)
 ## API Reference
 
 Every export below is available from the package root (`@kkdev92/vscode-ext-kit`) unless noted otherwise; see [`src/index.ts`](src/index.ts) for the complete list.
+
+**Disposal convention.** `createExtensionKit`, `createScope`, `createTreeView`, `createWebviewPanel`, `registerWebviewPanelSerializer`, and `registerWebviewView` add themselves to `context.subscriptions` — there is nothing to push. Everything else returns a `Disposable` you own and push yourself (or hand to a kit's `disposables`): that includes the storage factories — which take a `context` only to reach `globalState`/`secrets`, **not** to self-register — and the context-free factories (`createLogger`, `createStatusBarItem`, `createLanguageStatusItem`, `createFileWatcher`, `watchSetting`, ...).
 
 ### Extension Kit
 
@@ -353,7 +385,20 @@ const name = await inputText({
 });
 ```
 
-`toPickItem(value, display)` separates the returned **value** from what's displayed (`label`/`description`/`detail`/`icon`/`resourceUri`/...); `pickMany` mirrors `pickOne` for multi-selection. Both accept a plain array or a `Thenable` of items, and `PickOptions` adds `prompt` on top of `vscode.QuickPickOptions`. `toPickSeparator(label?)` inserts a non-selectable group divider. `toPickButton(icon, opts?)` builds a `QuickInputButton` — taking a codicon name like `toPickItem` does — with `location` (title / inline / inside the input box) and `toggled` for on/off toggle buttons whose `toggle.checked` VS Code flips in place. `inputText`'s `InputTextOptions` adds `password` and `ignoreFocusOut` to the usual prompt/placeholder/`validate`.
+`toPickItem(value, display)` separates the returned **value** from what's displayed (`label`/`description`/`detail`/`icon`/`resourceUri`/...); `pickMany` mirrors `pickOne` for multi-selection. Both accept a plain array or a `Thenable` of items, and `PickOptions` adds `prompt` on top of `vscode.QuickPickOptions`. `toPickSeparator(label?)` inserts a non-selectable group divider. `toPickButton(icon, opts?)` builds a `QuickInputButton` — taking a codicon name like `toPickItem` does — with `location` (title / inline / inside the input box) and `toggled` for on/off toggle buttons whose `toggle.checked` VS Code flips in place. Wire presses up through `PickOptions`: `buttons` for the title bar, `onTriggerButton`/`onTriggerItemButton` for the handlers. Both receive the live `QuickPick`, so a row-level action can update the list in place and leave the picker open:
+
+```typescript
+const remove = toPickButton('trash', { tooltip: 'Delete' });
+const chosen = await pickOne(
+  keys.map((key) => ({ ...toPickItem(key, { label: key }), buttons: [remove] })),
+  {
+    onTriggerItemButton: async (_button, item, picker) => {
+      await secrets.delete(item.value);
+      picker.items = picker.items.filter((candidate) => candidate !== item);
+    },
+  }
+);
+``` `inputText`'s `InputTextOptions` adds `password` and `ignoreFocusOut` to the usual prompt/placeholder/`validate`.
 
 ### Wizard
 
@@ -482,7 +527,7 @@ if (result.cancelled) return;
 const [buildResult, testResult, publishResult] = result.results; // each precisely typed
 ```
 
-`withProgress`'s `ProgressOptions`: `location` (default `vscode.ProgressLocation.Notification`) and `cancellable`. `withSteps` takes steps as **rest arguments** (not an array) so `result.results` infers a precise per-step tuple type without an `as const`; each step's `weight` (default `1`) determines how much of the bar it fills on completion. `toAbortSignal(token)` bridges a `CancellationToken` to the `AbortSignal` APIs like `fetch` expect.
+`withProgress`'s `ProgressOptions`: `location` (default `vscode.ProgressLocation.Notification`) and `cancellable`. `withSteps` takes steps as **rest arguments** (not an array) so `result.results` infers a precise per-step tuple type without an `as const`; each step's `weight` (default `1`) determines how much of the bar it fills on completion. Cancellation always comes back as `{ completed: false, cancelled: true }` with the results gathered so far — whether the token tripped between steps or a running step rejected because of it — so one `if (result.cancelled)` branch covers both and only real errors throw. `toAbortSignal(token)` bridges a `CancellationToken` to the `AbortSignal` APIs like `fetch` expect.
 
 ### File Watcher
 
@@ -569,7 +614,7 @@ const treeView = createTreeView(context, 'myext.files', new FileTreeProvider(), 
 treeView.badge = { value: 3, tooltip: '3 pending' }; // the real vscode.TreeView is returned
 ```
 
-`BaseTreeDataProvider` caches `getChildrenOf` results per element and refreshes just the affected subtree via `refresh(element?)`; override `getParentOf` to enable `TreeView.reveal()`. `SimpleTreeDataProvider<T>` is a ready-made in-memory implementation (`setItems`/`setChildren`/`addItem`/`updateItem`/`removeItem`/`findItem`, all O(1) plus subtree size, and nested-aware — including `reveal()` support out of the box). Checkbox toggles surface through `onDidChangeCheckboxState` (bridged automatically by `createTreeView`); `createDragAndDropController({ mimeType, onDrop })` builds a `TreeDragAndDropController`; `withPagination(items, pageSize, loadMoreLabel?)` caps a level at `pageSize` and appends a `LOAD_MORE_ID`-tagged sentinel that your `getChildrenOf` recognizes to load the next page.
+`BaseTreeDataProvider` caches `getChildrenOf` results per element and refreshes just the affected subtree via `refresh(element?)`; override `getParentOf` to enable `TreeView.reveal()`. `SimpleTreeDataProvider<T>` is a ready-made in-memory implementation (`setItems`/`setChildren`/`addItem`/`updateItem`/`removeItem`/`findItem`, all O(1) plus subtree size, and nested-aware — including `reveal()` support out of the box). A `collapsibleState` you set is respected: a group built `Expanded` stays open across partial updates, and `addItem(item, { parentId?, index? })` can put a node at a position — pinning a "Favorites" group on top without `setItems` rebuilding (and collapsing) the whole tree. Checkbox toggles surface through `onDidChangeCheckboxState` (bridged automatically by `createTreeView`); `createDragAndDropController({ mimeType, onDrop })` builds a `TreeDragAndDropController`; `withPagination(items, pageSize, { label?, command?, iconPath? })` caps a level at `pageSize` and appends a `LOAD_MORE_ID`-tagged sentinel — pass a `command` and the row is clickable, otherwise your `getChildrenOf` recognizes the id itself. A bare string still works in place of the options object.
 
 ### Webview
 
@@ -601,7 +646,23 @@ panel.rpc.emit('theme', { kind: 'dark' });
 
 `createWebviewPanel<S, TIn, TOut>(context, options: WebviewOptions)` returns a `ManagedWebviewPanel`: `setHtml`/`setHtmlFromTemplate`, raw `postMessage`/`onMessage` (prefer `.rpc` for request/response), `onDidChangeViewState`, `onDidDispose`, `reveal`, `asWebviewUri`, and `.native`. `registerWebviewPanelSerializer` restores panels across editor restarts; `registerWebviewView` is the sidebar/panel-view equivalent, resolving to a `ManagedWebviewView` each time VS Code shows the view.
 
-`createWebviewRpc<S>(webview)` — also exposed as `.rpc` on both managed wrappers, or callable directly on any raw `vscode.Webview` (e.g. inside `registerWebviewView`'s resolve callback) — layers a typed, awaitable `request`/`onRequest`/`emit`/`onEvent` channel over the webview's raw `postMessage`. A `WebviewRpcSchema` declares `webviewRequests`/`hostRequests`/`hostEvents`/`webviewEvents`; `request(method, params, { signal?, timeoutMs? })` rejects on timeout, abort, an error response, or the RPC being disposed (e.g. the panel closes) while in flight. This library ships only the extension-host side — copy the small webview-side counterpart from `createWebviewRpc`'s JSDoc example in [`src/views/webview/rpc.ts`](src/views/webview/rpc.ts) into your webview bundle.
+`createWebviewRpc<S>(webview)` — also exposed as `.rpc` on both managed wrappers, or callable directly on any raw `vscode.Webview` (e.g. inside `registerWebviewView`'s resolve callback) — layers a typed, awaitable `request`/`onRequest`/`emit`/`onEvent` channel over the webview's raw `postMessage`. A `WebviewRpcSchema` declares `webviewRequests`/`hostRequests`/`hostEvents`/`webviewEvents`. Request fields are named after the side that **answers** the request — `hostRequests` are the ones you bind with `rpc.onRequest`, `webviewRequests` the ones you send with `rpc.request` — while event fields are named after the side that **sends** them. `request(method, params, { signal?, timeoutMs? })` rejects on timeout, abort, an error response, or the RPC being disposed (e.g. the panel closes) while in flight.
+
+The webview side is one import — `createWebviewRpcClient` from `@kkdev92/vscode-ext-kit/webview-client` (no `vscode` import, so it bundles into webview code). It is written against the same `WebviewRpcSchema` as the host, so the two sides cannot drift, and it mirrors the host's semantics: `request`/`onRequest`/`emit`/`onEvent`, `timeoutMs`/`signal` cancellation that propagates across the wire, and `dispose`.
+
+```typescript
+// Webview bundle:
+import { createWebviewRpcClient } from '@kkdev92/vscode-ext-kit/webview-client';
+
+const vscodeApi = acquireVsCodeApi(); // keep it for getState/setState
+const rpc = createWebviewRpcClient<MyRpcSchema>({ vscodeApi });
+
+rpc.onRequest('getSelection', () => ({ text: document.getSelection()?.toString() ?? '' }));
+rpc.onEvent('theme', ({ kind }) => applyTheme(kind));
+const { ok } = await rpc.request('save', { content: editor.value }, { timeoutMs: 5000 });
+```
+
+Pass `vscodeApi` whenever your webview already calls `acquireVsCodeApi()` itself — VS Code allows exactly one call per session. Omit it and the client calls it for you.
 
 `generateCSP(webview, options?)` builds a strict-by-default CSP string — `allowInlineStyles`/`allowAnyHttpsImages` are opt-in, both `false` by default; `generateNonce()` makes a random nonce. `loadHtmlTemplate`/`createWebviewHtml`/`escapeHtml` cover simple `{{variable}}` templating (`{{raw:variable}}` for unescaped, `{{webviewUri:path}}` for resolved URIs) and HTML escaping.
 
@@ -647,7 +708,7 @@ formatDate(new Date(), { dateStyle: 'long' }); // "February 4, 2026"
 formatRelativeTime(-1, 'day'); // "1 day ago"
 ```
 
-`l10n.t(...)` matches the `l10n.t(...)`/`vscode.l10n.t(...)` callee shape `@vscode/l10n-dev`'s static extractor scans for (the 0.x bare `t()` export did not). `getLanguage()` returns the current display language (`vscode.env.language`); `isLanguage(locale)` checks a prefix match (e.g. `isLanguage('ja')`). `plural`/`formatNumber`/`formatDate`/`formatRelativeTime` use VS Code's current display language via `Intl`; their vscode-free cores (`pluralFor`, `formatNumberFor`, `formatDateFor`, `formatRelativeTimeFor`, each taking an explicit language) are reusable from a webview bundle. `getOrCreateCached(cache, key, limit, create)` — the bounded-LRU helper backing all four formatter caches — is exported for reuse in your own code.
+`l10n.t(...)` matches the `l10n.t(...)`/`vscode.l10n.t(...)` callee shape `@vscode/l10n-dev`'s static extractor scans for (the 0.x bare `t()` export did not). `getLanguage()` returns the current display language (`vscode.env.language`); `isLanguage(locale)` checks a prefix match (e.g. `isLanguage('ja')`). `plural`/`formatNumber`/`formatDate`/`formatRelativeTime` use VS Code's current display language via `Intl`; their vscode-free cores (`pluralFor`, `formatNumberFor`, `formatDateFor`, `formatRelativeTimeFor`, each taking an explicit language) are reusable from a webview bundle — import them from `@kkdev92/vscode-ext-kit/format` so the bundle doesn't pull in `vscode` through the root barrel. `getOrCreateCached(cache, key, limit, create)` — the bounded-LRU helper backing all four formatter caches — is exported for reuse in your own code.
 
 ## Migration from 0.x
 
@@ -657,9 +718,39 @@ formatRelativeTime(-1, 'day'); // "1 day ago"
 
 ## Testing Your Extension
 
-`@kkdev92/vscode-ext-kit/testing` is a separate, zero-dependency subpath that mocks the entire `vscode` module for unit tests — no running extension host required. It never imports `vitest` (or any other test runner) itself: every factory takes a small `{ fn }`-shaped object instead, so the exact same mocks work with Vitest's `vi`, Jest's `jest`, or a compatible object.
+`@kkdev92/vscode-ext-kit/testing` mocks the entire `vscode` module for unit tests — no running extension host required. It's a separate subpath with no dependencies, and it never imports a test runner: every factory takes a small `{ fn }`-shaped object instead, so the same mocks work with Vitest's `vi`, Jest's `jest`, or a compatible object.
 
-### Setup (once per project)
+### Setup for Vitest
+
+Merge the shipped config. That's the whole setup — no setup file, and nothing to know about how Vitest resolves `vscode`:
+
+```ts
+// vitest.config.ts
+import { defineConfig, mergeConfig } from 'vitest/config';
+import { vscodeExtKitVitestConfig } from '@kkdev92/vscode-ext-kit/testing/vitest-config';
+
+export default mergeConfig(
+  vscodeExtKitVitestConfig,
+  defineConfig({
+    test: {
+      environment: 'node',
+      clearMocks: true, // resets call history between tests automatically
+    },
+  })
+);
+```
+
+Any test file can now `import * as vscode from 'vscode'` and get the mock, and so can the code under test — including a built `dist/` bundle you want to `activate()` for real.
+
+<details>
+<summary>What that config does, and the <code>vi.mock</code> alternative</summary>
+
+Two things have to line up, and each produces a confusing error on its own:
+
+- **`resolve.alias`** maps `vscode` to `@kkdev92/vscode-ext-kit/testing/vitest`, a module that exports `createVSCodeMock(vi)`'s result as named exports (which is what `import * as vscode` reads — a default export alone leaves every `vscode.window` call undefined).
+- **`server.deps.inline`** keeps Vitest from externalizing this kit. Externalized packages load through Node's ESM loader, which knows nothing about Vite aliases, so without it the kit's own `import * as vscode from 'vscode'` fails with `Cannot find package 'vscode'` even though your test files resolve it fine.
+
+The older `vi.mock` approach still works and remains the right choice for Jest (and for anyone who wants a fresh mock per test file):
 
 ```ts
 // tests/setup.ts
@@ -669,31 +760,11 @@ import { createVSCodeMock } from '@kkdev92/vscode-ext-kit/testing';
 vi.mock('vscode', () => createVSCodeMock(vi));
 ```
 
-```ts
-// vitest.config.ts
-import { defineConfig } from 'vitest/config';
+It needs `setupFiles: ['./tests/setup.ts']` plus the same `server.deps.inline` entry. Note that `vi.mock` only applies to modules Vite transformed, which is why it cannot reach a prebuilt bundle.
 
-export default defineConfig({
-  test: {
-    globals: true,
-    environment: 'node',
-    setupFiles: ['./tests/setup.ts'],
-    clearMocks: true, // resets call history between tests automatically
-    server: {
-      deps: {
-        // Required: Vitest externalizes node_modules by default, loading them
-        // through Node's ESM loader instead of Vite's transform. This kit
-        // imports 'vscode' itself (e.g. in core/logger.ts), so without
-        // inlining it here, `vi.mock('vscode', ...)` never reaches that
-        // import and calling into the kit throws "Cannot find package
-        // 'vscode'". This is not a workaround for an edge case — any project
-        // that imports this kit from `node_modules` needs this entry.
-        inline: ['@kkdev92/vscode-ext-kit'],
-      },
-    },
-  },
-});
-```
+Because an alias is evaluated once per test file, the mock is shared across the tests in that file. `clearMocks: true` handles call history; a field a test assigns itself (say `window.activeTextEditor`) should be restored in an `afterEach`, or use the standalone builders below for a fixture scoped to one test.
+
+</details>
 
 ### Testing an activation function
 

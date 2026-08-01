@@ -367,7 +367,17 @@ export async function withTimeout<T>(
   options: WithTimeoutOptions = {}
 ): Promise<T> {
   const externalSignal = options.signal;
-  externalSignal?.throwIfAborted();
+  if (externalSignal?.aborted === true) {
+    // A promise-form operation was already created by the caller's argument
+    // evaluation, and the synchronous throw below skips the `.then` that would
+    // have handled it. Claim its rejection first, or a promise that settles
+    // after this point surfaces as an unhandled rejection. A function-form
+    // operation has not run yet, so there is nothing to guard.
+    if (typeof operation !== 'function') {
+      void operation.catch(() => undefined);
+    }
+    externalSignal.throwIfAborted();
+  }
 
   const controller = new AbortController();
   const forwardAbort = (): void => controller.abort(externalSignal?.reason);
