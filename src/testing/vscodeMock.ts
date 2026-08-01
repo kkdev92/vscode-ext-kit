@@ -78,6 +78,20 @@ export const LanguageStatusSeverity = {
   Error: 2,
 } as const;
 
+export const ColorThemeKind = {
+  Light: 1,
+  Dark: 2,
+  HighContrast: 3,
+  HighContrastLight: 4,
+} as const;
+
+export const TextEditorRevealType = {
+  Default: 0,
+  InCenter: 1,
+  InCenterIfOutsideViewport: 2,
+  AtTop: 3,
+} as const;
+
 // `Four`..`Nine` included for parity with the real `vscode.ViewColumn` enum.
 export const ViewColumn = {
   Active: -1,
@@ -1166,6 +1180,10 @@ export function createMockTextEditor(
 
 function createMockWindowNamespace(framework: MockFrameworkLike) {
   const { fn } = framework;
+  // Backs `activeColorTheme` / `onDidChangeActiveColorTheme` / `_setColorTheme`
+  // so a test can flip the theme and have listeners actually fire, the same way
+  // `_fireChange` works on the standalone fixtures.
+  const colorThemeEmitter = new EventEmitter<vscode.ColorTheme>();
   return {
     createOutputChannel: fn((name: string, options?: { log: true }) => {
       if (options?.log) {
@@ -1225,6 +1243,30 @@ function createMockWindowNamespace(framework: MockFrameworkLike) {
       }
       return Promise.resolve(editor);
     }),
+    /**
+     * `Dark` by default. A plain mutable field, so a test can assign it
+     * directly — use {@link _setColorTheme} instead when listeners registered
+     * through `onDidChangeActiveColorTheme` also need to fire.
+     */
+    activeColorTheme: { kind: ColorThemeKind.Dark } as vscode.ColorTheme,
+    onDidChangeActiveColorTheme: fn((listener: (theme: vscode.ColorTheme) => void) =>
+      colorThemeEmitter.event(listener)
+    ),
+    /**
+     * Test hook: switches the active theme and notifies
+     * `onDidChangeActiveColorTheme` listeners, as VS Code does when the user
+     * picks a different theme.
+     */
+    _setColorTheme(kind: (typeof ColorThemeKind)[keyof typeof ColorThemeKind]): void {
+      const theme = { kind } as vscode.ColorTheme;
+      this.activeColorTheme = theme;
+      colorThemeEmitter.fire(theme);
+    },
+    // `undefined` (the user cancelled) by default: a dialog that silently
+    // returned a path would make a test pass for the wrong reason. Set a
+    // return value explicitly with `mockResolvedValue([Uri.file('/x')])`.
+    showOpenDialog: fn().mockResolvedValue(undefined),
+    showSaveDialog: fn().mockResolvedValue(undefined),
   };
 }
 
@@ -1372,6 +1414,13 @@ function createMockL10nNamespace(framework: MockFrameworkLike) {
  */
 export function createVSCodeMock(framework: MockFrameworkLike) {
   return {
+    /**
+     * The running VS Code version, as `vscode.version` reports it. Set to this
+     * library's `engines.vscode` floor so a diagnostics command that prints it
+     * has something plausible to print; assign a different string when a test
+     * needs to exercise version-dependent behavior.
+     */
+    version: '1.125.0',
     LogLevel,
     ProgressLocation,
     ConfigurationTarget,
@@ -1383,6 +1432,8 @@ export function createVSCodeMock(framework: MockFrameworkLike) {
     QuickInputButtonLocation,
     LanguageStatusSeverity,
     ViewColumn,
+    ColorThemeKind,
+    TextEditorRevealType,
     EventEmitter,
     TreeItem,
     ThemeIcon,
