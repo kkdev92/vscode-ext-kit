@@ -14,6 +14,11 @@ A zero-dependency, type-safe utility library for VS Code extension development, 
 - **Typed webview RPC** — [`createWebviewRpc`](#webview) gives webviews an awaitable request/response + event channel over `postMessage`, with timeouts and `AbortSignal` support.
 - **Zero runtime dependencies, no Node.js API usage** — works in the web/remote extension host as well as desktop.
 
+> **Requires VS Code `^1.125.0`** (and Node.js `>=22.0.0` to build). This floor
+> propagates: an extension depending on this library has to declare the same
+> `engines.vscode`, which drops hosts older than roughly June 2026. See
+> [Installation](#installation) for the `@types/vscode` caveat that comes with it.
+
 > **Status:** Active (best-effort maintenance)
 >
 > **Quick Links:** [Installation](#installation) | [Quick Start](#quick-start) | [API Reference](#api-reference) | [Migration from 0.x](#migration-from-0x)
@@ -93,6 +98,18 @@ npm install @kkdev92/vscode-ext-kit
 ```
 
 > Requires VS Code `^1.125.0` and Node.js `>=22.0.0`. Zero runtime dependencies; the published package uses no Node.js APIs, so it also runs in the web/remote extension host.
+
+Because `engines.vscode` is a floor your own extension inherits, raising it is a
+user-visible change for anyone depending on you — set the same `^1.125.0` in your
+manifest rather than a lower value you can't honor.
+
+One wrinkle to expect: `@types/vscode` lags the VS Code release line, since
+DefinitelyTyped doesn't publish on VS Code's weekly cadence. This library pins
+`~1.125.0`, the newest available at release time, and compiles against exactly
+the version it declares. If your extension targets a newer host than the types
+cover, the API you're reaching for may be absent from the types while being
+present at runtime; pin `@types/vscode` to the newest published version and
+declare `engines.vscode` to match it.
 
 Four entry points are published:
 
@@ -353,7 +370,7 @@ const name = await inputText({
 });
 ```
 
-`toPickItem(value, display)` separates the returned **value** from what's displayed (`label`/`description`/`detail`/`icon`/`resourceUri`/...); `pickMany` mirrors `pickOne` for multi-selection. Both accept a plain array or a `Thenable` of items, and `PickOptions` adds `prompt` on top of `vscode.QuickPickOptions`. `toPickSeparator(label?)` inserts a non-selectable group divider. `toPickButton(icon, opts?)` builds a `QuickInputButton` — taking a codicon name like `toPickItem` does — with `location` (title / inline / inside the input box) and `toggled` for on/off toggle buttons whose `toggle.checked` VS Code flips in place. `inputText`'s `InputTextOptions` adds `password` and `ignoreFocusOut` to the usual prompt/placeholder/`validate`.
+`toPickItem(value, display)` separates the returned **value** from what's displayed (`label`/`description`/`detail`/`icon`/`resourceUri`/...); `pickMany` mirrors `pickOne` for multi-selection. Both accept a plain array or a `Thenable` of items, and `PickOptions` adds `prompt` on top of `vscode.QuickPickOptions`. `toPickSeparator(label?)` inserts a non-selectable group divider. `toPickButton(icon, opts?)` builds a `QuickInputButton` — taking a codicon name like `toPickItem` does — with `location` (title / inline / inside the input box) and `toggled` for on/off toggle buttons whose `toggle.checked` VS Code flips in place. Buttons need a picker you own: `pickOne`/`pickMany` resolve with the selection and expose no `onDidTriggerButton`, so use `vscode.window.createQuickPick` directly when a button has to do something. `inputText`'s `InputTextOptions` adds `password` and `ignoreFocusOut` to the usual prompt/placeholder/`validate`.
 
 ### Wizard
 
@@ -601,7 +618,7 @@ panel.rpc.emit('theme', { kind: 'dark' });
 
 `createWebviewPanel<S, TIn, TOut>(context, options: WebviewOptions)` returns a `ManagedWebviewPanel`: `setHtml`/`setHtmlFromTemplate`, raw `postMessage`/`onMessage` (prefer `.rpc` for request/response), `onDidChangeViewState`, `onDidDispose`, `reveal`, `asWebviewUri`, and `.native`. `registerWebviewPanelSerializer` restores panels across editor restarts; `registerWebviewView` is the sidebar/panel-view equivalent, resolving to a `ManagedWebviewView` each time VS Code shows the view.
 
-`createWebviewRpc<S>(webview)` — also exposed as `.rpc` on both managed wrappers, or callable directly on any raw `vscode.Webview` (e.g. inside `registerWebviewView`'s resolve callback) — layers a typed, awaitable `request`/`onRequest`/`emit`/`onEvent` channel over the webview's raw `postMessage`. A `WebviewRpcSchema` declares `webviewRequests`/`hostRequests`/`hostEvents`/`webviewEvents`; `request(method, params, { signal?, timeoutMs? })` rejects on timeout, abort, an error response, or the RPC being disposed (e.g. the panel closes) while in flight. This library ships only the extension-host side — copy the small webview-side counterpart from `createWebviewRpc`'s JSDoc example in [`src/views/webview/rpc.ts`](src/views/webview/rpc.ts) into your webview bundle.
+`createWebviewRpc<S>(webview)` — also exposed as `.rpc` on both managed wrappers, or callable directly on any raw `vscode.Webview` (e.g. inside `registerWebviewView`'s resolve callback) — layers a typed, awaitable `request`/`onRequest`/`emit`/`onEvent` channel over the webview's raw `postMessage`. A `WebviewRpcSchema` declares `webviewRequests`/`hostRequests`/`hostEvents`/`webviewEvents`. Request fields are named after the side that **answers** the request — `hostRequests` are the ones you bind with `rpc.onRequest`, `webviewRequests` the ones you send with `rpc.request` — while event fields are named after the side that **sends** them. `request(method, params, { signal?, timeoutMs? })` rejects on timeout, abort, an error response, or the RPC being disposed (e.g. the panel closes) while in flight. This library ships only the extension-host side — copy the small webview-side counterpart from `createWebviewRpc`'s JSDoc example in [`src/views/webview/rpc.ts`](src/views/webview/rpc.ts) into your webview bundle.
 
 `generateCSP(webview, options?)` builds a strict-by-default CSP string — `allowInlineStyles`/`allowAnyHttpsImages` are opt-in, both `false` by default; `generateNonce()` makes a random nonce. `loadHtmlTemplate`/`createWebviewHtml`/`escapeHtml` cover simple `{{variable}}` templating (`{{raw:variable}}` for unescaped, `{{webviewUri:path}}` for resolved URIs) and HTML escaping.
 

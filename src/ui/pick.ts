@@ -31,8 +31,14 @@ export interface PickItemDisplay {
   alwaysShow?: boolean;
   /**
    * Inline buttons rendered on this item. Build them with
-   * {@link toPickButton}. Only shown via the `createQuickPick` code path —
-   * see {@link pickOne}.
+   * {@link toPickButton}.
+   *
+   * **Not usable through {@link pickOne}/{@link pickMany}.** Those resolve
+   * with the selection and nothing else, so there is no way to subscribe to
+   * `onDidTriggerItemButton` and a press can never be handled — the buttons
+   * would render as dead pixels. Drive `vscode.window.createQuickPick`
+   * yourself when you need item buttons; this field exists so items built
+   * with {@link toPickItem} can be fed to such a picker unchanged.
    */
   buttons?: readonly vscode.QuickInputButton[];
   /**
@@ -142,6 +148,12 @@ export function toPickSeparator(label = ''): vscode.QuickPickItem {
  * Builds a {@link vscode.QuickInputButton}, accepting a codicon name in place
  * of a hand-built {@link vscode.ThemeIcon} the same way {@link toPickItem}
  * does for item icons.
+ *
+ * Handling a press means subscribing to `onDidTriggerButton` /
+ * `onDidTriggerItemButton`, which only a `QuickPick`/`InputBox` you own
+ * exposes — so buttons belong to pickers driven through
+ * `vscode.window.createQuickPick`, not to {@link pickOne}/{@link pickMany}
+ * (which resolve with the selection alone).
  *
  * @param icon - A codicon name (e.g. `'refresh'`) or an explicit icon path
  * @param opts - Tooltip, render location, and toggle state

@@ -6,6 +6,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 From 1.0.0 onward this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0 releases followed it in spirit; their breaking changes are marked **Breaking**.
 
+## [2.0.1] - 2026-08-01
+
+Fixes found by the first downstream adopter to migrate a full extension onto
+2.0.0. Two real bugs, and documentation that sent readers the wrong way.
+
+### Fixed
+
+- **`withTimeout` no longer strands a caller's promise.** Passing an
+  already-aborted `options.signal` made it throw synchronously before attaching
+  any handler to a promise-form `operation` — and that promise was created back
+  at the call site, during argument evaluation. If it later rejected (a worker
+  exiting, say), nothing was there to catch it and the extension host logged an
+  unhandled rejection. Its rejection is now claimed before the throw.
+  Function-form operations were never affected and still aren't started when the
+  signal is already aborted.
+- **`SimpleTreeDataProvider` stops collapsing nodes you asked to be expanded.**
+  A `collapsibleState` of `Expanded` now survives `setChildren` and `addItem`,
+  and is honored when passed to the constructor, `setItems`, or either of those
+  mutators — previously all three paths overwrote it with `Collapsed`, so a group
+  built expanded either never opened or folded shut on every partial update. A
+  parent that had no children is still promoted to `Collapsed` when children
+  arrive, and still drops to `None` when its last one goes away.
+
+### Documentation
+
+- `WebviewRpcSchema`'s `webviewRequests`/`hostRequests` docs described the
+  wrong direction. Both fields are named after the side that *answers* the
+  request (`webviewRequests` are sent with `rpc.request`, `hostRequests` bound
+  with `rpc.onRequest`) — the types always worked this way. The convention, and
+  why it differs from the send-direction naming used for events, is now spelled
+  out on the interface and in the README.
+- `PickItemDisplay.buttons` and `toPickButton` now say plainly that item buttons
+  cannot be handled through `pickOne`/`pickMany`, which resolve with the
+  selection and expose no trigger event. Use `vscode.window.createQuickPick`
+  directly. (Making them work through `pickOne` is tracked for a later release.)
+- README states the `^1.125.0` VS Code requirement up front, notes that the floor
+  propagates to dependents, and explains the `@types/vscode` lag behind the
+  weekly VS Code release line.
+- MIGRATION.md claimed `createSecretStore`'s `keys()` was feature-detected. It
+  isn't, and doesn't need to be: `SecretStorage.keys` has been stable since
+  1.105, well under this library's floor.
+
 ## [2.0.0] - 2026-07-31
 
 Follows the current VS Code release line. `engines.vscode` and the
@@ -325,6 +367,7 @@ platform support, toolchain currency, and release supply chain.
 
 Initial public release.
 
+[2.0.1]: https://github.com/kkdev92/vscode-ext-kit/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v1.1.0...v2.0.0
 [1.1.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v0.5.0...v1.0.0

@@ -9,11 +9,18 @@ import * as vscode from 'vscode';
  * webview and reference it from both the extension host code and the
  * webview-side counterpart — see {@link createWebviewRpc}'s `@example` for a
  * full webview-side reference implementation.
+ *
+ * The two naming conventions here differ, because requests and events need
+ * different information. A request field is named after the side that
+ * **answers** it (`webviewRequests` are handled by the webview), since that's
+ * the side whose handler signature the types have to describe. An event field
+ * is named after the side that **sends** it (`hostEvents` travel host →
+ * webview), because a one-way message has no handler contract to pin down.
  */
 export interface WebviewRpcSchema {
-  /** Webview → Host. Requests that expect a response. */
+  /** Handled by the webview. The host calls these with `rpc.request`. */
   webviewRequests?: Record<string, { params: unknown; result: unknown }>;
-  /** Host → Webview. Requests that expect a response. */
+  /** Handled by the host. The webview calls these; bind with `rpc.onRequest`. */
   hostRequests?: Record<string, { params: unknown; result: unknown }>;
   /** Host → Webview. One-way events (no response expected). */
   hostEvents?: Record<string, unknown>;
