@@ -93,6 +93,27 @@ cancellation it previously threw.
 
 ### Fixed
 
+- **`resolvePositionsBatch`/`resolveOffsetsBatch` recognize the same line
+  breaks as VS Code.** The one-pass line-start table split on `\n` only, but
+  VS Code's text buffer also treats a lone `\r` as a line terminator — so on a
+  document containing a bare carriage return, the batch helpers disagreed with
+  `TextDocument.positionAt`/`offsetAt` about every position after it, producing
+  ranges that edit the wrong text. LF and CRLF documents were always correct
+  and are unchanged.
+- **File-watcher ignore globs are anchored.** `*.log` compiled to an unanchored
+  regex that also matched inside `x.log.txt` and `foo.logs`, silently swallowing
+  their events. Glob patterns now match a whole path segment at the end of the
+  path, as glob semantics say they should; `**/`-style patterns behave as
+  before.
+- **Settled requests detach their abort listeners.** `retry`'s inter-attempt
+  wait and both webview RPC endpoints (`request` on the host and the client)
+  registered an `abort` listener on the caller's `AbortSignal` and never
+  removed it on the success path — an `AbortController` reused across many
+  operations accumulated one dead listener per call for as long as it stayed
+  un-aborted. `toAbortSignal` had the same shape (one token listener per call)
+  and now memoizes one bridge signal per token via a `WeakMap`, so repeated
+  calls return the same `AbortSignal` instead of stacking listeners on a token
+  that may never fire.
 - **Typed storage reads pre-kit plain values instead of `undefined`.** A value
   stored before this kit was adopted isn't wrapped in the kit's storage
   envelope; `get()` read `.value` off it anyway, returning `undefined` on a
