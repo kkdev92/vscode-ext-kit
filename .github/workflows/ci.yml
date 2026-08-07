@@ -75,6 +75,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The fixture imports the built `dist/`, the way a consumer does -- that
+      # is the point of it. On a clean checkout nothing has produced dist/ yet,
+      # so the typecheck below has to build first. `npm run test:eh` builds too,
+      # and finds nothing to do.
+      - name: Build
+        run: npm run build
+
       - name: Typecheck the fixture
         run: npx tsc -p fixtures/extension-host/tsconfig.json
 
@@ -104,6 +111,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Same reason as the desktop lane: the fixture imports the built dist/.
+      - name: Build
+        run: npm run build
+
       # `types: ["vscode"]` with no "node" here: a Node built-in anywhere in the
       # graph fails this step rather than a user's browser.
       - name: Typecheck the web fixture
@@ -132,6 +143,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # It refuses to run without dist/ rather than packing whatever happens to
+      # be there, so a clean checkout has to build first -- same order as the
+      # release workflow.
+      - name: Build
+        run: npm run build
 
       - name: Verify the packed package
         run: npm run verify:package
