@@ -1,0 +1,66 @@
+{
+  // The one emitting project: framework sources -> dist. `npm run build` runs
+  // `tsc -b` on this; the mock kit builds alongside via the reference below.
+  //
+  // NOTE: `tsc -b --noEmit` does NOT work (TS6310 on TypeScript 6.0.3 and
+  // 7.0.2 alike -- project references require composite, and --noEmit
+  // propagates through the graph). Use `tsc -b` to build, and `tsc -p
+  // tsconfig.json` to typecheck tests.
+  //
+  // Every strictness option here was measured against the v2 source on
+  // TypeScript 6.0.3: verbatimModuleSyntax / noPropertyAccessFromIndexSignature
+  // / noUncheckedSideEffectImports / moduleDetection / skipLibCheck:false cost
+  // 0 errors.
+  "compilerOptions": {
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "useUnknownInCatchVariables": true,
+    "noUncheckedSideEffectImports": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleDetection": "force",
+    "skipLibCheck": false,
+
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    // ESNext.Disposable keeps `Symbol.dispose` typeable (v2 already ships
+    // `using` support; dropping it would be a silent regression). WebWorker
+    // provides AbortSignal, which is in no lib.es* at all.
+    "lib": ["ES2023", "ESNext.Disposable", "WebWorker"],
+    // No "node": the runtime core must not reach Node built-ins. Measured:
+    // `types: []`-style scoping makes `import "node:fs/promises"` fail with TS2591.
+    "types": ["vscode"],
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true,
+    "isolatedDeclarations": true,
+    // Incremental-build state is a regenerable cache; parking it under
+    // node_modules keeps it out of the repo root and out of npm pack
+    // (dist/ is published, node_modules never is).
+    "tsBuildInfoFile": "node_modules/.tsbuildinfo/build"
+  },
+  "include": ["src/**/*.ts"],
+  // The mock kit compiles in its own referenced project with
+  // isolatedDeclarations off -- see tsconfig.mock.json for why.
+  "exclude": [
+    "src/testing/mock/vscode-mock.ts",
+    "src/testing/mock/mock-factories.ts",
+    "src/testing/mock/mock-types.ts",
+    "src/testing/mock/vitest.ts",
+    "src/testing/mock/vitest-config.ts"
+  ],
+  "references": [{ "path": "./tsconfig.mock.json" }]
+}

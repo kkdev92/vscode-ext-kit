@@ -3,8 +3,27 @@ node_modules/
 
 # Build output
 dist/
+
+# npm pack output (verify:package packs into a temp dir; a stray one here is
+# an accident, and committing a tarball is never right)
+*.tgz
 out/
 *.vsix
+
+# TypeScript project-references incremental state
+*.tsbuildinfo
+
+# Downloaded VS Code builds and bundled fixtures (host contract lanes).
+# @vscode/test-electron and @vscode/test-web cache full VS Code builds here
+# (~200MB each). The vscode-web-* / vscode-win32-* globs are belt-and-braces in
+# case a harness ever writes them outside its own cache directory.
+.vscode-test/
+.vscode-test-web/
+vscode-web-*/
+vscode-win32-*/
+vscode-linux-*/
+vscode-darwin-*/
+fixtures/*/out/
 
 # Test coverage
 coverage/

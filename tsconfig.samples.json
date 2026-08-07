@@ -1,0 +1,40 @@
+{
+  // The README's code samples, compiled.
+  //
+  // Every fenced `ts` block in README.md is a file in docs/samples/, and
+  // tests/readme-samples.test.ts checks that the two match character for
+  // character. So `npm run typecheck` failing here means the README is wrong --
+  // which is the point: the previous README's Quick Start called an
+  // `createExtensionKit()` that no version of this package ever exported.
+  //
+  // The compiler options are deliberately the ones the README tells a consumer
+  // to use, not the ones this repo builds with: `ESNext.Disposable` because the
+  // public types name `Symbol.dispose`, and `DOM` because they name
+  // `AbortSignal`. scripts/verify-package.mjs checks the same pair against the
+  // packed .d.ts files.
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "es2023",
+    "lib": ["ES2023", "ESNext.Disposable", "DOM"],
+    "types": ["vscode"],
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "skipLibCheck": false,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "isolatedModules": true,
+    // A consumer writes the package name; these map it back to this working
+    // tree so the samples compile against the source being changed. No
+    // `baseUrl`: it is deprecated in TypeScript 6 and removed in 7, and paths
+    // resolve relative to this file without it.
+    "paths": {
+      "@kkdev92/vscode-ext-kit": ["./src/index.ts"],
+      "@kkdev92/vscode-ext-kit/testing": ["./src/testing/index.ts"],
+      "@kkdev92/vscode-ext-kit/webview-client": ["./src/capabilities/webview-client/index.ts"]
+    }
+  },
+  "include": ["docs/samples/**/*.ts"]
+}

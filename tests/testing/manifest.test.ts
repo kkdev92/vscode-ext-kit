@@ -1,0 +1,172 @@
+/**
+ * Public manifest-assertion contract.
+ *
+ * These tests pin the mechanical overlap for which source is authoritative and
+ * the “report all disagreements” ergonomics. Add cases here when
+ * `DeclaredContributions` begins checking another machine-facing fact; do not
+ * add assertions for human-facing manifest fields that source cannot own.
+ */
+import { describe, expect, it } from 'vitest';
+
+import { defineCommandContract } from '../../src/foundation/commands/contract.js';
+import { defineSettings, setting } from '../../src/foundation/settings/definition.js';
+import { assertManifestMatches } from '../../src/testing/manifest.js';
+
+const Refresh = defineCommandContract({ id: 'sample.refresh' });
+const Clear = defineCommandContract({ id: 'sample.clear' });
+
+const Options = defineSettings({
+  section: 'sample',
+  values: {
+    limit: setting.integer({ default: 10, minimum: 1 }),
+    mode: setting.enum({ values: ['fast', 'safe'], default: 'safe' }),
+  },
+});
+
+/** A manifest that agrees with everything above. */
+function agreeingManifest(): unknown {
+  return {
+    contributes: {
+      commands: [
+        { command: 'sample.refresh', title: 'Refresh' },
+        { command: 'sample.clear', title: 'Clear' },
+      ],
+      configuration: {
+        properties: {
+          'sample.limit': { type: 'integer', default: 10, scope: 'window', description: 'Limit' },
+          'sample.mode': {
+            type: 'string',
+            default: 'safe',
+            enum: ['fast', 'safe'],
+            scope: 'window',
+            description: 'Mode',
+          },
+        },
+      },
+      views: { sampleContainer: [{ id: 'sample.tree', name: 'Tree' }] },
+    },
+  };
+}
+
+/**
+ * Keeping package.json and `src` in step, without generating either.
+ *
+ * VS Code reads the manifest before the extension's code runs, so the two can
+ * never become one file. What overlaps is small — ids, types, defaults, enum
+ * values and scopes—and this is what stops it drifting. Presentation and other
+ * contribution points remain the manifest's responsibility.
+ */
+describe('assertManifestMatches', () => {
+  const declared = {
+    settings: [Options],
+    commands: [Refresh, Clear],
+    views: ['sample.tree'],
+  };
+
+  it('passes when the manifest agrees', () => {
+    expect(() => {
+      assertManifestMatches(agreeingManifest(), declared);
+    }).not.toThrow();
+  });
+
+  it('names a command src declares and the manifest is missing, with the JSON to paste', () => {
+    const manifest = agreeingManifest() as { contributes: { commands: unknown[] } };
+    manifest.contributes.commands = [{ command: 'sample.refresh', title: 'Refresh' }];
+
+    expect(() => {
+      assertManifestMatches(manifest, declared);
+    }).toThrow(/"sample\.clear" is declared in src but missing[\s\S]*"command": "sample\.clear"/u);
+  });
+
+  it('names a command the manifest offers that nothing handles', () => {
+    const manifest = agreeingManifest() as { contributes: { commands: unknown[] } };
+    manifest.contributes.commands.push({ command: 'sample.ghost', title: 'Ghost' });
+
+    expect(() => {
+      assertManifestMatches(manifest, declared);
+    }).toThrow(/"sample\.ghost" is in contributes\.commands but no contract declares it/u);
+  });
+
+  it('catches a type that drifted, which is what `integer` exists to make visible', () => {
+    const manifest = agreeingManifest() as {
+      contributes: { configuration: { properties: Record<string, Record<string, unknown>> } };
+    };
+    const limit = manifest.contributes.configuration.properties['sample.limit'];
+    if (limit !== undefined) {
+      limit['type'] = 'number';
+    }
+
+    expect(() => {
+      assertManifestMatches(manifest, declared);
+    }).toThrow(/"sample\.limit" is "number" in the manifest and "integer" in src/u);
+  });
+
+  it('catches a default and an enum that drifted', () => {
+    const manifest = agreeingManifest() as {
+      contributes: { configuration: { properties: Record<string, Record<string, unknown>> } };
+    };
+    const limit = manifest.contributes.configuration.properties['sample.limit'];
+    const mode = manifest.contributes.configuration.properties['sample.mode'];
+    if (limit !== undefined) {
+      limit['default'] = 25;
+    }
+    if (mode !== undefined) {
+      mode['enum'] = ['fast'];
+    }
+
+    let message = '';
+    try {
+      assertManifestMatches(manifest, declared);
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    // Everything at once: fixing a manifest one failing assertion at a time is
+    // the slowest possible way to do it.
+    expect(message).toMatch(/defaults to 25 in the manifest and 10 in src/u);
+    expect(message).toMatch(/allows \["fast"\] in the manifest/u);
+    expect(message).toMatch(/in 2 place\(s\)/u);
+  });
+
+  it('prints the setting to paste when the manifest has none', () => {
+    const manifest = agreeingManifest() as {
+      contributes: { configuration: { properties: Record<string, unknown> } };
+    };
+    delete manifest.contributes.configuration.properties['sample.mode'];
+
+    expect(() => {
+      assertManifestMatches(manifest, declared);
+    }).toThrow(/"enum": \[\s*"fast",\s*"safe"\s*\]/u);
+  });
+
+  it('treats an omitted scope as window, which is what VS Code does', () => {
+    const manifest = agreeingManifest() as {
+      contributes: { configuration: { properties: Record<string, Record<string, unknown>> } };
+    };
+    for (const entry of Object.values(manifest.contributes.configuration.properties)) {
+      delete entry['scope'];
+    }
+
+    expect(() => {
+      assertManifestMatches(manifest, declared);
+    }).not.toThrow();
+  });
+
+  it('catches a view in one place and not the other', () => {
+    expect(() => {
+      assertManifestMatches(agreeingManifest(), { ...declared, views: ['sample.other'] });
+    }).toThrow(/"sample\.other" is registered in src[\s\S]*"sample\.tree" is contributed/u);
+  });
+
+  it('checks only what it was given', () => {
+    // A consumer that declares no views should not be told its views are wrong.
+    expect(() => {
+      assertManifestMatches({ contributes: { views: { c: [{ id: 'x' }] } } }, {});
+    }).not.toThrow();
+  });
+
+  it('survives a manifest with no contributes at all', () => {
+    expect(() => {
+      assertManifestMatches({}, { commands: [Refresh] });
+    }).toThrow(/"sample\.refresh" is declared in src/u);
+  });
+});

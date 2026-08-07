@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  quality:
     runs-on: ubuntu-latest
 
     strategy:
@@ -34,22 +34,32 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run linter
+      - name: Check formatting
+        run: npm run format:check
+
+      # Must precede lint: `tsc -b` produces dist/, which type-aware lint
+      # resolves on a fresh checkout. `tsc -b --noEmit` is not usable: TS6310.
+      - name: Build and typecheck
+        run: npm run typecheck
+
+      # Type-aware lint plus the architecture rules that keep the runtime core
+      # free of `vscode` and Node built-ins.
+      - name: Type-aware lint
         run: npm run lint
 
-      - name: Run type check
-        run: npm run typecheck
+      # The coverage gate runs here rather than as a separate lane: the
+      # thresholds are per layer, and a threshold miss exits non-zero, so this
+      # single step is both the test run and the gate.
+      - name: Run tests with the coverage gate
+        run: npm run test:coverage
 
       - name: Check for unused code
         run: npm run knip
 
-      - name: Run tests
-        run: npm run test
-
-      - name: Build
-        run: npm run build
-
-  smoke:
+  # Real Extension Host. The only lane that can verify the shutdown contract the
+  # whole design rests on -- and the one that found VS Code disposes
+  # context.subscriptions *during* deactivate(), not after it.
+  desktop-contract:
     runs-on: ubuntu-latest
 
     steps:
@@ -65,8 +75,92 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npm run build
+      - name: Typecheck the fixture
+        run: npx tsc -p fixtures/extension-host/tsconfig.json
 
-      - name: Run consumer smoke test
-        run: npm run test:smoke
+      # Stable only. VS Code updates itself, so an extension published today
+      # runs on it; testing an older build would pin effort to a configuration
+      # almost nobody is in. xvfb is required either way -- VS Code is an
+      # Electron app and needs a display.
+      - name: Run Extension Host contract test
+        run: xvfb-run -a npm run test:eh
+
+  # Browser/worker extension host. The core is meant to run where the JS engine is
+  # the user's browser rather than a version VS Code pins, so this is the only lane
+  # that can confirm it actually loads there.
+  web-contract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # `types: ["vscode"]` with no "node" here: a Node built-in anywhere in the
+      # graph fails this step rather than a user's browser.
+      - name: Typecheck the web fixture
+        run: npx tsc -p fixtures/web-extension/tsconfig.json
+
+      - name: Run web extension host contract test
+        run: npm run test:web
+
+  # The package as a consumer sees it: packs the tarball, installs it into a
+  # throwaway project with a stub `vscode`, imports every subpath, checks that
+  # `require` is rejected (the package is ESM-only), and type-checks a consumer
+  # file against the packed .d.ts under nodenext. Blocking: every one of those is
+  # part of the published contract.
+  package:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify the packed package
+        run: npm run verify:package
+
+  # Non-blocking: TypeScript 7 is already npm's `latest`, so consumers default
+  # to it, but typescript-eslint supports only `>=4.8.4 <6.1.0`, which pins the
+  # build to 6.0.x. This lane keeps the gap visible instead of implicit.
+  typescript7:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Override TypeScript with the 7.x line
+        run: npm install --no-save typescript@7
+
+      - name: Report compiler version
+        run: npx tsc --version
+
+      - name: Build with TypeScript 7
+        run: npx tsc -b tsconfig.build.json --force

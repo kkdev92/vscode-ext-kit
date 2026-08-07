@@ -1,66 +1,90 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.2.x   | :white_check_mark: |
-| 0.1.x   | :white_check_mark: |
+| Version         | Supported | Notes                                           |
+| --------------- | --------- | ----------------------------------------------- |
+| `3.0.0-alpha.x` | ✅        | this branch; not published to npm yet           |
+| `2.1.x`         | ✅        | `latest` on npm, maintained on `v2-maintenance` |
+| `2.0.x`         | ❌        | upgrade to `2.1.x`                              |
+| `0.x`, `1.x`    | ❌        | unsupported                                     |
 
-## Reporting a Vulnerability
+The 2.x and 3.x lines are different codebases. A fix for one is not automatically
+a fix for the other; a report should say which line it applies to, and "both" is a
+valid answer.
 
-If you discover a security vulnerability:
+## Reporting a vulnerability
 
-1. **Do NOT** create a public GitHub issue
-2. Use GitHub's "Report a vulnerability" feature in the Security tab
+1. **Do not open a public issue.**
+2. Use GitHub's **Report a vulnerability** button in the repository's Security
+   tab.
 
-## Security Best Practices
+Please include the version, the extension host (desktop or web), and the smallest
+reproduction you have. A failing test against the Test Host is ideal.
 
-When using this library in your VS Code extension:
+## What this package does and does not do
 
-### Secrets Storage
+- **No network access.** Nothing here makes a request.
+- **No Node built-ins.** The framework core cannot reach the file system or the
+  process; the type configuration (`types: ["vscode"]`) is what enforces that, so
+  the same code runs in the web extension host. File and workspace access goes
+  through VS Code's own APIs in the adapter layer.
+- **No runtime dependencies.** Nothing is pulled in at install time, so the
+  package contributes no transitive supply chain of its own.
+- **Secrets go to VS Code's encrypted storage**, never to a memento.
 
-Always use `createSecretStorage` for sensitive data:
+## Secret values never leave the secret
 
-```typescript
-// Good - uses VS Code's secure storage
-const apiKeyStorage = createSecretStorage(context, 'myExtension.apiKey');
-await apiKeyStorage.set(apiKey);
+This is the one property worth stating explicitly, because it is easy to violate
+by accident and the kit is deliberately strict about it.
 
-// Bad - stores in plain text
-await context.globalState.update('apiKey', apiKey);
+When a secret fails to parse or validate, the report carries the **key name**, the
+schema vendor and an issue count — and nothing else. No message, no path, no
+cause, no stack. A third-party schema routinely quotes the value it rejected, and
+a validation path can name keys inside it, so none of it is propagated.
+
+```ts
+// A schema failure surfaces as: { key: 'sample.apiToken', vendor: 'zod', issueCount: 1 }
+// It will not contain the token.
 ```
 
-### Input Validation
+The same rule applies to logs and lifecycle diagnostics: a secret's value is never
+written to either.
 
-Validate user input before processing:
+## Using the kit safely
 
-```typescript
-const input = await inputText({
-  prompt: 'Enter value',
-  validate: (value) => {
-    if (!value || value.trim().length === 0) {
-      return 'Value cannot be empty';
-    }
-    return undefined;
-  },
+**Store credentials as secrets, not state.**
+
+```ts
+// Good: declared secret, backed by VS Code's encrypted storage
+const ApiToken = defineSecret({ key: 'sample.apiToken' });
+module.secrets.add(ApiToken);
+
+// Bad: a memento is plain text on disk
+await context.globalState.update('apiToken', token);
+```
+
+**Validate anything that arrives from outside your code.** A command invoked from
+a keybinding, a menu, or another extension carries runtime input, not typed
+arguments. Give the contract an `args` validator:
+
+```ts
+const Open = defineCommandContract<readonly [path: string], void>({
+  id: 'sample.open',
+  args: (raw) =>
+    typeof raw[0] === 'string'
+      ? { ok: true, value: raw as readonly [string] }
+      : { ok: false, issues: [{ message: 'expected a path' }] },
 });
 ```
 
-### Error Handling
+Webview messages are validated for you: the RPC layer checks the whole envelope
+before any of it reaches your handler, and rejects a malformed frame rather than
+acting on part of it.
 
-Use `safeExecute` to prevent information leakage in error messages:
+**Do not build webview HTML by hand.** Use the kit's HTML/CSP helpers so the
+content security policy and nonce stay consistent with the resource roots.
 
-```typescript
-await safeExecute(logger, 'Operation', async () => {
-  // Your code here
-}, {
-  userMessage: 'Operation failed. Please try again.',
-});
-```
-
-## Security Considerations
-
-1. **No Network Access**: This library does not make any network requests
-2. **No File System Access**: File operations are delegated to VS Code APIs
-3. **Secure Storage**: Secret storage uses VS Code's encrypted storage API
+**Errors reach your caller, not the user.** The framework does not toast
+exceptions, so an error message you produce is shown only where you choose to show
+it. Keep internal detail in `context.logger` and give users a sentence.

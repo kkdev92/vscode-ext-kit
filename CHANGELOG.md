@@ -6,6 +6,253 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 From 1.0.0 onward this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0 releases followed it in spirit; their breaking changes are marked **Breaking**.
 
+## [3.0.0-alpha.0] - unreleased
+
+**A different kind of package.** 2.x is a utility library you call from your own
+`activate()`. 3.x is an application framework that owns activation and
+deactivation, and that you hand modules to. The capability APIs came across; the
+application shape did not.
+
+Not published. `latest` on npm stays on 2.x until the release decision, and this
+line will publish on the `next` tag.
+
+Every v2 capability has an equivalent here, and an existing extension has been
+migrated onto it end to end — commands, views, webviews, settings, storage,
+secrets and all — and verified in a real Extension Host. That migration is where
+most of what follows comes from: it found abilities the framework could not
+express, ceremony it was making the consumer write, and defects none of the
+framework's own tests could see.
+
+### Added
+
+- **`defineExtension` / `defineModule` / `compileApplication`.** A module declares
+  commands, services, hosted services, settings, storage, secrets, file watchers,
+  status bar and language status items, tree views, and raw registrations, as
+  data. `compileApplication` validates the whole declaration -- duplicate ids,
+  missing services, dependency cycles, captive dependencies -- and produces a
+  deeply immutable plan. Preflight runs at import time, before any VS Code API
+  call.
+- **`ApplicationHost`.** A state machine with one cleanup path: `stop()` runs
+  exactly once, unwinds framework-owned resources in reverse order, and holds a
+  shutdown budget (3s by default) inside VS Code's 5s race.
+- **Operations.** Every command invocation and watcher batch runs with an id, a
+  logger carrying its fields, a combined `AbortSignal`, a progress session, and a
+  resource scope disposed when the work settles.
+- **Two scope kinds.** `RegistrationScope` (synchronous) and `ResourceScope`
+  (asynchronous, LIFO, error-aggregating), because VS Code never awaits an async
+  `dispose()`.
+- **A dependency container.** Singleton and transient lifetimes, synchronous
+  factories, container-owned disposal in reverse creation order.
+- **Capability ports.** The core is vscode-free; the real API lives behind ports
+  in `src/vscode/`.
+- **`@kkdev92/vscode-ext-kit/testing` grew a Test Host.** `createTestHost` runs a
+  _production_ plan against fakes, with singleton overrides and leak assertions.
+  Every fake and its real adapter share one contract suite.
+- **Typed settings.** `defineSettings` + `setting.*` fix keys, types, defaults and
+  contribution scope in one declaration; reads take a scope; `watch` fires only
+  when a key's effective value actually changed.
+- **Declared storage and secrets.** `defineStorage` (versioned, validated,
+  migrated, optionally syncable) and `defineSecret`, both injectable under their
+  own token.
+- **A module can declare an ambient service set.** `defineModule` takes a
+  `{ uses }` options object, and every handler in the module receives that set
+  merged under its own `inject`. A name in both is a definition-time error
+  rather than a shadowing rule. Services are excluded, because a service's
+  dependencies _are_ the graph preflight validates. `Injected<typeof uses>`
+  names the resulting shape, so the bundle a feature receives is derived rather
+  than hand-written.
+- **Six services on every handler's context**, without declaring them:
+  `notify`, `ask`, `l10n`, `editors`, `commands` and `status`. Not a second way
+  in — `context.notify` resolves the same token an `inject` would, out of the
+  same container, exactly as `context.logger` already did. They are lazy and
+  non-enumerable, so an application that never notifies builds no notifier and
+  a spread of the context resolves nothing.
+- **`Commands`, `FileWatchers` and `Operations` tokens**, for the runtime half
+  of three abilities that already had a declaration: invoking a command as
+  opposed to registering one, a glob the user just typed as opposed to a
+  declared one, and work that did not start in a handler.
+- **`assertManifestMatches`**, published so a consumer can keep `package.json`
+  in step with what `src` declares. It names every disagreement at once and
+  prints the JSON to paste; it found four real drifts the first time it ran
+  against a migrated extension.
+- **`Log`**, for a service that has no operation to take `context.logger` from.
+
+### Changed
+
+- **Typed storage keeps 2.x's envelope format**, so values written by a 2.x build
+  are read by a 3.x build.
+- **Errors are not presented for you.** A command's result and its rejection both
+  reach the caller; the Command Palette already shows a dialog and a keybinding
+  already warns.
+- **One way in per ability.** Every capability is reached through a declaration
+  or an injected token, never through both a standalone function and a
+  declaration. `Notifications`, `QuickInput`, `Editors`, `Localization` and
+  `Webviews` are services; status bar items, language status items, tree views,
+  webview views, watchers, settings, storage and secrets are declarations. The
+  root export is 74 values, down from 164.
+- **A declaration and a runtime token are not two ways in.**
+  `module.fileWatchers.add` is for a glob known when the code is written;
+  `FileWatchers.watch` is for one the user just typed. Same split as
+  `defineStatusBarItem` against `StatusBar.flash`, and `context.progress`
+  against `Operations.run`. Each pair is one ability with a definition-time and
+  a runtime entry.
+- **A text editor command receives an `ActiveEditor`** — the same object
+  `Editors.active` returns — so a feature works under either declaration.
+- **Usability outranks a design line that costs the consumer something.** Three
+  lines moved on that basis: the pure helpers (`debounce`, `retry`, the
+  formatters) are on the root barrel as well as their subpaths, because the
+  subpaths exist for webview bundles that cannot import the root at all;
+  `toPickItem` and `toPickButton` turn out to be vscode-free, since VS Code
+  recognises a theme icon by its `id`; and `status` belongs in the standard
+  context set, because `StatusBar.flash` is exactly what a handler body says to
+  the user.
+- **`confirm`'s remembering button says what it does.** The default label is
+  `'Yes, Always'`, not `"Don't Ask Again"` — pressing it answers yes _and_
+  records consent to every later call, and a dismissal-sounding label on a
+  confirmation dialog is the last place for that to blur. `rememberText`
+  overrides it, like `yesText` and `noText`.
+- **Storage and secrets validate before they store.** The read side is lenient
+  by design, so an unchecked write failed nowhere at all: the value was simply
+  gone the next time anyone looked. A schema that coerces has its output stored,
+  so the next read agrees with the write.
+- **A webview's `script-src` drops `cspSource` once a nonce is supplied.**
+  Source expressions and nonces are alternatives in CSP Level 3 — a script
+  matching either one runs — so keeping both let anything under
+  `localResourceRoots` execute with no nonce, which is the whole guarantee the
+  nonce exists for. VS Code's own webviews emit `script-src 'nonce-x'` alone.
+- **Services get a logger**, instead of being handed a raw memento to build one
+  from, and can inject a declared storage, setting or secret like a handler can.
+- **Editor access is `Editors`**, replacing 20 free functions that each took a
+  `vscode.TextEditor`. `editors.active` answers the "is there an editor?"
+  question once, at the top of a handler.
+- **Tree providers moved onto the foundation.** `BaseTreeDataProvider` and
+  `SimpleTreeDataProvider` are vscode-free, a row is plain data, and an icon is
+  a theme icon id (`icon: 'folder'`). The adapter builds the platform's
+  `TreeItem`.
+- **Webviews are declared or injected.** `module.webviews.addView` for a view,
+  `module.webviews.restorePanel` for a panel that survives a window reload, and
+  the `Webviews` token for opening one from a handler.
+- **Cancellation is an `AbortSignal` everywhere.** Anything that took a
+  `CancellationToken` — retry attempts, batch resolution, progress steps — takes
+  a signal, and `context.signal` already combines the operation's cancellation
+  with the user's.
+- **`./ui` is retired.** Its contents were the vscode-bound picker functions,
+  which the `QuickInput` service replaces.
+- **ESM only, explicitly.** `require()` of any subpath fails, and CI proves it
+  against the packed tarball rather than asserting it in prose.
+- **Consumers need `ESNext.Disposable` and an `AbortSignal` lib** (`DOM`,
+  `WebWorker` or `@types/node`) in `lib`. The public types name both.
+- **`vitest` is declared as an optional peer dependency**, for the
+  `./testing/vitest` subpath.
+
+### Removed
+
+The application shape v2 implied is gone: `createExtensionKit`, `safeExecute`
+and the manual `context.subscriptions` bookkeeping they required.
+`defineExtension`, operations and `host.stop()` replace them.
+
+The standalone helpers went with it. Every ability survives; the way in changed:
+
+| Removed                                                                                                                                                                                                     | Now                                                 |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `showInfo` `showWarn` `showError` `confirm`                                                                                                                                                                 | `Notifications` token                               |
+| `withProgress` `withSteps`                                                                                                                                                                                  | `context.progress.run` / `.steps`                   |
+| `pickOne` `pickMany` `inputText` `wizard`                                                                                                                                                                   | `QuickInput` token                                  |
+| `createStatusBarItem`                                                                                                                                                                                       | `defineStatusBarItem` + token                       |
+| `showStatusMessage` `createStatusMessage`                                                                                                                                                                   | `StatusBar` token: `flash`                          |
+| `createSecretStore`                                                                                                                                                                                         | `Secrets` token                                     |
+| `applyEditsGrouped`                                                                                                                                                                                         | `editors.active.editStages`                         |
+| `createLanguageStatusItem`                                                                                                                                                                                  | `defineLanguageStatusItem` + token                  |
+| `createFileWatcher` `watchFile`                                                                                                                                                                             | `module.fileWatchers.add`                           |
+| `createTreeView` `createDragAndDropController`                                                                                                                                                              | `module.treeViews.add`, with `dragAndDrop` declared |
+| `createWebviewPanel` `registerWebviewView` `registerWebviewPanelSerializer` `loadHtmlTemplate`                                                                                                              | `Webviews` token / `module.webviews.*`              |
+| the 20 editor functions                                                                                                                                                                                     | `Editors` token                                     |
+| `l10n` `plural` `formatDate` `formatNumber` `formatRelativeTime` `getLanguage` `isLanguage`                                                                                                                 | `Localization` token                                |
+| `createTypedStorage` `createGlobalStorage` `createWorkspaceStorage` `createSecret*`                                                                                                                         | `defineStorage` / `defineSecret` + token            |
+| `createNotifier` `createProgressRunner` `createManagedStatusBarItem` `createManagedLanguageStatusItem` `createManagedFileWatcher` `createWizard` `createSettingsAccessor`                                   | built by the host                                   |
+| `createApplication` `compileApplication` `createApplicationHost` `runtimePreflight`, the scope constructors, the logger factories, the host state machine, and the nine `createVSCode*Capability` factories | `defineExtension`                                   |
+
+Three more arrived after a trial migration of a real extension found that v3
+could not express them: `Secrets`, for secrets the _user_ names (`defineSecret`
+declares a key the extension knows about at definition time, which is a
+different ability); `StatusBar.flash`, for a message with no item of its own;
+and `editors.active.editStages`, for several edits in order that land as one
+undo step.
+
+Two abilities were rebuilt on the v3 side _before_ their v2 form was removed,
+rather than dropped: weighted multi-step progress is `context.progress.steps`,
+which still reports cancellation as a value rather than a thrown error, and the
+transient status message is `status.flash`, which is a state the existing item
+passes through instead of a second item created and disposed on a timer.
+
+`listStorageKeys` has no v3 equivalent and is simply gone: a declared storage
+knows its own key.
+
+### Fixed
+
+Findings from a full source and test review, each with a regression test:
+deactivation ownership and the shutdown deadline, deep plan immutability, webview
+RPC envelope validation before any state change, Standard Schema v1 conformance
+with a synchronous-only gate, secret redaction in schema failures, atomic
+legacy-key storage migration, file watcher construction rollback, per-attempt
+retry signals, single-key setting watches, and the fidelity of the fakes and the
+mock kit (settings `affects` semantics, listener removal, watcher pattern
+routing).
+
+A second, independent read of the whole tree turned up these, each re-verified
+against the source before it was changed:
+
+- **`ResourceScope.own` discarded a `dispose()` that returned a promise.**
+  `Registration.dispose` is typed `unknown`, and TypeScript accepts a
+  promise-returning method wherever `void` is expected, so such a resource
+  arrived without a complaint and its teardown was never awaited. The cleanup
+  now hands the promise back to be awaited in place. `RegistrationScope` refuses
+  one outright — closing ingress synchronously is its whole purpose.
+- **`setKeysForSync` ran before runtime preflight.** It writes to persistent
+  storage and survives a failed activation, so an application that then refused
+  to start left the platform holding a claim nothing backed. Preflight now runs
+  first, before anything in activation touches VS Code.
+- **Module rollback stopped at its first failing phase.** Both scopes are
+  detached until the module commits, so a registration whose `dispose()` threw
+  took the module's resources with it — and replaced the activation error with
+  the cleanup error. Each phase is attempted independently, and the cause
+  propagates while the consequence is reported.
+- **A declared webview view's RPC channel had no teardown path.** Each resolve
+  built one and nothing closed it. It is now owned for exactly as long as its
+  incarnation, and whatever is still on screen when the module unbinds is closed
+  with it.
+- **`request()` on the webview RPC could throw synchronously** — the
+  `postMessage` call is evaluated as an argument, so a disposed webview escaped
+  the method as an exception where the signature promises a promise, stranding
+  the entry it had already placed in `pending`.
+- **Undo boundaries belonged to the first and last stage in the list**, not to
+  the first and last that actually edit. A stage that decided it had nothing to
+  do took its boundary with it, and one undo swallowed whatever the user did
+  next to it.
+- **A tree load that started before a refresh repopulated the cache** it had
+  just been cleared from, so the next query was served pre-refresh children. The
+  trigger is ordinary: a watcher fires while a node is expanding.
+- **Three things were identified by what they said rather than by which they
+  were**: a status flash by its text (so the same message twice let the first
+  handle clear the second), a debounce `maxWait` timer by an overwritten handle
+  (leaving the old one armed to fire a trailing invocation), and an RPC handler
+  registration by its method name (so disposing a registration you had just
+  replaced silently unregistered the replacement — fixed on both endpoints).
+- **A log line was dropped whole when its fields could not be serialized.**
+  Circular references, `BigInt` and throwing getters all make `JSON.stringify`
+  throw; the entry now survives with less in it.
+- **The recommended Vitest alias omitted `UIKind` and `extensions`.**
+  `import * as vscode` reads named exports, and the environment adapter reads
+  `vscode.UIKind.Web` during preflight — so activating through the documented
+  path threw on every application while every unit test passed. A test now
+  derives the required set from the adapter sources.
+- **The mock kit had no `languages` provider registrations.** `createTestHost`
+  binds a plan's managed raw registrations like anything else, so an application
+  registering a hover provider could not start at all.
+- Narrower: `isThenable` missed a callable thenable, and the injected dependency
+  record was built on `Object.prototype`, where a dependency named `__proto__`
+  would have changed the prototype instead of becoming a property.
+
 ## [2.1.0] - 2026-08-01
 
 The rest of the first downstream adopter's report: the places where the library
@@ -20,7 +267,7 @@ cancellation it previously threw.
   setup:
 
   ```ts
-  export default mergeConfig(vscodeExtKitVitestConfig, defineConfig({ /* yours */ }));
+  export default mergeConfig(vscodeExtKitVitestConfig, defineConfig({/* yours */}));
   ```
 
   It pairs `resolve.alias` (pointing `vscode` at the new
@@ -32,6 +279,7 @@ cancellation it previously threw.
   `activate()` can be tested for real. `@kkdev92/vscode-ext-kit/testing` itself
   stays runner-agnostic; only the two new subpaths import `vitest` (declared as
   an optional peer).
+
 - **`@kkdev92/vscode-ext-kit/webview-client`** ships the webview-side end of
   `createWebviewRpc` — previously a 51-line reference implementation in a JSDoc
   comment that every adopter copied into their webview bundle by hand, untyped
@@ -80,11 +328,11 @@ cancellation it previously threw.
   `TextEditorRevealType`, `window.activeColorTheme`,
   `window.onDidChangeActiveColorTheme`, `window.showOpenDialog`, and
   `window.showSaveDialog`. `window._setColorTheme(kind)` is the test hook that
-  switches theme *and* notifies listeners. Theme detection plus a change
+  switches theme _and_ notifies listeners. Theme detection plus a change
   listener is close to universal in extensions that render anything, and none of
   it was mockable.
 - **`MockFn` describes more of `vi.fn`/`jest.fn`**: `mock.results` (the only way
-  to assert on the object a factory mock *returned*, e.g. the channel from
+  to assert on the object a factory mock _returned_, e.g. the channel from
   `window.createOutputChannel`), plus `mockReturnValueOnce`,
   `mockResolvedValueOnce`, `mockRejectedValue`, `mockRejectedValueOnce`, and
   `mockImplementationOnce`. Both runners already had all of these; the interface
@@ -150,7 +398,7 @@ cancellation it previously threw.
   exact same contract as the host. Both are re-exported from their previous
   home — every existing import keeps working.
 - **`withSteps` reports mid-step cancellation as `cancelled` instead of
-  throwing.** Only the gap *between* steps was checked, so a step handed
+  throwing.** Only the gap _between_ steps was checked, so a step handed
   `toAbortSignal(token)` — the usage the JSDoc recommends — rejected with an
   `AbortError` that passed straight through, leaving `result.cancelled` false and
   forcing callers to write both a `cancelled` branch and a `try`/`catch` with
@@ -187,7 +435,7 @@ Fixes found by the first downstream adopter to migrate a full extension onto
 ### Documentation
 
 - `WebviewRpcSchema`'s `webviewRequests`/`hostRequests` docs described the
-  wrong direction. Both fields are named after the side that *answers* the
+  wrong direction. Both fields are named after the side that _answers_ the
   request (`webviewRequests` are sent with `rpc.request`, `hostRequests` bound
   with `rpc.onRequest`) — the types always worked this way. The convention, and
   why it differs from the send-direction naming used for events, is now spelled
@@ -247,7 +495,7 @@ that depends on this library.
 ### Fixed
 
 - **`pickOne`/`pickMany` swallowed the error when an async item list rejected.**
-  Disposing a *visible* quick pick makes VS Code fire `onDidHide`
+  Disposing a _visible_ quick pick makes VS Code fire `onDidHide`
   (`ExtHostQuickInput.dispose` calls `_fireDidHide`), so the teardown on the
   rejection path re-entered the hide handler and resolved the promise with
   `undefined` before `reject` ran. Callers saw a plain cancellation instead of
@@ -326,7 +574,7 @@ harder to use than the source tree suggested.
   of testing an ordinary extension.
 - **A consumer smoke test** (`npm run test:smoke`, plus a CI job): packs the
   tarball, installs it into a throwaway project configured exactly as the
-  README documents, then typechecks and runs tests against the *published*
+  README documents, then typechecks and runs tests against the _published_
   artifact — asserting the `vscode` mock reaches the kit's internals, all four
   entry points resolve, and no sourcemap warnings appear. Both packaging bugs
   above were invisible to the existing suite because it only ever tests
@@ -357,7 +605,7 @@ zero runtime dependencies).
   `postMessage`, `AbortSignal`/timeout, auto-reject on panel close), plus
   `registerWebviewView` (sidebar) and `registerWebviewPanelSerializer`.
 - **Wizard fluent builder**: type-accumulating `wizard().step(...).optionalStep(...)
-  .branch(...).run(...)` returning `Result` with the exact answered shape —
+.branch(...).run(...)` returning `Result` with the exact answered shape —
   async items (auto busy), async debounced validation, native back button and
   step counter.
 - **`@kkdev92/vscode-ext-kit/testing`**: the vscode mock suite behind this
@@ -522,6 +770,7 @@ platform support, toolchain currency, and release supply chain.
 
 Initial public release.
 
+[3.0.0-alpha.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v2.1.0...HEAD
 [2.1.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v2.0.1...v2.1.0
 [2.0.1]: https://github.com/kkdev92/vscode-ext-kit/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v1.1.0...v2.0.0

@@ -1,0 +1,29 @@
+{
+  // Typecheck only: esbuild owns the emit, and it produces the CommonJS bundle
+  // VS Code actually loads. So the source is authored as ESM with bundler
+  // resolution, exactly like a real bundled extension.
+  //
+  // Imports resolve against the framework's *built output*, so this also proves
+  // the emitted declarations and JS are usable by a consumer.
+  "extends": "../../tsconfig.build.json",
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2023", "ESNext.Disposable"],
+    "types": ["node", "vscode"],
+    "noEmit": true,
+    // The root project emits; these only typecheck, so every emit-side option it
+    // sets has to be turned back off here (composite forbids noEmit, TS6304;
+    // isolatedDeclarations needs declaration, TS5069).
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    // The root project points rootDir at src/; with noEmit it only has to cover
+    // the files in *this* program.
+    "rootDir": ".",
+    "isolatedDeclarations": false
+  },
+  "include": ["src/**/*.ts"]
+}

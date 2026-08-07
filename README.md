@@ -1,27 +1,19 @@
 # @kkdev92/vscode-ext-kit
 
 [![npm version](https://img.shields.io/npm/v/@kkdev92/vscode-ext-kit)](https://www.npmjs.com/package/@kkdev92/vscode-ext-kit)
-[![npm downloads](https://img.shields.io/npm/dm/@kkdev92/vscode-ext-kit)](https://www.npmjs.com/package/@kkdev92/vscode-ext-kit)
 [![CI](https://github.com/kkdev92/vscode-ext-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/kkdev92/vscode-ext-kit/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue.svg)](https://www.typescriptlang.org/)
 
-A zero-dependency, type-safe utility library for VS Code extension development, published as native ESM.
+An application framework for VS Code extensions. You declare what your extension
+is made of; the framework validates that declaration before touching VS Code,
+runs it, and tears it down through exactly one path.
+_Built for extensions big enough that "what does this thing actually register?"
+has stopped being obvious._
 
-- **Type-safe by construction** — command IDs, configuration schemas, and multi-step wizards are all checked at compile time, not cast at the call site.
-- **Cancellation-aware error handling** — `run`/`tryRun` treat a user pressing Escape (or an aborted `AbortSignal`) as a cancellation, never as an error to toast or rethrow.
-- **A public testing kit** — [`@kkdev92/vscode-ext-kit/testing`](#testing-your-extension) mocks the entire `vscode` module, so `activate()` is unit-testable without a running extension host.
-- **Typed webview RPC** — [`createWebviewRpc`](#webview) gives webviews an awaitable request/response + event channel over `postMessage`, with timeouts and `AbortSignal` support.
-- **Zero runtime dependencies, no Node.js API usage** — works in the web/remote extension host as well as desktop.
-
-> **Requires VS Code `^1.125.0`** (and Node.js `>=22.12.0` to build). This floor
-> propagates: an extension depending on this library has to declare the same
-> `engines.vscode`, which drops hosts older than roughly June 2026. See
-> [Installation](#installation) for the `@types/vscode` caveat that comes with it.
-
-> **Status:** Active (best-effort maintenance)
->
-> **Quick Links:** [Installation](#installation) | [Quick Start](#quick-start) | [API Reference](#api-reference) | [Migration from 0.x](#migration-from-0x)
+> **Status:** `3.0.0-alpha.0`, not published yet. `latest` on npm is the 2.x
+> utility library — a different codebase with a different shape. See
+> [Coming from 2.x](#coming-from-2x).
 
 ---
 
@@ -30,66 +22,33 @@ A zero-dependency, type-safe utility library for VS Code extension development, 
 - [Features](#features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
-- [API Reference](#api-reference)
-  - [Extension Kit](#extension-kit)
-  - [Logger](#logger)
-  - [Error Handling](#error-handling)
-  - [Commands](#commands)
-  - [Configuration](#configuration)
-  - [Storage](#storage)
-  - [UI](#ui)
-  - [Wizard](#wizard)
-  - [Notifications](#notifications)
-  - [Status Bar and Language Status](#status-bar-and-language-status)
-  - [Progress](#progress)
-  - [File Watcher](#file-watcher)
-  - [Editor](#editor)
-  - [Tree View](#tree-view)
-  - [Webview](#webview)
-  - [Timing and Retry](#timing-and-retry)
-  - [Localization](#localization)
-- [Migration from 0.x](#migration-from-0x)
-- [Testing Your Extension](#testing-your-extension)
-- [Development](#development)
-- [Changelog](#changelog)
+- [Why vscode-ext-kit](#why-vscode-ext-kit)
+- [Usage](#usage)
+- [What Is Guaranteed](#what-is-guaranteed)
+- [Known Limitations](#known-limitations)
+- [How It Works](#how-it-works)
+- [Coming from 2.x](#coming-from-2x)
+- [Platform Requirements](#platform-requirements)
+- [Troubleshooting](#troubleshooting)
+- [Security and Privacy](#security-and-privacy)
 - [Contributing](#contributing)
-- [Security](#security)
+- [Support & Maintenance Policy](#support--maintenance-policy)
 - [License](#license)
+- [Acknowledgments](#acknowledgments)
+
+---
 
 ## Features
 
-### Core
+- **Declare, Then Run**: Commands, services, settings, storage, secrets, watchers and views are data; compiling them produces an immutable plan
+- **Preflight Before VS Code**: Duplicate ids, a missing service, a dependency cycle, a captive dependency — all rejected at import time, before a single API call
+- **One Cleanup Owner**: `deactivate` is the only teardown path; `context.subscriptions` gets one synchronous failsafe and nothing else
+- **Every Unit of Work Is an Operation**: A command invocation or a watcher batch arrives with an id, a logger, a combined `AbortSignal`, a progress session and a resource scope
+- **A vscode-free Core**: Your real plan runs on fakes in a unit test, and the same code runs in the web extension host
+- **Typed End to End**: Command arguments, settings, stored values and webview messages all carry their types to the call site
+- **Zero Runtime Dependencies**: No Node built-ins, no polyfills, native ESM
 
-- **Extension Kit** — one call wires a logger, a disposable scope, and cancellation-aware error handling
-- **Logger** — `LogOutputChannel`-backed structured logging with child scopes and telemetry
-- **Error Handling** — `run`/`tryRun` unify logging, user notification, and cancellation
-- **Commands** — compile-time checked batch registration, returns per-command `Disposable`s
-
-### Configuration and Storage
-
-- **Config** — schema-validated, cached, observable settings (`defineConfigSchema`)
-- **Storage** — versioned/migratable global, workspace, and secret storage with TTL and Settings Sync
-
-### UI Components
-
-- **Pick / Input** — QuickPick and InputBox helpers with async item support
-- **Wizard** — type-accumulating multi-step flows with back navigation and branching
-- **Notifications** — info/warning/error with reference-resolved action buttons
-- **Status Bar / Language Status** — managed items with spinner support
-- **Progress** — step-weighted progress with cancellation
-
-### Workspace
-
-- **File Watcher** — debounced, batched file system events
-- **Editor** — selection/cursor/offset utilities and multi-file workspace edits
-- **Tree View** — cached `TreeDataProvider` with checkboxes, drag & drop, and pagination
-- **Webview** — managed panels/views, CSP generation, and a typed `postMessage` RPC channel
-
-### Developer Tools
-
-- **Timing & Retry** — debounce/throttle/timeout/retry, also published as dependency-free `./timing`/`./retry` subpaths
-- **Localization** — `vscode.l10n` wrapper, pluralization, and `Intl`-based formatting
-- **Testing** — `@kkdev92/vscode-ext-kit/testing` mocks the entire `vscode` module
+---
 
 ## Installation
 
@@ -97,799 +56,385 @@ A zero-dependency, type-safe utility library for VS Code extension development, 
 npm install @kkdev92/vscode-ext-kit
 ```
 
-> Requires VS Code `^1.125.0` and Node.js `>=22.12.0`. Zero runtime dependencies; the published package uses no Node.js APIs, so it also runs in the web/remote extension host.
+Subpaths, all ESM:
 
-Because `engines.vscode` is a floor your own extension inherits, raising it is a
-user-visible change for anyone depending on you — set the same `^1.125.0` in your
-manifest rather than a lower value you can't honor.
+| Import                                          | What It Is                                                                          |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `@kkdev92/vscode-ext-kit`                       | the framework and the capability APIs                                               |
+| `@kkdev92/vscode-ext-kit/testing`               | Test Host, one fake per capability, and the `vscode` mock kit                       |
+| `@kkdev92/vscode-ext-kit/testing/vitest`        | a `vscode` stand-in for Vitest's `resolve.alias` (needs the optional `vitest` peer) |
+| `@kkdev92/vscode-ext-kit/testing/vitest-config` | the matching Vitest config to merge                                                 |
+| `@kkdev92/vscode-ext-kit/webview-client`        | the browser side of the typed webview RPC                                           |
+| `@kkdev92/vscode-ext-kit/timing`                | `debounce` `throttle` `withTimeout` `withTiming` `measureTime`                      |
+| `@kkdev92/vscode-ext-kit/retry`                 | retry with backoff, jitter and a per-attempt `AbortSignal`                          |
+| `@kkdev92/vscode-ext-kit/format`                | `Intl` date/number/relative-time/plural formatting                                  |
 
-**Native ESM, but no bundler required.** A CommonJS extension compiled with
-plain `tsc` can `require()` this package directly — Node's `require(esm)`
-handles it (Node **22.12+**, which is why `engines.node` says `>=22.12.0`).
-Bundled (esbuild/webpack) and ESM extensions have no version wrinkle beyond
-that. Nothing about the package assumes a bundler exists.
+The last three are also on the root barrel. They have their own subpaths because
+the root imports `vscode` and a webview bundle cannot.
 
-One wrinkle to expect: `@types/vscode` lags the VS Code release line, since
-DefinitelyTyped doesn't publish on VS Code's weekly cadence. This library pins
-`~1.125.0`, the newest available at release time, and compiles against exactly
-the version it declares. If your extension targets a newer host than the types
-cover, the API you're reaching for may be absent from the types while being
-present at runtime; pin `@types/vscode` to the newest published version and
-declare `engines.vscode` to match it.
-
-The published entry points:
-
-| Import | Contents |
-| --- | --- |
-| `@kkdev92/vscode-ext-kit` | The full API — everything in this document |
-| `@kkdev92/vscode-ext-kit/timing` | `debounce`/`throttle`/`withTimeout`/... only, no `vscode` import — safe for a webview bundle |
-| `@kkdev92/vscode-ext-kit/retry` | `retry`/`RetryExhaustedError` only, no `vscode` import |
-| `@kkdev92/vscode-ext-kit/format` | `pluralFor`/`formatNumberFor`/`formatDateFor`/`formatRelativeTimeFor` — the `Intl` core behind `l10n`, no `vscode` import |
-| `@kkdev92/vscode-ext-kit/webview-client` | The webview-side end of [`createWebviewRpc`](#webview), no `vscode` import — bundle it into your webview code |
-| `@kkdev92/vscode-ext-kit/testing` | `vscode` mocks for unit tests, runner-agnostic — see [Testing Your Extension](#testing-your-extension) |
-| `@kkdev92/vscode-ext-kit/testing/vitest` | A ready-made `vscode` module stand-in to alias, for Vitest |
-| `@kkdev92/vscode-ext-kit/testing/vitest-config` | The Vitest config that setup needs, as a mergeable value |
-
-`./package.json` is exported too, for build scripts that bake the resolved
-version into a bundle.
+---
 
 ## Quick Start
 
-```typescript
-import * as vscode from 'vscode';
-import { createExtensionKit, showInfo } from '@kkdev92/vscode-ext-kit';
+Two files. The first is your `extension.ts`:
 
-export function activate(context: vscode.ExtensionContext) {
-  const kit = createExtensionKit<'myext.hello'>(context, 'MyExtension');
-  kit.registerCommands({
-    'myext.hello': () => showInfo('Hello!'),
-  });
-}
+<!-- sample: docs/samples/extension.ts -->
+
+```ts
+import { defineExtension } from '@kkdev92/vscode-ext-kit';
+
+import { CountProjects, projectsModule } from './commands-and-services.js';
+
+// Preflight runs here, at import time: duplicate ids, a missing service, a cycle
+// or a captive dependency fail before VS Code is touched at all.
+// Exported so a test can run this exact plan on fakes -- see testing.ts.
+export const app = defineExtension({
+  name: 'Sample',
+  modules: [projectsModule],
+});
+
+// `activate` registers one synchronous failsafe on `context.subscriptions`;
+// `deactivate` is the single cleanup path. Nothing else needs disposing by hand.
+export const activate = app.activate;
+export const deactivate = app.deactivate;
+
+// Typed invocation from anywhere: the contract fixes the arguments and the
+// result, and both the value and any rejection reach this caller.
+export const countProjects = (): Promise<number> => app.commands.execute(CountProjects);
 ```
 
-That one call wires a [`Logger`](#logger), a disposable scope, and cancellation-aware [error handling](#error-handling); `kit.registerCommands` adds the commands to that scope and disposes everything — including the logger — when the extension deactivates.
+The second is the module it names:
 
-The kit is sugar, not a framework: every module below (config, storage, UI, ...) is a standalone import that works identically without it. Reach for `createLogger`/`run`/`registerCommands` directly if you'd rather wire things up yourself.
+<!-- sample: docs/samples/commands-and-services.ts -->
 
-## API Reference
-
-Every export below is available from the package root (`@kkdev92/vscode-ext-kit`) unless noted otherwise; see [`src/index.ts`](src/index.ts) for the complete list.
-
-**Disposal convention.** `createExtensionKit`, `createScope`, `createTreeView`, `createWebviewPanel`, `registerWebviewPanelSerializer`, and `registerWebviewView` add themselves to `context.subscriptions` — there is nothing to push. Everything else returns a `Disposable` you own and push yourself (or hand to a kit's `disposables`): that includes the storage factories — which take a `context` only to reach `globalState`/`secrets`, **not** to self-register — and the context-free factories (`createLogger`, `createStatusBarItem`, `createLanguageStatusItem`, `createFileWatcher`, `watchSetting`, ...).
-
-### Extension Kit
-
-One call wires a [`Logger`](#logger), a disposable scope, and logger-bound [error handling](#error-handling) and [command registration](#commands) — the kit registers itself in `context.subscriptions`, so there's nothing to push by hand.
-
-```typescript
-import * as vscode from 'vscode';
-import { createExtensionKit, showInfo } from '@kkdev92/vscode-ext-kit';
-
-export function activate(context: vscode.ExtensionContext) {
-  const kit = createExtensionKit<'myext.hello' | 'myext.sync'>(context, 'MyExtension');
-
-  kit.registerCommands({
-    'myext.hello': () => showInfo('Hello!'),
-    'myext.sync': () => kit.run('Sync', (signal) => sync(signal)),
-  });
-
-  kit.logger.info('activated');
-}
-```
-
-`ExtensionKit<TCommandId>` exposes:
-
-- `logger` — a [`Logger`](#logger)
-- `disposables` — a `DisposableCollection` (see below), disposed along with the logger and every registered command by `kit.dispose()`
-- `run` / `tryRun` — [error handling](#error-handling) bound to the kit's logger
-- `registerCommands` / `registerTextEditorCommands` / `executeCommand` — [command registration](#commands) bound to the kit's logger and scope
-- `dispose()` / `Symbol.dispose` — tears down everything above; called automatically on deactivation
-
-`ExtensionKitOptions` forwards `logger` (`LoggerOptions`) and `commands` (default `RegisterCommandsOptions` applied to every `registerCommands` call made through the kit). The kit deliberately does not wrap config/storage/UI — those stay standalone imports so tree-shaking and type inference keep working; everything else in this document works identically with or without a kit.
-
-`DisposableCollection` (the type of `kit.disposables`) batches disposables with LIFO teardown, aggregated error handling if a `dispose()` throws, and TC39 `using` support (`Symbol.dispose`). `createScope(context)` creates one that's already registered on `context.subscriptions`, useful for grouping one feature's disposables so they can be torn down independently:
-
-```typescript
-import { createScope, createStatusBarItem, createFileWatcher } from '@kkdev92/vscode-ext-kit';
-
-const scope = createScope(context);
-scope.add(createStatusBarItem('myext.status', { text: 'hi' }));
-scope.add(createFileWatcher({ patterns: '**/*.md' }));
-// ...later, when the feature is turned off:
-scope.dispose();
-```
-
-### Logger
-
-`createLogger` builds a logger backed by a native `LogOutputChannel` by default, so timestamps, level colors, the Output panel's level dropdown, and `Developer: Set Log Level` all work without any extra code.
-
-```typescript
-import { createLogger } from '@kkdev92/vscode-ext-kit';
-
-const logger = createLogger('MyExtension');
-context.subscriptions.push(logger);
-
-logger.info('activated', { workspaceFolders: 2 });
-logger.error(new Error('sync failed'), { retry: 3 });
-
-try {
-  await sync();
-} catch (error) {
-  logger.error(error, { retry: 3 }); // `unknown` — catch bindings pass straight through
-}
-
-const gitLogger = logger.child('git');
-gitLogger.debug('spawn', { args: ['status'] }); // -> [git] spawn {"args":["status"]}
-
-logger.setLevel('warn');
-```
-
-`error()`'s first parameter is typed `unknown`, not `string | Error`, so a `catch (error)` binding can be passed straight through — `Error` instances keep their message and stack, anything else is stringified; put structured context in the second argument.
-
-Key `LoggerOptions`:
-
-- `level` — gate applied on top of the channel; defaults to `'trace'` in the default `channelMode: 'log'` (the Output panel's own dropdown already filters), or `'info'` in `'plain'` mode
-- `channelMode: 'log' | 'plain'` — `'log'` (default) uses a native `LogOutputChannel`; `'plain'` formats lines by hand, for when the extension must fully control visibility itself (e.g. a "collect verbose logs" command)
-- `configSection` — a VS Code setting to read the level from, re-read on every configuration change
-- `showOnError` / `showOnErrorThrottleMs` — reveal the channel on `error()`, throttled to avoid popping up repeatedly during an error storm
-- `telemetry` — a `vscode.TelemetrySender`, wrapped with `env.createTelemetryLogger` for native PII scrubbing
-
-`logger.child(scope)` returns a `Logger` that prefixes messages with `[scope]` and shares the parent's channel, level, and telemetry; disposing a child is a no-op since only the root owns the channel.
-
-### Error Handling
-
-`run`/`tryRun` are the single place error logging, user notification, and cancellation classification happen — call user-facing operations through one of them instead of a bare `try`/`catch`.
-
-```typescript
-import { run, tryRun } from '@kkdev92/vscode-ext-kit';
-
-// Collapses failure to `undefined` — already logged and shown to the user.
-const data = await run(logger, 'Fetch data', (signal) => fetchData(signal));
-if (data === undefined) return;
-
-// Result-returning variant, for callers that need the error.
-const result = await tryRun(logger, 'Fetch data', (signal) => fetch(url, { signal }));
-if (result.ok) {
-  use(result.value);
-} else if (!result.cancelled) {
-  fallback(result.error);
-}
-```
-
-Both receive an `AbortSignal` (aborted once the operation settles or fails) and a `RunOptions`: `userMessage` (custom toast text), `rethrow` (rethrow real errors after logging — cancellations are *never* rethrown), and `silent` (log only, no toast). `isCancellation(error)` recognizes `vscode.CancellationError`, an aborted-signal `AbortError`, or anything named `'Canceled'` — the same classification `run`/`tryRun` use internally.
-
-`Result<T, E = Error>` is `{ ok: true; value: T } | { ok: false; error: E; cancelled: boolean }`, with helpers `ok`, `err`, `unwrap`, `unwrapOr`, `mapResult`, and `mapResultErr`.
-
-Outside `run`/`tryRun` — e.g. a non-user-facing `catch` — [`logger.error`](#logger) takes the caught value directly: its first parameter is `unknown`, not `string | Error`, so there's no normalization step to write by hand.
-
-### Commands
-
-```typescript
+```ts
 import {
-  registerCommands,
-  registerTextEditorCommands,
-  executeCommand,
-  showInfo,
+  defineCommandContract,
+  defineModule,
+  serviceToken,
+  type OperationContext,
 } from '@kkdev92/vscode-ext-kit';
 
-type MyCommandId = 'myext.hello' | 'myext.openSettings';
-
-const commands = registerCommands<MyCommandId>(context, logger, {
-  'myext.hello': (uri: vscode.Uri) => showInfo(`Hello ${uri.fsPath}`),
-  'myext.openSettings': () => executeCommand(logger, 'workbench.action.openSettings'),
-});
-commands['myext.hello'].dispose(); // disable a single command later
-
-registerTextEditorCommands(context, logger, {
-  'myext.reverseSelection': (editor, edit) => {
-    for (const selection of editor.selections) {
-      const text = editor.document.getText(selection);
-      edit.replace(selection, text.split('').reverse().join(''));
-    }
-  },
-});
-```
-
-The type parameter is a command-ID union — typos and missing keys fail to build (hand-write it, or generate it from `package.json`). Both functions return `Record<CommandId, vscode.Disposable>` and add every entry to `context.subscriptions`. `RegisterCommandsOptions`: `wrap` (default `true`, wraps each handler with [`run`](#error-handling)) and `commandErrorMessage(id)` (a custom action name used in the error message). `executeCommand(logger, command, ...args)` runs a VS Code command through the same logging/error handling.
-
-### Configuration
-
-```typescript
-import { defineConfigSchema, field, s } from '@kkdev92/vscode-ext-kit';
-
-const config = defineConfigSchema('myExt', {
-  logLevel: field(s.enum('trace', 'debug', 'info', 'warn', 'error', 'silent'), 'info'),
-  maxItems: field(s.number({ min: 1, integer: true }), 50),
-});
-
-logger.setLevel(config.get('logLevel')); // validated & cached — never garbage
-context.subscriptions.push(
-  config.onDidChange('logLevel', (level) => logger.setLevel(level)) // fires only for logLevel
-);
-await config.set('maxItems', 100);
-```
-
-`field(schema, defaultValue, description?)` pairs a [Standard Schema v1](https://standardschema.dev) validator with the value used when a setting is unset or fails validation — either a built-in `s.*` builder (`string`, `number`, `boolean`, `enum`, `array`, `object`, `optional`, `nullable`, `record`, `unknown`, `custom`) or any library with synchronous Standard Schema validation (zod, valibot, ...). `s.nullable(inner)` mirrors `s.optional` for VS Code's `"type": ["string", "null"]` settings pattern, where `null` (not `undefined`) means "unset": `field(s.nullable(s.enum('compact', 'wide')), null)` accepts `'compact'`, `'wide'`, or `null`. `validateSchema(schema, value)` runs a schema directly if you need one outside config/storage.
-
-`TypedConfig` returned by `defineConfigSchema`:
-
-- `get(key, scope?)` — validated read, silently falling back to the default; `tryGet(key, scope?)` reports validation issues instead, as `Result<T, ConfigValidationIssue[]>`
-- `getAll(scope?)` — every field at once
-- `set(key, value, target?, overrideInLanguage?)`
-- `onDidChange(key, listener, scope?)` — fires only when that key changes; `onDidChangeAny(listener)` fires the raw `ConfigurationChangeEvent` for the whole section
-- `inspect(key)` — raw `WorkspaceConfiguration.inspect`, typed
-- `checkPackageJsonSync(context)` — dev-time check: fully-qualified keys declared in the schema but missing from `package.json`'s `contributes.configuration`
-
-For a single setting too small to warrant a schema, `watchSetting(section, key, defaultValue)` returns a live `{ value, onDidChange }` pair without validation.
-
-### Storage
-
-```typescript
-import { createGlobalStorage, createWorkspaceStorage, createSecretStore } from '@kkdev92/vscode-ext-kit';
-
-interface UserPrefs {
-  theme: string;
-  fontSize: number;
+// A service is an interface plus a token. The token carries the type, so
+// injection sites need no casts and a missing registration is a compile error.
+interface ProjectIndex {
+  count(): number;
+  rebuild(signal: AbortSignal): Promise<number>;
 }
+const ProjectIndex = serviceToken<ProjectIndex>('sample.projectIndex');
 
-const prefs = createGlobalStorage<UserPrefs>(context, 'preferences', {
-  defaultValue: { theme: 'dark', fontSize: 14 },
-  version: 2,
-  migrations: { 1: (old) => ({ ...(old as { theme: string }), fontSize: 14 }) },
-  syncable: true, // opts into Settings Sync via setKeysForSync
+// A command contract names the id once and fixes the argument and result types
+// for every caller.
+export const CountProjects = defineCommandContract<readonly [], number>({
+  id: 'sample.countProjects',
 });
-context.subscriptions.push(prefs);
-
-const current = prefs.get();
-await prefs.set({ ...current, theme: 'light' });
-
-const recentFiles = createWorkspaceStorage<string[]>(context, 'recentFiles', { defaultValue: [] });
-
-const secrets = createSecretStore(context);
-await secrets.set('apiKey', 'sk-...');
-secrets.onDidChange((key) => logger.info(`${key} changed`));
-```
-
-`StorageOptions<T>`: `defaultValue`, `schema?` (Standard Schema, validated on every read), `version?`/`migrations?` (keyed by the version they migrate *from*; a gap in the chain stops early and defers to validation), and `ttlMs?` (an entry reads back as unset once expired). `GlobalStorageOptions` adds `syncable`. Every write is a single atomic `Memento.update()` (not a value+version pair).
-
-`TypedStorage<T>`: `get()` (never throws, falls back to the default), `tryGet()` (`Result` reporting *why* a fallback happened — migration or validation failure), `set`, `reset`, `has`, `delete`, and `onDidChange` (fires for writes made through this instance).
-
-`createSecretStore(context)` spans every secret the extension owns (`get`/`set`/`delete`/`onDidChange`, plus `keys()` on VS Code 1.105+, feature-detected); `createSecretStorage(context, key)` wraps a single key with the same `onDidChange`. `listStorageKeys(memento, prefix?)` lists keys stored in a `Memento`.
-
-### UI
-
-```typescript
-import { pickOne, toPickItem, toPickSeparator, inputText } from '@kkdev92/vscode-ext-kit';
-
-const items = [
-  toPickItem('feature', { label: 'Feature', description: 'New feature' }),
-  toPickItem('fix', { label: 'Bug Fix', icon: 'bug' }),
-];
-const selected = await pickOne(items, { placeHolder: 'Select a type' });
-if (selected) console.log(selected.value); // 'feature' | 'fix', not a label string
-
-// toPickSeparator inserts a non-selectable group divider between items
-await pickOne([toPickSeparator('Recent'), ...items, toPickSeparator('All')]);
-
-// Async items: the picker opens immediately with a busy spinner while this resolves.
-const branch = await pickOne(
-  fetchBranches().then((names) => names.map((n) => toPickItem(n, { label: n })))
-);
-
-// `prompt` adds a line of instructional text above the list.
-await pickOne(items, { prompt: 'This rewrites history and cannot be undone.' });
-
-const name = await inputText({
-  prompt: 'Enter project name',
-  validate: (value) => (/^[a-z-]+$/.test(value) ? undefined : 'Use lowercase letters and hyphens only'),
-});
-```
-
-`toPickItem(value, display)` separates the returned **value** from what's displayed (`label`/`description`/`detail`/`icon`/`resourceUri`/...); `pickMany` mirrors `pickOne` for multi-selection. Both accept a plain array or a `Thenable` of items, and `PickOptions` adds `prompt` on top of `vscode.QuickPickOptions`. `toPickSeparator(label?)` inserts a non-selectable group divider. `toPickButton(icon, opts?)` builds a `QuickInputButton` — taking a codicon name like `toPickItem` does — with `location` (title / inline / inside the input box) and `toggled` for on/off toggle buttons whose `toggle.checked` VS Code flips in place. Wire presses up through `PickOptions`: `buttons` for the title bar, `onTriggerButton`/`onTriggerItemButton` for the handlers. Both receive the live `QuickPick`, so a row-level action can update the list in place and leave the picker open:
-
-```typescript
-const remove = toPickButton('trash', { tooltip: 'Delete' });
-const chosen = await pickOne(
-  keys.map((key) => ({ ...toPickItem(key, { label: key }), buttons: [remove] })),
-  {
-    onTriggerItemButton: async (_button, item, picker) => {
-      await secrets.delete(item.value);
-      picker.items = picker.items.filter((candidate) => candidate !== item);
-    },
-  }
-);
-``` `inputText`'s `InputTextOptions` adds `password` and `ignoreFocusOut` to the usual prompt/placeholder/`validate`.
-
-### Wizard
-
-The step-array form is gone — a wizard is now a type-accumulating fluent builder, so `.run()` resolves with an exact, cast-free state shape.
-
-```typescript
-import { wizard, quickpickStep, inputStep, toPickItem } from '@kkdev92/vscode-ext-kit';
-
-const result = await wizard()
-  .step(
-    'type',
-    quickpickStep({
-      items: () => [
-        toPickItem('feature', { label: 'Feature', description: 'New feature' }),
-        toPickItem('fix', { label: 'Bug Fix', description: 'Fix a bug' }),
-      ],
-    })
-  )
-  .step(
-    'name',
-    inputStep({
-      prompt: 'Branch name',
-      validate: (v) => (/^[a-z0-9-]+$/.test(v) ? undefined : 'lowercase only'),
-    })
-  )
-  .optionalStep('description', inputStep({ prompt: 'Description' }), {
-    skip: (s) => s.type === 'fix',
-  })
-  .run({ title: 'Create Branch' });
-
-if (result.ok) {
-  // result.value: { type: 'feature' | 'fix'; name: string; description?: string } — exact, no casts
-  const { type, name, description } = result.value;
-  await createBranch(`${type}/${name}`, description);
-} else {
-  // Always a cancellation here — an unexpected items/value/validate failure
-  // instead rejects .run() as a WizardStepError, it never resolves this branch.
-  logger.info(`Wizard cancelled at ${String(result.error.atKey)}`);
-}
-```
-
-Each `.step(key, def)` (required) / `.optionalStep(key, def, { skip })` (may be skipped) folds its value into the builder's accumulated state type. `.branch((state) => builder)` swaps in an entirely different set of steps based on the state gathered so far. Build steps with `quickpickStep` (items may be async — shows a busy spinner automatically) and `inputStep` (validation may be async, debounced by 100ms while typing). `WizardRunOptions`: `title`, `showStepNumbers` (default `true`), `ignoreFocusOut` (default `true`). A step's `items`/`value`/`validate` callback throwing rejects `.run()` with a `WizardStepError` (`.atKey`, `.cause`) instead of resolving.
-
-### Notifications
-
-```typescript
-import { showInfo, showWarn, showError, confirm } from '@kkdev92/vscode-ext-kit';
-
-await showInfo('Operation completed successfully');
-
-// Return type is inferred as 'reload' | 'ignore' | undefined
-const action = await showWarn('File changed on disk', {
-  actions: [
-    { title: 'Reload', value: 'reload' as const },
-    { title: 'Ignore', value: 'ignore' as const },
-  ],
+export const Rebuild = defineCommandContract<readonly [force: boolean], number>({
+  id: 'sample.rebuild',
 });
 
-const confirmed = await confirm('Delete this file?', { severity: 'error' });
-if (confirmed) await deleteFile();
-
-// "Don't ask again", persisted in global state
-const proceed = await confirm('Enable experimental feature?', {
-  severity: 'info',
-  remember: { memento: context.globalState, key: 'myext.confirmedExperimental' },
-});
-```
-
-`showInfo`/`showWarn`/`showError` resolve with the clicked action's `value` — matched by reference, not by title, so duplicate labels work — or `undefined` if dismissed. `NotifyOptions`: `modal`, `detail` (rendered only when `modal: true`), `actions: NotifyAction<T>[]`. `confirm`'s `ConfirmOptions`: `yesText`/`noText`, `modal` (default `true`), `detail`, `severity: 'info' | 'warn' | 'error'` (default `'warn'`), and `remember` (adds a "Don't Ask Again" button backed by a `Memento`, and short-circuits future calls).
-
-### Status Bar and Language Status
-
-```typescript
-import {
-  createStatusBarItem,
-  showStatusMessage,
-  createLanguageStatusItem,
-} from '@kkdev92/vscode-ext-kit';
-
-const statusItem = createStatusBarItem('myext.status', {
-  text: '$(sync) Syncing',
-  command: 'myext.sync',
-  priority: 100,
-});
-context.subscriptions.push(statusItem);
-
-statusItem.showSpinner('Processing...');
-await doWork();
-statusItem.hideSpinner();
-statusItem.update('$(check) Synced', 'Last sync: just now');
-
-showStatusMessage('File saved!', 3000); // self-dismisses; or hold the Disposable to dismiss early
-
-const eslintStatus = createLanguageStatusItem(
-  'myext.eslint',
-  { language: 'typescript' },
-  { name: 'ESLint', text: '$(check) No issues' }
-);
-eslintStatus.update('$(warning) 3 problems', { severity: 'warn' });
-```
-
-`ManagedStatusBarItem`: `update(text, tooltip?)`, `set(partialOptions)`, `show`/`hide`, `showSpinner(text?)`/`hideSpinner()` (spinner state and text updates no longer clobber each other), and `.native` for the underlying `vscode.StatusBarItem`. `createLanguageStatusItem(id, selector, options)` shows an item only while the active editor's language matches `selector`, in the dedicated Language Status area; its `update(text, opts?)` mirrors the status bar item's shape (`detail`/`severity`/`busy`/`command`).
-
-### Progress
-
-```typescript
-import { withProgress, withSteps, toAbortSignal } from '@kkdev92/vscode-ext-kit';
-
-await withProgress(
-  'Fetching...',
-  async (progress, token) => {
-    const response = await fetch(url, { signal: toAbortSignal(token) });
-    progress.report({ message: 'Parsing...' });
-    return response.json();
-  },
-  { cancellable: true }
-);
-
-const result = await withSteps(
-  { title: 'Deploying...', cancellable: true },
-  { label: 'Building', task: build, weight: 3 },
-  { label: 'Testing', task: runTests, weight: 5 },
-  { label: 'Publishing', task: publish, weight: 2 }
-);
-if (result.cancelled) return;
-const [buildResult, testResult, publishResult] = result.results; // each precisely typed
-```
-
-`withProgress`'s `ProgressOptions`: `location` (default `vscode.ProgressLocation.Notification`) and `cancellable`. `withSteps` takes steps as **rest arguments** (not an array) so `result.results` infers a precise per-step tuple type without an `as const`; each step's `weight` (default `1`) determines how much of the bar it fills on completion. Cancellation always comes back as `{ completed: false, cancelled: true }` with the results gathered so far — whether the token tripped between steps or a running step rejected because of it — so one `if (result.cancelled)` branch covers both and only real errors throw. `toAbortSignal(token)` bridges a `CancellationToken` to the `AbortSignal` APIs like `fetch` expect.
-
-### File Watcher
-
-```typescript
-import * as vscode from 'vscode';
-import { createFileWatcher, watchFile } from '@kkdev92/vscode-ext-kit';
-
-const watcher = createFileWatcher({
-  patterns: ['**/*.ts', '**/*.tsx'],
-  ignorePatterns: ['**/node_modules/**'],
-  debounceDelay: 300,
-  maxBatchSize: 500, // flush immediately during large bursts (checkout, npm install, ...)
-});
-watcher.onDidChange((events) => {
-  for (const event of events) logger.debug(`${event.type}: ${event.uri.fsPath}`);
-});
-context.subscriptions.push(watcher);
-
-const configUri = vscode.Uri.file('/path/to/.myconfig');
-const configWatcher = watchFile(configUri, () => reloadConfig(), 500);
-```
-
-`FileWatcherOptions.patterns` accepts plain glob strings and/or `vscode.RelativePattern` entries — mix bases for multi-root workspaces in one watcher. `events` (default all three) also determines which native `ignore*Events` flags are passed to VS Code, so event kinds nobody asked for are never subscribed to in the first place. Events are deduped per file and delivered as one batched array per debounce window; `pause()`/`resume()`/`isWatching` control delivery without tearing down the native watchers.
-
-### Editor
-
-```typescript
-import {
-  getSelectedText,
-  transformSelection,
-  getFilePath,
-  applyEditsGrouped,
-  applyWorkspaceEdits,
-} from '@kkdev92/vscode-ext-kit';
-
-await transformSelection(editor, (text) => text.toUpperCase());
-
-const location = getFilePath(editor); // { fsPath, uri } | undefined — remote/virtual fs aware
-if (location) logger.info(location.uri.scheme, { fsPath: location.fsPath });
-
-await applyEditsGrouped(editor, [
-  (eb) => eb.insert(pos1, 'foo'),
-  (eb) => eb.replace(range2, 'bar'),
-]); // collapses to a single Undo step
-
-await applyWorkspaceEdits(
-  matches.map((m) => ({ uri: m.uri, range: m.range, newText: m.replacement })),
-  { label: 'Rename symbol across files' }
-); // multi-file, atomic — does not require the files to be open in an editor
-```
-
-Also included: selection/cursor helpers (`getSelectedText`, `getAllSelectedText`, `insertAtCursor`, `getLine`/`getCurrentLine`, `moveCursor`, `selectRange`/`selectLine`/`selectWord`), `replaceText`/`applyEdits`/`transformAllSelections`, and batch offset/position conversion (`rangeFromOffsets`, `getTextInOffsetRange`, `resolvePositionsBatch`, `resolveOffsetsBatch`) that resolve many regex-match offsets in a single document pass instead of one lookup per match. `getFilePath` returns `undefined` only for `untitled` documents — local, Remote-SSH/WSL/Codespaces, and virtual file systems all resolve normally.
-
-### Tree View
-
-```typescript
-import * as vscode from 'vscode';
-import { BaseTreeDataProvider, createTreeView, withPagination, type TreeItemData } from '@kkdev92/vscode-ext-kit';
-
-interface FileItem extends TreeItemData<{ path: string }> {}
-
-class FileTreeProvider extends BaseTreeDataProvider<FileItem> {
-  async getRoots(): Promise<FileItem[]> {
-    return [
-      {
-        id: 'src',
-        label: 'src',
-        collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
-        data: { path: '/src' },
+export const projectsModule = defineModule('projects', (module): undefined => {
+  module.services.singleton(ProjectIndex, () => {
+    let known = 0;
+    return {
+      count: () => known,
+      rebuild: async (signal) => {
+        // Cooperative cancellation: the operation's signal aborts on stop,
+        // caller cancellation and timeout alike.
+        for (let step = 0; step < 10 && !signal.aborted; step += 1) {
+          known += 1;
+        }
+        return known;
       },
-    ];
-  }
-
-  async getChildrenOf(element: FileItem): Promise<FileItem[]> {
-    const files = await listFiles(element.data!.path);
-    const items: FileItem[] = files.map((f) => ({ id: f, label: f, data: { path: f } }));
-    return withPagination(items, 500); // caps at 500 + a "Load more…" sentinel item
-  }
-}
-
-const treeView = createTreeView(context, 'myext.files', new FileTreeProvider(), {
-  showCollapseAll: true,
-});
-treeView.badge = { value: 3, tooltip: '3 pending' }; // the real vscode.TreeView is returned
-```
-
-`BaseTreeDataProvider` caches `getChildrenOf` results per element and refreshes just the affected subtree via `refresh(element?)`; override `getParentOf` to enable `TreeView.reveal()`. `SimpleTreeDataProvider<T>` is a ready-made in-memory implementation (`setItems`/`setChildren`/`addItem`/`updateItem`/`removeItem`/`findItem`, all O(1) plus subtree size, and nested-aware — including `reveal()` support out of the box). A `collapsibleState` you set is respected: a group built `Expanded` stays open across partial updates, and `addItem(item, { parentId?, index? })` can put a node at a position — pinning a "Favorites" group on top without `setItems` rebuilding (and collapsing) the whole tree. Checkbox toggles surface through `onDidChangeCheckboxState` (bridged automatically by `createTreeView`); `createDragAndDropController({ mimeType, onDrop })` builds a `TreeDragAndDropController`; `withPagination(items, pageSize, { label?, command?, iconPath? })` caps a level at `pageSize` and appends a `LOAD_MORE_ID`-tagged sentinel — pass a `command` and the row is clickable, otherwise your `getChildrenOf` recognizes the id itself. A bare string still works in place of the options object.
-
-### Webview
-
-```typescript
-import { createWebviewPanel, generateNonce, type WebviewRpcSchema } from '@kkdev92/vscode-ext-kit';
-
-interface MyRpcSchema extends WebviewRpcSchema {
-  hostRequests: { save: { params: { content: string }; result: { ok: boolean } } };
-  hostEvents: { theme: { kind: 'light' | 'dark' } };
-}
-
-const panel = createWebviewPanel<MyRpcSchema>(context, {
-  viewType: 'myext.editor',
-  title: 'Custom Editor',
-  enableScripts: true,
-});
-
-await panel.setHtmlFromTemplate('media/editor.html', {
-  cspSource: panel.native.webview.cspSource,
-  nonce: generateNonce(),
-});
-
-panel.rpc.onRequest('save', async ({ content }) => {
-  await writeFile(content);
-  return { ok: true };
-});
-panel.rpc.emit('theme', { kind: 'dark' });
-```
-
-`createWebviewPanel<S, TIn, TOut>(context, options: WebviewOptions)` returns a `ManagedWebviewPanel`: `setHtml`/`setHtmlFromTemplate`, raw `postMessage`/`onMessage` (prefer `.rpc` for request/response), `onDidChangeViewState`, `onDidDispose`, `reveal`, `asWebviewUri`, and `.native`. `registerWebviewPanelSerializer` restores panels across editor restarts; `registerWebviewView` is the sidebar/panel-view equivalent, resolving to a `ManagedWebviewView` each time VS Code shows the view.
-
-`createWebviewRpc<S>(webview)` — also exposed as `.rpc` on both managed wrappers, or callable directly on any raw `vscode.Webview` (e.g. inside `registerWebviewView`'s resolve callback) — layers a typed, awaitable `request`/`onRequest`/`emit`/`onEvent` channel over the webview's raw `postMessage`. A `WebviewRpcSchema` declares `webviewRequests`/`hostRequests`/`hostEvents`/`webviewEvents`. Request fields are named after the side that **answers** the request — `hostRequests` are the ones you bind with `rpc.onRequest`, `webviewRequests` the ones you send with `rpc.request` — while event fields are named after the side that **sends** them. `request(method, params, { signal?, timeoutMs? })` rejects on timeout, abort, an error response, or the RPC being disposed (e.g. the panel closes) while in flight.
-
-The webview side is one import — `createWebviewRpcClient` from `@kkdev92/vscode-ext-kit/webview-client` (no `vscode` import, so it bundles into webview code). It is written against the same `WebviewRpcSchema` as the host, so the two sides cannot drift, and it mirrors the host's semantics: `request`/`onRequest`/`emit`/`onEvent`, `timeoutMs`/`signal` cancellation that propagates across the wire, and `dispose`.
-
-```typescript
-// Webview bundle:
-import { createWebviewRpcClient } from '@kkdev92/vscode-ext-kit/webview-client';
-
-const vscodeApi = acquireVsCodeApi(); // keep it for getState/setState
-const rpc = createWebviewRpcClient<MyRpcSchema>({ vscodeApi });
-
-rpc.onRequest('getSelection', () => ({ text: document.getSelection()?.toString() ?? '' }));
-rpc.onEvent('theme', ({ kind }) => applyTheme(kind));
-const { ok } = await rpc.request('save', { content: editor.value }, { timeoutMs: 5000 });
-```
-
-Pass `vscodeApi` whenever your webview already calls `acquireVsCodeApi()` itself — VS Code allows exactly one call per session. Omit it and the client calls it for you.
-
-`generateCSP(webview, options?)` builds a strict-by-default CSP string — `allowInlineStyles`/`allowAnyHttpsImages` are opt-in, both `false` by default; `generateNonce()` makes a random nonce. `loadHtmlTemplate`/`createWebviewHtml`/`escapeHtml` cover simple `{{variable}}` templating (`{{raw:variable}}` for unescaped, `{{webviewUri:path}}` for resolved URIs) and HTML escaping.
-
-### Timing and Retry
-
-```typescript
-import { debounce, throttle, withTimeout, retry, RetryExhaustedError } from '@kkdev92/vscode-ext-kit';
-
-const debouncedSave = debounce(save, 500, { maxWait: 2000 }); // force a flush at least every 2s
-onDidChangeTextDocument(() => debouncedSave(editor.document.getText()));
-
-const throttledUpdate = throttle(() => updateVisibleRange(), 100);
-
-const data = await withTimeout((signal) => fetch(url, { signal }), 5000);
-
-try {
-  const result = await retry(({ signal }) => fetch(url, { signal }).then((r) => r.json()), {
-    maxAttempts: 5,
-    timeoutMs: 2000,
+    };
   });
-} catch (error) {
-  if (error instanceof RetryExhaustedError) {
-    logger.error(`Gave up after ${error.attempts} attempts`, { history: error.history });
-  }
-}
-```
 
-`debounce`/`throttle` share one timer engine with `leading`/`trailing`/`maxWait`/`signal` options and `cancel()`/`flush()`/`pending()` helpers (`throttle` defaults `leading` to `true`). `withTimeout` races a promise — or an `AbortSignal`-aware function — against a timeout, throwing `TimeoutError`. `retry`'s `jitter` defaults to `'full'` (randomized full-jitter backoff, capped by `maxDelay`); exhaustion throws `RetryExhaustedError` with `.attempts`/`.history`/`.cause`. `withTiming`/`measureTime` measure (and optionally log) elapsed time.
+  module.commands.handle(CountProjects, {
+    inject: { index: ProjectIndex },
+    execute: (_context: OperationContext, _args, { index }) => index.count(),
+  });
 
-`./timing` and `./retry` are also published as separate subpath exports (`@kkdev92/vscode-ext-kit/timing`, `@kkdev92/vscode-ext-kit/retry`) with no `vscode` import — safe to bundle directly into a webview.
-
-### Localization
-
-```typescript
-import { l10n, plural, formatNumber, formatDate, formatRelativeTime } from '@kkdev92/vscode-ext-kit';
-
-l10n.t('Hello, {0}!', userName);
-l10n.t({ message: 'Found {0} files', args: [count], comment: 'Status bar text' });
-
-plural(1, { one: '{count} item', other: '{count} items' }); // "1 item"
-formatNumber(1234.56, { style: 'currency', currency: 'USD' }); // "$1,234.56"
-formatDate(new Date(), { dateStyle: 'long' }); // "February 4, 2026"
-formatRelativeTime(-1, 'day'); // "1 day ago"
-```
-
-`l10n.t(...)` matches the `l10n.t(...)`/`vscode.l10n.t(...)` callee shape `@vscode/l10n-dev`'s static extractor scans for (the 0.x bare `t()` export did not). `getLanguage()` returns the current display language (`vscode.env.language`); `isLanguage(locale)` checks a prefix match (e.g. `isLanguage('ja')`). `plural`/`formatNumber`/`formatDate`/`formatRelativeTime` use VS Code's current display language via `Intl`; their vscode-free cores (`pluralFor`, `formatNumberFor`, `formatDateFor`, `formatRelativeTimeFor`, each taking an explicit language) are reusable from a webview bundle — import them from `@kkdev92/vscode-ext-kit/format` so the bundle doesn't pull in `vscode` through the root barrel. `getOrCreateCached(cache, key, limit, create)` — the bounded-LRU helper backing all four formatter caches — is exported for reuse in your own code.
-
-## Migration from 0.x
-
-1.0 is a ground-up, intentionally-breaking redesign: `getSetting`/`setSetting`/`onConfigChange`, `safeExecute`/`trySafeExecute`, the wizard's declarative step-array form, `showWithActions`, and the `WebView*`-prefixed names are all gone. See [MIGRATION.md](MIGRATION.md) for the complete 0.x → 1.0 mapping, including the one-call `createExtensionKit` equivalent of the old `createLogger` + `registerCommands` pair.
-
----
-
-## Testing Your Extension
-
-`@kkdev92/vscode-ext-kit/testing` mocks the entire `vscode` module for unit tests — no running extension host required. It's a separate subpath with no dependencies, and it never imports a test runner: every factory takes a small `{ fn }`-shaped object instead, so the same mocks work with Vitest's `vi`, Jest's `jest`, or a compatible object.
-
-### Setup for Vitest
-
-Merge the shipped config. That's the whole setup — no setup file, and nothing to know about how Vitest resolves `vscode`:
-
-```ts
-// vitest.config.ts
-import { defineConfig, mergeConfig } from 'vitest/config';
-import { vscodeExtKitVitestConfig } from '@kkdev92/vscode-ext-kit/testing/vitest-config';
-
-export default mergeConfig(
-  vscodeExtKitVitestConfig,
-  defineConfig({
-    test: {
-      environment: 'node',
-      clearMocks: true, // resets call history between tests automatically
+  module.commands.handle(Rebuild, {
+    inject: { index: ProjectIndex },
+    execute: async (context: OperationContext, [force], { index }) => {
+      context.logger.info('rebuilding', { force });
+      return index.rebuild(context.signal);
     },
-  })
-);
-```
-
-Any test file can now `import * as vscode from 'vscode'` and get the mock, and so can the code under test — including a built `dist/` bundle you want to `activate()` for real.
-
-<details>
-<summary>What that config does, and the <code>vi.mock</code> alternative</summary>
-
-Two things have to line up, and each produces a confusing error on its own:
-
-- **`resolve.alias`** maps `vscode` to `@kkdev92/vscode-ext-kit/testing/vitest`, a module that exports `createVSCodeMock(vi)`'s result as named exports (which is what `import * as vscode` reads — a default export alone leaves every `vscode.window` call undefined).
-- **`server.deps.inline`** keeps Vitest from externalizing this kit. Externalized packages load through Node's ESM loader, which knows nothing about Vite aliases, so without it the kit's own `import * as vscode from 'vscode'` fails with `Cannot find package 'vscode'` even though your test files resolve it fine.
-
-The older `vi.mock` approach still works and remains the right choice for Jest (and for anyone who wants a fresh mock per test file):
-
-```ts
-// tests/setup.ts
-import { vi } from 'vitest';
-import { createVSCodeMock } from '@kkdev92/vscode-ext-kit/testing';
-
-vi.mock('vscode', () => createVSCodeMock(vi));
-```
-
-It needs `setupFiles: ['./tests/setup.ts']` plus the same `server.deps.inline` entry. Note that `vi.mock` only applies to modules Vite transformed, which is why it cannot reach a prebuilt bundle.
-
-Because an alias is evaluated once per test file, the mock is shared across the tests in that file. `clearMocks: true` handles call history; a field a test assigns itself (say `window.activeTextEditor`) should be restored in an `afterEach`, or use the standalone builders below for a fixture scoped to one test.
-
-</details>
-
-### Testing an activation function
-
-`createMockExtensionContext` and `createMockLogger` return values typed as the real `vscode.ExtensionContext` and this library's `Logger` — no `as any`/`as never` needed at the call site.
-
-```ts
-import { describe, it, expect, vi } from 'vitest';
-import * as vscode from 'vscode';
-import { createMockExtensionContext, createMockLogger } from '@kkdev92/vscode-ext-kit/testing';
-import { activate } from '../src/extension.js';
-
-describe('myExtension', () => {
-  it('registers the hello command', () => {
-    const context = createMockExtensionContext(vi);
-    const logger = createMockLogger(vi);
-
-    activate(context, logger);
-
-    expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
-      'myext.hello',
-      expect.any(Function)
-    );
   });
+
+  return undefined;
 });
 ```
 
-### Driving events from a mock
+That is a complete extension: a service, two commands with typed arguments and
+results, cancellation, and structured logging. Add `sample.countProjects` and
+`sample.rebuild` to `contributes.commands` in your `package.json` and they appear
+in the Command Palette.
 
-Individual builders (`createMockFileSystemWatcher`, `createMockQuickPick`, `createMockTreeView`, ...) are also exported for tests that want a standalone fixture. Each exposes `_`-prefixed test-driving helpers to simulate the native events VS Code would normally fire:
+Two things that are easy to miss. A service factory is synchronous on purpose —
+asynchronous setup belongs in a hosted service, so resolving a service can never
+deadlock. And a command's return value **and** its rejection both reach the
+caller: the framework does not toast errors for you, because the Command Palette
+already shows a dialog and a keybinding already warns.
 
-```ts
-import { vi } from 'vitest';
-import * as vscode from 'vscode';
-import { createMockFileSystemWatcher } from '@kkdev92/vscode-ext-kit/testing';
-
-const watcher = createMockFileSystemWatcher(vi);
-vi.mocked(vscode.workspace.createFileSystemWatcher).mockReturnValue(watcher);
-
-// ... code under test registers a listener on watcher.onDidChange ...
-watcher._fireChange({ fsPath: '/test/file.ts' });
-```
-
-### Overriding or extending the mock
-
-The defaults mirror a freshly started extension host — no open editor, no workspace folder. `activeTextEditor` / `visibleTextEditors` are plain mutable fields (not getters), so override one for a single test by assigning it directly — no need to recompose the `window` namespace:
-
-```ts
-import { vi } from 'vitest';
-import * as vscode from 'vscode';
-import { createMockTextEditor } from '@kkdev92/vscode-ext-kit/testing';
-
-vscode.window.activeTextEditor = createMockTextEditor(vi, 'const x = 1;', 'typescript');
-```
-
-To add an API this kit doesn't mock yet, spread the namespace you need inside `vi.mock`'s factory instead of hand-building the whole module:
-
-```ts
-import { vi } from 'vitest';
-import { createVSCodeMock } from '@kkdev92/vscode-ext-kit/testing';
-
-vi.mock('vscode', () => {
-  const base = createVSCodeMock(vi);
-  return {
-    ...base,
-    env: { ...base.env, openExternal: vi.fn().mockResolvedValue(true) },
-  };
-});
-```
+See the **[Guide](docs/guide.md)** for settings, storage, secrets, hosted
+services, watchers, editor commands, UI, views, testing and the escape hatch.
 
 ---
 
-## Development
+## Why vscode-ext-kit
 
-### Prerequisites
+A VS Code extension starts as one `activate()` function, and for a while that is
+the right shape. Past a certain size it stops being one: registrations pile onto
+`context.subscriptions`, half of them are pushed and half are forgotten, setup
+order becomes load-bearing without anyone deciding that it should be, and the
+answer to "what does this extension register?" is "read `activate()` and hope".
 
-- Node.js >= 22.22.1 (Node 24 LTS recommended)
-- npm >= 10.0.0
+The usual next step is a folder of helper functions. That tidies the file
+without changing the shape — the helpers still reach for `vscode` directly, so
+none of it runs in a unit test, and the lifecycle is still whatever order the
+calls happen to be in.
 
-### Setup
+This package takes a different route. An extension is a **declaration**:
+modules describe what exists, and the framework validates that description
+before VS Code is touched, runs it, and unwinds it through one path.
 
-```bash
-git clone https://github.com/kkdev92/vscode-ext-kit.git
-cd vscode-ext-kit
-npm install
+- Mistakes that are knowable up front — a duplicate id, a missing service, a
+  dependency cycle — fail at import, not on the day someone runs the command
+- Nothing is disposed by hand, so nothing is forgotten
+- Handlers receive their capabilities instead of importing them, which is what
+  makes a real extension runnable in a test with no VS Code loaded
+- There is one way in per ability, so there is no question of which of four
+  functions to reach for
+
+---
+
+## Usage
+
+Every ability is reached through a declaration or an injected token.
+
+**A module declares:**
+
+| Declaration                                          | Registers                                                       |
+| ---------------------------------------------------- | --------------------------------------------------------------- |
+| `module.commands.handle` / `.handleTextEditor`       | a command; the second hands the handler an `ActiveEditor`       |
+| `module.services.singleton` / `.transient`           | a service, against a `serviceToken`                             |
+| `module.hostedServices.add` / `.background`          | long-lived work with a lifecycle                                |
+| `module.settings.add`                                | a `defineSettings` group                                        |
+| `module.storage.add` / `module.secrets.add`          | a `defineStorage` / `defineSecret`                              |
+| `module.fileWatchers.add`                            | a debounced, batched watcher                                    |
+| `module.statusBar.add` / `module.languageStatus.add` | a declared UI item                                              |
+| `module.treeViews.add`                               | a tree view, from a `BaseTreeDataProvider`                      |
+| `module.webviews.addView` / `.restorePanel`          | a webview view, or a panel restorer                             |
+| `module.raw.register`                                | any VS Code API with no model here, still owned and rolled back |
+
+**A handler injects:**
+
+| Token                       | Gives You                                                                 |
+| --------------------------- | ------------------------------------------------------------------------- |
+| `Notifications`             | `info` `warn` `error` `confirm`                                           |
+| `QuickInput`                | `one` `many` `text` `wizard`                                              |
+| `Editors`                   | the active editor, and cross-file edits                                   |
+| `Localization`              | `t` `plural` `number` `date` `relativeTime`, in the host's language       |
+| `Commands`                  | invoking a command, this extension's or the platform's                    |
+| `Webviews`                  | `openPanel`                                                               |
+| `Secrets`                   | secrets the _user_ names: `get` `set` `delete` `keys`                     |
+| `StatusBar`                 | `flash` — a short-lived message with no item of its own                   |
+| `FileWatchers`              | `watch`, for a glob known only at runtime                                 |
+| `Operations`                | `run`, for work that did not start in a handler                           |
+| `Log`                       | a logger for a service, which has no operation to borrow one from         |
+| a definition's own `.token` | the settings accessor, typed storage, secret or UI controller it declared |
+
+`notify`, `ask`, `l10n`, `editors`, `commands` and `status` are on every
+handler's `context` without being declared — they resolve the same tokens an
+`inject` would. `context` also carries `id`, `logger`, `signal`, `progress`
+(`run` and weighted `steps`), `resources` and `services`.
+
+Values you pass around: `ok` `err` `unwrap` `mapResult` and the `s.*` schema
+builders; `FrameworkError` with `userError` / `validationError` / `classifyError`
+/ `isCancellation`; `DisposableCollection` and `createScope`.
+
+Full signatures live in the `.d.ts` files and the JSDoc on each export; a
+generated API reference is not built yet.
+
+---
+
+## What Is Guaranteed
+
+- `stop()` runs exactly once, and only after `start()` completed or failed
+- Framework-owned resources unwind in reverse order, synchronous registrations first
+- A failed activation rolls back everything the framework created
+- A command's result and its rejection both reach the caller
+- The plan is immutable: mutating a definition after compilation cannot change what runs
+- Fakes and real adapters satisfy the same contract suite
+
+---
+
+## Known Limitations
+
+Stated plainly, because a framework that is vague about its boundaries gets
+trusted for things it cannot do.
+
+- **Nothing unwinds on a crash**: If the extension host is killed, `deactivate` never runs — persist what matters when the operation that produced it completes, not during shutdown
+- **The shutdown budget is shared and hard**: VS Code races _every_ extension's deactivation against 5 seconds and then exits; the framework's own budget (3 s by default) sits inside that, and past it pending work is abandoned rather than awaited
+- **Rollback covers what the framework owns**: registrations, the services it created, resources placed in one of its scopes, started hosted services — it cannot un-write a file or un-send a request
+- **Leak detection has the same boundary**: it sees what the framework tracks, and nothing else
+- **Cancellation is cooperative**: aborting a signal asks a handler to stop; one that ignores its signal keeps running, and the framework cannot terminate it
+- **The Test Host does not reproduce VS Code**: it renders no UI, interprets no contribution point, and does not substitute a direct `import "vscode"`
+- **No generated API reference yet**, and no step-by-step migration guide from 2.x
+
+---
+
+## How It Works
+
+```text
+   defineModule(...)          pure data: no VS Code, no side effects
+          |
+          v
+   compileApplication()       preflight: ids, service graph, scopes
+          |
+          v
+   ApplicationPlan            immutable, deeply frozen
+          |
+          v
+   ApplicationHost            state machine; start / stop exactly once
+          |
+          v
+   capability ports  ------>  real adapters  |  fakes (Test Host)
 ```
 
-### Scripts
+The split at the bottom is the point: the plan above it never learns which side
+it is running on, so the plan a test runs is the plan that ships.
 
-| Script | Description |
-|--------|-------------|
-| `npm run build` | Compile TypeScript to dist/ |
-| `npm test` | Run tests with Vitest |
-| `npm run test:watch` | Run tests in watch mode |
-| `npm run test:coverage` | Run tests with coverage |
-| `npm run lint` | Run ESLint |
-| `npm run lint:fix` | Fix ESLint errors |
-| `npm run format` | Format code with Prettier |
-| `npm run typecheck` | Run TypeScript type checking |
-| `npm run knip` | Check for unused code/exports |
+Four ideas carry the whole design.
 
-### Git Hooks
+**A module is a value.** Its callback runs once, synchronously, with no side
+effects, and produces a frozen description. Anything that needs to _happen_
+happens later, in a hosted service or a handler.
 
-Pre-commit hooks automatically run:
-1. **lint-staged** - Formats and lints staged files
-2. **typecheck** - Verifies TypeScript types
-3. **test** - Runs the test suite
+**Preflight is not a linter.** It runs inside `defineExtension`, at module import
+time, and refuses to produce a plan it cannot run.
 
-## Changelog
+**Every unit of work is an operation.** A command invocation, a watcher batch:
+each gets an id, a logger, a combined `AbortSignal`, a progress session and a
+resource scope that is disposed when the work settles.
 
-See [CHANGELOG.md](CHANGELOG.md) for the release history.
+**Ownership is explicit.** The host owns registrations and declared UI; the
+container owns singletons and disposes them in reverse creation order; an
+operation owns what it resolved. `deactivate()` unwinds all of it, once.
+
+---
+
+## Coming from 2.x
+
+2.x is a **utility library**: you call its helpers from your own `activate()`.
+3.x is a **framework**: it owns activation and deactivation, and you hand it
+modules. Everything 2.x could do, 3.x can do — the shapes changed, because there
+is now one way in per ability rather than a standalone function _and_ a
+declaration.
+
+Three consequences worth knowing before you port:
+
+- **You no longer push to `context.subscriptions`**: the host owns what it registered, and `deactivate` unwinds all of it
+- **A capability arrives by injection, not by import**: that is what makes a handler runnable in a test with no VS Code loaded
+- **Cancellation is a signal**: anything that took a `CancellationToken` takes an `AbortSignal`, and `context.signal` already combines the operation's own cancellation with the user's
+
+Typed storage keeps 2.x's envelope format, so values written by a 2.x build are
+read by a 3.x build, and the mock kit is unchanged.
+
+The [CHANGELOG](CHANGELOG.md) carries the full old-to-new mapping.
+
+---
+
+## Platform Requirements
+
+|                  |                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| VS Code          | `^1.125.0` — your extension declares the same `engines.vscode`; CI tests stable                                                       |
+| Extension hosts  | desktop and web, both covered by CI                                                                                                   |
+| Node (to build)  | `>=22.12.0`                                                                                                                           |
+| Module format    | **ESM only** — `require()` of any subpath fails by design; bundle as extensions normally do                                           |
+| TypeScript `lib` | `ESNext.Disposable` (the public types name `Symbol.dispose`) and one of `DOM` / `WebWorker` / `@types/node` (they name `AbortSignal`) |
+| TypeScript       | 6.0.x is what this repo builds with; 7.x compiles the package in a non-blocking CI lane                                               |
+
+The floor is `1.125.0` because that is the newest `@types/vscode` there is, so it
+is the newest API this package can name at all. VS Code updates itself and CI
+tests stable, so treat the floor as a formality rather than a tested target.
+`scripts/verify-package.mjs` checks the `lib` requirements against the packed
+`.d.ts` files on every CI run, so that row is verified rather than remembered.
+
+---
+
+## Troubleshooting
+
+- **`ERR_REQUIRE_ESM` or `require() of ES Module`**: the package is ESM only, by design; bundle your extension with esbuild/webpack/rollup, which is what VS Code extensions normally do anyway
+- **`Symbol.dispose` or `AbortSignal` is not defined in the types**: add `ESNext.Disposable` and one of `DOM` / `WebWorker` / `@types/node` to `lib` — see [Platform Requirements](#platform-requirements)
+- **An error at import time, before anything ran**: that is preflight, and it is working; the message names the duplicate id, the missing service or the cycle
+- **A command is greyed out in the Command Palette**: that is `enablement` / `commandPalette` `when` in your `package.json`, not something this package controls
+- **A text editor command's result is `undefined`**: VS Code runs those handlers fire-and-forget and discards what they return; use `module.commands.handle` with `Editors.active` when the caller needs the result
+- **`vscode` cannot be resolved in tests**: point Vitest's `resolve.alias` at `@kkdev92/vscode-ext-kit/testing/vitest`, or merge `vscodeExtKitVitestConfig`
+
+---
+
+## Security and Privacy
+
+- **No Telemetry**: the package collects no usage data and makes no network requests
+- **No Credentials of Its Own**: it holds none, and reads none
+- **Secrets Stay Out of Diagnostics**: a secret's value never reaches a log, a diagnostic or an error message — a schema failure reports the key, the vendor and an issue count, never a message, a path or a value
+- **Webview Messages Are Untrusted Input**: envelopes are validated before they touch state, and the CSP helper puts a nonce in `script-src` rather than the webview's own source
+- **Untrusted Workspaces**: a module declares what it requires, and runtime preflight refuses to activate a module whose requirements this host does not meet
+
+For vulnerability reporting, see [SECURITY.md](SECURITY.md).
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions are welcome — thank you for helping make this better 🙌
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+`npm run quality` is the gate: typecheck, lint, tests with per-layer coverage
+floors, and dead-code detection. Two more lanes run the framework in a real
+desktop Extension Host and a real browser worker.
+
+If you're planning a larger change, opening an issue first is appreciated. One
+thing to know about direction: adding a second way to do something that already
+has one is the change most likely to be turned down.
 
 ---
 
-## Security
+## Support & Maintenance Policy
 
-To report a vulnerability, please see [SECURITY.md](SECURITY.md).
+This is a personal project maintained in spare time. It is active, but support
+is best-effort: I'll do my best to review issues and PRs, and releases may be a
+bit slow sometimes — thank you for your patience.
+
+The `3.x` line is pre-release. Breaking changes are expected between alphas and
+are listed in the [CHANGELOG](CHANGELOG.md). `2.x` remains `latest` on npm and
+still takes bug fixes.
+
+Helpful things when reporting bugs:
+
+- VS Code version, OS, and whether it is the desktop or web extension host
+- The smallest module definition that reproduces the issue
+- Whether it fails at import (preflight), at activation, or at runtime
+
+Security-related reports should follow [SECURITY.md](SECURITY.md).
+Really appreciate you using it 💛
 
 ---
 
 ## License
 
 [MIT](LICENSE)
+
+---
+
+## Acknowledgments
+
+- Built on the [VS Code Extension API](https://code.visualstudio.com/api); this
+  is a third-party project, not affiliated with or endorsed by Microsoft
+- Validation follows [Standard Schema](https://standardschema.dev/), so Zod,
+  Valibot, ArkType and friends work without an adapter
+- Tested with [Vitest](https://vitest.dev/),
+  [`@vscode/test-electron`](https://github.com/microsoft/vscode-test) and
+  [`@vscode/test-web`](https://github.com/microsoft/vscode-test-web)

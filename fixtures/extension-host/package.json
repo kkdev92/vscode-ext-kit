@@ -1,0 +1,36 @@
+{
+  "name": "extension-host",
+  "displayName": "vscode-ext-kit Extension Host fixture",
+  "description": "Verifies the framework against a real Extension Host: shutdown ordering, command result delivery, and runtime feature availability.",
+  "publisher": "ext-kit-fixtures",
+  "version": "0.0.0",
+  "private": true,
+  "engines": {
+    "vscode": "^1.125.0"
+  },
+  "main": "./out/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "extKitFixture.probe",
+        "title": "Probe",
+        "category": "Ext Kit Fixture"
+      },
+      {
+        "command": "extKitFixture.viewReport",
+        "title": "View Report",
+        "category": "Ext Kit Fixture"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "extKitFixture.sidebar",
+          "name": "Ext Kit Fixture",
+          "type": "webview"
+        }
+      ]
+    }
+  }
+}
