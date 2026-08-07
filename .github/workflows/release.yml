@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  # `verify` is otherwise unreachable until a tag is pushed, and a pushed tag
+  # cannot be moved -- the ruleset makes `v*` immutable, deliberately. So a
+  # mistake in this file costs a version number. Running it on demand is how you
+  # find one first. `publish` stays tag-only below, so a dispatch cannot publish.
+  workflow_dispatch:
 
 # Nothing at workflow level, deliberately. `id-token: write` is the publishing
 # capability under npm Trusted Publishing: GitHub injects the OIDC request
@@ -40,6 +45,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # First, not last. Type-aware lint resolves `fixtures/` through the built
+      # `dist/`, and the tarball checks refuse to run without it, so on a clean
+      # checkout everything below this line needs it to exist. (`tsc -b --noEmit`
+      # is not an option: TS6310.)
+      - name: Build
+        run: npm run build
+
       - name: Run linter
         run: npm run lint
 
@@ -53,9 +65,6 @@ jobs:
       - name: Run tests with the coverage gate
         run: npm run test:coverage
 
-      - name: Build
-        run: npm run build
-
       # The same consumer-level checks CI runs, repeated here: a release must not
       # be the first time the tarball is exercised.
       - name: Verify the packed package
@@ -64,6 +73,10 @@ jobs:
   publish:
     needs: verify
     runs-on: ubuntu-latest
+
+    # A manual dispatch runs `verify` and stops here. Publishing needs a version
+    # to publish, and the only thing that names one is the tag.
+    if: github.ref_type == 'tag'
 
     # The gate that survives this file being rewritten. Everything else here is
     # read from the pushed tag, so anyone who can push a tag can also delete the

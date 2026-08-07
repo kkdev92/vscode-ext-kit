@@ -6,15 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 From 1.0.0 onward this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0 releases followed it in spirit; their breaking changes are marked **Breaking**.
 
-## [3.0.0-alpha.0] - unreleased
+## [3.0.0-alpha.1] - 2026-08-08
 
 **A different kind of package.** 2.x is a utility library you call from your own
 `activate()`. 3.x is an application framework that owns activation and
 deactivation, and that you hand modules to. The capability APIs came across; the
 application shape did not.
 
-Not published. `latest` on npm stays on 2.x until the release decision, and this
-line will publish on the `next` tag.
+Published on the **`next`** dist-tag. `latest` stays on 2.x, which continues on
+`v2-maintenance`, so nothing installs this by accident:
+`npm install @kkdev92/vscode-ext-kit@next`.
+
+There is no `3.0.0-alpha.0` on npm. Its tag exists and its release workflow
+failed before publishing anything — release tags are immutable here, so the fix
+took the next number rather than the same one.
 
 Every v2 capability has an equivalent here, and an existing extension has been
 migrated onto it end to end — commands, views, webviews, settings, storage,
@@ -770,7 +775,7 @@ platform support, toolchain currency, and release supply chain.
 
 Initial public release.
 
-[3.0.0-alpha.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v2.1.0...HEAD
+[3.0.0-alpha.1]: https://github.com/kkdev92/vscode-ext-kit/compare/v2.1.0...v3.0.0-alpha.1
 [2.1.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v2.0.1...v2.1.0
 [2.0.1]: https://github.com/kkdev92/vscode-ext-kit/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v1.1.0...v2.0.0
