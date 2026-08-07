@@ -12,8 +12,6 @@
     "url": "https://github.com/kkdev92/vscode-ext-kit/issues"
   },
   "homepage": "https://github.com/kkdev92/vscode-ext-kit#readme",
-  "//": "`private` is the publication gate: npm publish refuses outright rather than relying on anyone remembering the policy. Feature parity with 2.x is complete; what remains is the decision to release. Delete this field and this note together — publishConfig below is already correct, and puts the first release on the `next` tag so `latest` stays on 2.x.",
-  "private": true,
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public",
