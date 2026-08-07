@@ -1,51 +1,94 @@
 /**
  * @packageDocumentation
- * `@kkdev92/vscode-ext-kit/testing` — a framework-injected mock kit for the
- * `vscode` module, published as a subpath export so extension authors can
- * unit test code that imports `vscode` without a running extension host.
+ * Public `./testing` entry point.
  *
- * This subpath has zero runtime dependencies, including on `vitest`/`jest`
- * themselves: every factory takes a {@link MockFrameworkLike} (typically
- * `vi` or `jest`) instead of importing one.
+ * Prefer the highest-level seam that reaches the code under test:
  *
- * @example
- * ```ts
- * // tests/setup.ts
- * import { vi } from 'vitest';
- * import { createVSCodeMock } from '@kkdev92/vscode-ext-kit/testing';
+ * - `createTestHost` for framework modules and their production plan;
+ * - a focused port fake for one capability or service;
+ * - `createVSCodeMock` only for code that directly imports `vscode`.
  *
- * vi.mock('vscode', () => createVSCodeMock(vi));
- * ```
- *
- * @example
- * ```ts
- * import { describe, it, expect, vi } from 'vitest';
- * import * as vscode from 'vscode';
- * import { createMockExtensionContext, createMockLogger } from '@kkdev92/vscode-ext-kit/testing';
- * import { activate } from '../src/extension.js';
- *
- * describe('myExtension', () => {
- *   it('registers the hello command', () => {
- *     const context = createMockExtensionContext(vi);
- *     const logger = createMockLogger(vi);
- *
- *     activate(context, logger);
- *
- *     expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
- *       'myext.hello',
- *       expect.any(Function)
- *     );
- *   });
- * });
- * ```
- *
- * @module @kkdev92/vscode-ext-kit/testing
+ * This package never imports `vscode` at runtime. The low-level mock uses only
+ * `import type`, so ordinary unit tests do not require an Extension Host. That
+ * convenience is not a compatibility guarantee: platform rendering, host
+ * scheduling and unimplemented VS Code members still belong in Extension Host
+ * tests.
  */
 
-// ============================================
-// vscode module mock (enums, value classes, namespaces)
-// ============================================
-export { createVSCodeMock } from './vscodeMock.js';
+export { createFakeCommands } from './fakes/fake-commands.js';
+export type { FakeCommands } from './fakes/fake-commands.js';
+
+export { createFakeEnvironment } from './fakes/fake-environment.js';
+export type { FakeEnvironment } from './fakes/fake-environment.js';
+
+export { createFakeWebviews } from './fakes/fake-webview.js';
+export type {
+  FakeWebviewPanel,
+  FakeWebviewSerializer,
+  FakeWebviewView,
+  FakeWebviews,
+} from './fakes/fake-webview.js';
+
+export { createFakeEditor } from './fakes/fake-editor.js';
+export type { FakeEditor, RecordedWorkspaceEdit } from './fakes/fake-editor.js';
+
+export { createFakeLocalization } from './fakes/fake-localization.js';
+export type { FakeLocalization } from './fakes/fake-localization.js';
+
+export { createFakeSettings } from './fakes/fake-settings.js';
+export type {
+  FakeSettings,
+  FakeSettingsPlacement,
+  FakeSettingsTier,
+} from './fakes/fake-settings.js';
+
+export { createTestHost } from './test-host.js';
+export type { CreateTestHostOptions, LeakReport, ServiceOverrides, TestHost } from './test-host.js';
+
+// Manifest and source remain separate because VS Code consumes contributions
+// before activation. This assertion makes source declarations authoritative
+// only for their mechanical overlap; human-facing manifest text stays manual.
+export { assertManifestMatches } from './manifest.js';
+export type { DeclaredContributions } from './manifest.js';
+
+export { createFakeMemento, createFakeSecrets, createFakeStorage } from './fakes/fake-storage.js';
+export type { FakeMemento, FakeSecrets, FakeStorage } from './fakes/fake-storage.js';
+
+export { createFakeFileWatchers, fakeUri } from './fakes/fake-filewatcher.js';
+export type { FakeFileWatchers } from './fakes/fake-filewatcher.js';
+
+export { createFakeTreeViews } from './fakes/fake-treeview.js';
+export type { FakeTreeView, FakeTreeViews } from './fakes/fake-treeview.js';
+
+export { createFakeQuickInput } from './fakes/fake-quick-input.js';
+export type { FakeInputBox, FakeQuickInput, FakeQuickPick } from './fakes/fake-quick-input.js';
+
+export {
+  createFakeLanguageStatus,
+  createFakeNotifications,
+  createFakeProgress,
+  createFakeStatusBar,
+} from './fakes/fake-ui.js';
+export type {
+  FakeLanguageStatus,
+  FakeLanguageStatusItem,
+  FakeNotifications,
+  FakeProgress,
+  FakeProgressRun,
+  FakeStatusBar,
+  FakeStatusBarItem,
+  ShownNotification,
+} from './fakes/fake-ui.js';
+
+export { createRecordingLogSink } from './fakes/recording-log-sink.js';
+export type { RecordingLogSink } from './fakes/recording-log-sink.js';
+
+// --- Partial stand-in for direct `vscode` imports ---------------------------
+// This is deliberately lower-level than TestHost. It implements the subset
+// documented by its builders, not the whole VS Code API. Factories accept the
+// runner's `vi`/`jest` object instead of importing one, keeping the main testing
+// entry point runner-neutral.
+export { createVSCodeMock } from './mock/vscode-mock.js';
 
 export {
   LogLevel,
@@ -59,9 +102,10 @@ export {
   QuickInputButtonLocation,
   LanguageStatusSeverity,
   ViewColumn,
+  UIKind,
   ColorThemeKind,
   TextEditorRevealType,
-} from './vscodeMock.js';
+} from './mock/vscode-mock.js';
 
 export {
   EventEmitter,
@@ -78,8 +122,8 @@ export {
   RelativePattern,
   Disposable,
   WorkspaceEdit,
-} from './vscodeMock.js';
-export type { MockWorkspaceEditEntry, MockTextLine } from './vscodeMock.js';
+} from './mock/vscode-mock.js';
+export type { MockWorkspaceEditEntry, MockTextLine } from './mock/vscode-mock.js';
 
 export {
   createMockUri,
@@ -100,14 +144,8 @@ export {
   createMockWorkspaceConfiguration,
   createMockTextDocument,
   createMockTextEditor,
-} from './vscodeMock.js';
+} from './mock/vscode-mock.js';
 
-// ============================================
-// Higher-level fixtures (Logger, ExtensionContext)
-// ============================================
-export { createMockLogger, createMockExtensionContext } from './factories.js';
-
-// ============================================
-// Framework-injection types
-// ============================================
-export type { MockFrameworkLike, MockFn, MockFnCreator } from './types.js';
+export { createMockExtensionContext } from './mock/mock-factories.js';
+export { createMockLogger } from './mock/mock-logger.js';
+export type { MockFn, MockFnCreator, MockFrameworkLike } from './mock/mock-types.js';

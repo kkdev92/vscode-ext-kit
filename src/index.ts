@@ -1,332 +1,347 @@
 /**
  * @packageDocumentation
- * vscode-ext-kit - A lightweight utility library for VS Code extension development
+ * Public extension-host surface of vscode-ext-kit.
  *
- * This library provides common utilities for building VS Code extensions:
+ * Start with `defineModule` to declare one cohesive feature, then pass those
+ * modules to `defineExtension` and re-export its `activate`/`deactivate`
+ * properties from the extension entry point. Handlers receive an
+ * `OperationContext` and explicitly declared injected services; tests run the
+ * resulting `app.plan` with the `./testing` entry point. That route preserves
+ * preflight, dependency validation, resource ownership and one shutdown path.
  *
- * - **Extension Kit** - One-call wiring for logger + error handling + commands
- * - **Logger** - LogOutputChannel-backed structured logging with child scopes
- * - **run/tryRun** - Unified, cancellation-aware error handling
- * - **Commands** - Compile-time checked batch command registration
- * - **Config** - Schema-driven, validated, observable configuration
- * - **Storage** - Versioned, migratable global/workspace/secret storage
- * - **UI utilities** - QuickPick, InputBox, and multi-step wizard
- * - **Notification** - showInfo/showWarn/showError with actions
- * - **StatusBar** - Managed status bar items with spinner support
- * - **FileWatcher** - Debounced file watching with event batching
- * - **Editor** - Text editor manipulation utilities
- * - **TreeView** - Base TreeDataProvider with caching
- * - **WebView** - Managed WebView panels with CSP support
- * - **std** - vscode-free debounce/throttle/timeout/retry (also under the
- *   `./timing` and `./retry` subpath exports for webview bundles)
- * - **l10n** - Localization and Intl-based formatting
+ * What is deliberately *not* here is anything that would be a second way to
+ * reach something already exported. `defineExtension` compiles the plan, builds
+ * every capability and owns the lifecycle, so the application constructors, the
+ * `createVSCode*Capability` factories, the scope constructors and the host state
+ * machine stay internal — exporting them would offer a second way to start an
+ * application, one that skips the parts the first way guarantees.
  *
- * @example
- * ```typescript
- * import { createExtensionKit, showInfo } from '@kkdev92/vscode-ext-kit';
+ * The same rule excludes a free function beside every token: `showInfo` next to
+ * `Notifications`, `createTypedStorage` next to `defineStorage`. Each ability is
+ * reachable exactly once, through a declaration or an injected token, so there
+ * is never a question of which of two spellings is the right one.
  *
- * export function activate(context: vscode.ExtensionContext) {
- *   const kit = createExtensionKit<'myext.hello'>(context, 'MyExtension');
- *   kit.registerCommands({
- *     'myext.hello': () => showInfo('Hello!'),
- *   });
- * }
- * ```
+ * Extension-host feature code should import from this barrel. The vscode-free
+ * helpers — `./timing`, `./retry`,
+ * `./format` — are *also* their own subpaths, for a webview bundle, which cannot
+ * import this module at all: it reaches `defineExtension` and therefore
+ * `vscode`, which a browser build cannot resolve. Extension-host code should not
+ * have to know that. The test surface is `./testing`, and the browser half of
+ * the webview RPC is `./webview-client`. The root barrel is intentionally not
+ * browser-safe because it includes `defineExtension` and therefore the real
+ * `vscode` adapter.
  *
- * @module @kkdev92/vscode-ext-kit
+ * If the framework does not cover an API, use a module's managed raw
+ * registration and put every registration/resource returned by VS Code into
+ * the supplied scopes. That keeps declared dependencies visible to preflight
+ * and cleanup inside the application lifecycle. A direct `vscode` import
+ * outside that boundary is invisible to the Test Host and needs its own
+ * Extension Host coverage.
  */
 
-// ============================================
-// Core: shared types
-// ============================================
+// --- Application declarations and the single production entry point -------
+export { defineExtension } from './vscode/foundation/extension.js';
 export type {
-  LogLevel,
-  LoggerOptions,
-  Logger,
-  CommandHandler,
-  TextEditorCommandHandler,
-  RegisterCommandsOptions,
-  ProgressOptions,
-} from './core/types.js';
+  DefineExtensionOptions,
+  ExtensionApplication,
+} from './vscode/foundation/extension.js';
 
-// ============================================
-// Core: Result
-// ============================================
-export type { Result } from './core/result.js';
-export { ok, err, unwrap, unwrapOr, mapResult, mapResultErr } from './core/result.js';
-
-// ============================================
-// Core: schema (Standard Schema-compatible)
-// ============================================
-export { s, validateSchema } from './core/schema.js';
+export { defineModule } from './foundation/modules/definition.js';
 export type {
-  StandardSchemaV1,
-  Infer,
-  SchemaIssue,
-  SchemaResult,
-  StringOptions,
-  NumberOptions,
-} from './core/schema.js';
+  CommandCollection,
+  DefineModuleOptions,
+  FileWatcherCollection,
+  HostedServiceCollection,
+  LanguageStatusCollection,
+  ModuleBuilder,
+  ModuleDefinition,
+  RawRegistrationCollection,
+  SecretCollection,
+  ServiceCollection,
+  SettingsCollection,
+  StatusBarCollection,
+  StorageCollection,
+  TreeViewCollection,
+  WebviewCollection,
+} from './foundation/modules/definition.js';
+export { ModuleCompatibility } from './foundation/modules/compatibility.js';
+export type { ModuleRequirements } from './foundation/modules/compatibility.js';
+export type { ApplicationPlan } from './foundation/application/plan.js';
+export type { HostDiagnostic } from './foundation/hosting/application-host.js';
 
-// ============================================
-// Core: logger
-// ============================================
-export { createLogger } from './core/logger.js';
+// --- Explicit dependency injection ----------------------------------------
+export { serviceToken } from './foundation/services/token.js';
+export type { Injected, ServiceMap, ServiceOf, ServiceToken } from './foundation/services/token.js';
+export { ServiceLifetime } from './foundation/services/descriptors.js';
+export type { ServiceResolver } from './foundation/services/container.js';
 
-// ============================================
-// Core: run (unified error handling)
-// ============================================
-export { run, tryRun, isCancellation } from './core/run.js';
-export type { RunOptions } from './core/run.js';
-
-// ============================================
-// Core: Extension Kit
-// ============================================
-export { createExtensionKit } from './core/kit.js';
-export type { ExtensionKit, ExtensionKitOptions } from './core/kit.js';
-
-// ============================================
-// Core: commands
-// ============================================
-export { registerCommands, registerTextEditorCommands, executeCommand } from './core/commands.js';
-
-// ============================================
-// Core: disposable
-// ============================================
-export { DisposableCollection, createScope } from './core/disposable.js';
-
-// ============================================
-// Config
-// ============================================
-export { field, defineConfigSchema, watchSetting } from './config/index.js';
+// --- Commands -------------------------------------------------------------
+export { defineCommandContract } from './foundation/commands/contract.js';
 export type {
-  ConfigFieldDef,
-  ConfigValidationIssue,
-  ConfigInspection,
-  TypedConfig,
-  ConfigWatcher,
-} from './config/index.js';
+  ArgumentsValidator,
+  CommandContract,
+  CommandContractOptions,
+  StandardSchemaLike,
+  ValidationIssue,
+  ValidationResult,
+  Validator,
+} from './foundation/commands/contract.js';
+export type { CommandExecutor } from './foundation/commands/binder.js';
+// Calling a command, as opposed to registering one.
+export { Commands } from './capabilities/commands/commands.js';
+export type { CommandsService } from './capabilities/commands/commands.js';
 
-// ============================================
-// Storage
-// ============================================
+// --- Per-operation context, logging and resource ownership -----------------
+export type { OperationContext } from './foundation/operations/context.js';
+// How work that did not start in a handler comes by a context of its own.
+export { Operations } from './foundation/operations/service.js';
+export type { OperationsService, RunTaskOptions } from './foundation/operations/service.js';
+export type {
+  OperationProgress,
+  OperationProgressOptions,
+  ProgressStep,
+  StepsOutcome,
+} from './foundation/operations/progress.js';
+export type { LogEntry, LogFields, Logger, LogSink } from './foundation/logging/logger.js';
+// For a service, which has no operation to take `context.logger` from.
+export { Log } from './foundation/logging/token.js';
+export type { ResourceScope } from './foundation/resources/resource-scope.js';
+export type { Registration, RegistrationScope } from './foundation/resources/registration-scope.js';
+
+// --- Background lifetime and the managed raw-API escape hatch --------------
+export type {
+  HostedServiceContext,
+  HostedServiceStopContext,
+} from './foundation/hosted-services/definition.js';
+export type { RawRegistrationContext } from './foundation/raw/definition.js';
+
+// --- Settings -------------------------------------------------------------
 export {
-  createGlobalStorage,
-  createWorkspaceStorage,
-  createSecretStore,
-  createSecretStorage,
-  listStorageKeys,
-} from './storage/index.js';
+  defineSettings,
+  setting,
+  SettingContributionScope,
+  SettingsValidationPolicy,
+} from './foundation/settings/definition.js';
+export type {
+  DefineSettingsOptions,
+  SettingSpec,
+  SettingSpecs,
+  SettingsDefinition,
+  SettingsValues,
+} from './foundation/settings/definition.js';
+export type {
+  SettingsAccessor,
+  SettingsChangeEvent,
+  SettingsSnapshot,
+} from './foundation/settings/accessor.js';
+export { SettingsTarget } from './foundation/platform/ports.js';
+export type { SettingsInspection, SettingsScope } from './foundation/platform/ports.js';
+
+// --- Storage and secrets --------------------------------------------------
+export { defineStorage, defineSecret } from './capabilities/storage/definition.js';
+export type {
+  DefineSecretOptions,
+  DefineStorageOptions,
+  SecretDefinition,
+  StorageDefinition,
+  StorageScope,
+} from './capabilities/storage/definition.js';
 export type {
   StorageIssue,
   StorageOptions,
-  GlobalStorageOptions,
   TypedStorage,
-  SecretStore,
-  SecretStorage,
-} from './storage/index.js';
+} from './capabilities/storage/typed-storage.js';
+export { Secrets } from './capabilities/secrets/secrets.js';
+export type { SecretAccessor, SecretStore } from './capabilities/secrets/secrets.js';
 
-// ============================================
-// Progress
-// ============================================
-export { withProgress, withSteps, toAbortSignal } from './ui/progress.js';
+// --- File watching --------------------------------------------------------
 export type {
-  ProgressReporter,
-  ProgressStep,
-  StepsProgressOptions,
-  WithStepsOptions,
-  StepsResult,
-} from './ui/progress.js';
-
-// ============================================
-// UI: pick / input / wizard
-// ============================================
-export {
-  pickOne,
-  pickMany,
-  toPickItem,
-  toPickSeparator,
-  toPickButton,
-  inputText,
-  wizard,
-  quickpickStep,
-  inputStep,
-  WizardStepError,
-} from './ui/index.js';
-export type {
-  PickItem,
-  PickItemDisplay,
-  PickButtonOptions,
-  PickOptions,
-  InputTextOptions,
-  StepOutcome,
-  StepDefinition,
-  QuickPickStepConfig,
-  InputStepConfig,
-  WizardRunOptions,
-  WizardBuilder,
-} from './ui/index.js';
-
-// ============================================
-// Notification
-// ============================================
-export { showInfo, showWarn, showError, confirm } from './ui/notification.js';
-export type { NotifyAction, NotifyOptions, ConfirmOptions } from './ui/notification.js';
-
-// ============================================
-// StatusBar
-// ============================================
-export { createStatusBarItem, showStatusMessage } from './ui/statusbar.js';
-export type { StatusBarItemOptions, ManagedStatusBarItem } from './ui/statusbar.js';
-
-// ============================================
-// Language Status
-// ============================================
-export { createLanguageStatusItem } from './ui/languageStatus.js';
-export type {
-  LanguageStatusItemSeverity,
-  LanguageStatusItemOptions,
-  LanguageStatusItemUpdate,
-  ManagedLanguageStatusItem,
-} from './ui/languageStatus.js';
-
-// ============================================
-// FileWatcher
-// ============================================
-export { createFileWatcher, watchFile } from './workspace/filewatcher.js';
-export type {
-  FileWatcherOptions,
   FileWatcherEvent,
+  FileWatcherOptions,
   ManagedFileWatcher,
   WatchPattern,
-} from './workspace/filewatcher.js';
+} from './capabilities/workspace/filewatcher.js';
+// For a pattern only known at runtime — a file the user picked. Declared globs
+// belong in `module.fileWatchers.add`.
+export { FileWatchers } from './capabilities/workspace/watch-service.js';
+export type { FileWatcherService } from './capabilities/workspace/watch-service.js';
 
-// ============================================
-// Editor
-// ============================================
-export {
-  replaceText,
-  getSelectedText,
-  getAllSelectedText,
-  insertAtCursor,
-  getLine,
-  getCurrentLine,
-  applyEdits,
-  applyEditsGrouped,
-  applyWorkspaceEdits,
-  transformSelection,
-  transformAllSelections,
-  moveCursor,
-  selectRange,
-  selectLine,
-  selectWord,
-  getFilePath,
-  rangeFromOffsets,
-  getTextInOffsetRange,
-  resolvePositionsBatch,
-  resolveOffsetsBatch,
-} from './workspace/editor.js';
+// --- UI services resolved through declared dependency tokens ---------------
+export { Notifications } from './capabilities/ui/notifications.js';
 export type {
-  EditOperation,
-  FilePathInfo,
-  WorkspaceEditEntry,
-  ApplyWorkspaceEditsOptions,
-} from './workspace/editor.js';
+  ConfirmOptions,
+  NotificationService,
+  NotifyAction,
+  NotifyOptions,
+} from './capabilities/ui/notifications.js';
+export { QuickInput } from './capabilities/ui/quick-input-service.js';
+export type { QuickInputService } from './capabilities/ui/quick-input-service.js';
+export { toPickButton, toPickItem, toPickSeparator } from './capabilities/ui/quick-input.js';
+export type {
+  InputTextOptions,
+  PickButtonOptions,
+  PickItem,
+  PickItemDisplay,
+  PickOptions,
+} from './capabilities/ui/quick-input.js';
+export { Localization } from './capabilities/l10n/localization.js';
+export type { LocalizationService } from './capabilities/l10n/localization.js';
+export { Editors } from './capabilities/editor/editor.js';
+export type {
+  ActiveEditor,
+  DocumentLocation,
+  EditorService,
+  EditStage,
+} from './capabilities/editor/editor.js';
+export { Webviews } from './capabilities/views/webview/host.js';
+export type {
+  ManagedWebview,
+  ManagedWebviewPanel,
+  WebviewService,
+} from './capabilities/views/webview/host.js';
 
-// ============================================
-// TreeView
-// ============================================
+// --- UI contributions owned by a module/application plan -------------------
+export { defineLanguageStatusItem, defineStatusBarItem } from './capabilities/ui/definition.js';
+export type {
+  DefineLanguageStatusItemOptions,
+  DefineStatusBarItemOptions,
+} from './capabilities/ui/definition.js';
+export type { ManagedStatusBarItem, StatusBarItemOptions } from './capabilities/ui/statusbar.js';
+export { StatusBar } from './capabilities/ui/status-bar-service.js';
+export type { StatusBarService } from './capabilities/ui/status-bar-service.js';
+export type {
+  LanguageStatusItemOptions,
+  LanguageStatusItemSeverity,
+  LanguageStatusItemUpdate,
+  ManagedLanguageStatusItem,
+} from './capabilities/ui/language-status.js';
+
+// --- The wizard -----------------------------------------------------------
+export { WizardStepError, inputStep, quickpickStep } from './capabilities/ui/wizard.js';
+export type {
+  InputStepConfig,
+  QuickPickStepConfig,
+  StepDefinition,
+  StepOutcome,
+  StepRunContext,
+  WizardBuilder,
+  WizardRunOptions,
+  WizardStepPhase,
+} from './capabilities/ui/wizard.js';
+
+// --- Editing text ---------------------------------------------------------
+export type {
+  TextEdit,
+  TextEditOptions,
+  TextPosition,
+  TextRange,
+  WorkspaceEditOptions,
+  WorkspaceTextEdit,
+} from './foundation/platform/ports.js';
+
+// --- Tree views -----------------------------------------------------------
 export {
   BaseTreeDataProvider,
-  SimpleTreeDataProvider,
-  createTreeView,
-  createDragAndDropController,
-  withPagination,
   LOAD_MORE_ID,
-} from './views/treeview.js';
+  SimpleTreeDataProvider,
+  withPagination,
+} from './capabilities/views/tree.js';
 export type {
-  TreeItemData,
-  TreeCheckboxChange,
-  TreeDragAndDropOptions,
   AddItemOptions,
   PaginationOptions,
-} from './views/treeview.js';
+  TreeCheckboxChange,
+  TreeDragAndDropOptions,
+  TreeItemData,
+} from './capabilities/views/tree.js';
+export { TreeItemChecked, TreeItemCollapsible } from './foundation/platform/ports.js';
+export type { TreeItemIcon, TreeViewOptionsLike } from './foundation/platform/ports.js';
 
-// ============================================
-// Webview
-// ============================================
+// --- Webviews -------------------------------------------------------------
+export { createWebviewRpc } from './capabilities/views/webview/rpc.js';
+export type {
+  WebviewRpc,
+  WebviewRpcRequestOptions,
+  WebviewRpcSchema,
+} from './capabilities/views/webview/rpc.js';
 export {
-  createWebviewPanel,
-  registerWebviewPanelSerializer,
-  registerWebviewView,
-  createWebviewRpc,
-  generateCSP,
-  generateNonce,
-  loadHtmlTemplate,
   createWebviewHtml,
   escapeHtml,
-} from './views/webview/index.js';
-export type {
-  WebviewOptions,
-  WebviewMessage,
-  ManagedWebviewPanel,
-  WebviewViewOptions,
-  ManagedWebviewView,
-  WebviewRpc,
-  WebviewRpcSchema,
-  WebviewRpcRequestOptions,
-  CSPOptions,
-} from './views/webview/index.js';
+  generateCSP,
+  generateNonce,
+} from './capabilities/views/webview/html.js';
+export type { CSPOptions } from './capabilities/views/webview/html.js';
+export type { WebviewPanelRequest, WebviewViewRequest } from './foundation/platform/ports.js';
 
-// ============================================
-// std: timing (vscode-free; also exported as the ./timing subpath)
-// ============================================
+// --- Results and validation -----------------------------------------------
+export { err, mapResult, mapResultErr, ok, unwrap, unwrapOr } from './capabilities/core/result.js';
+export type { Result } from './capabilities/core/result.js';
+export { s, validateSchema } from './capabilities/core/schema.js';
+export type {
+  Infer,
+  NumberOptions,
+  SchemaIssue,
+  SchemaResult,
+  StandardSchemaV1,
+  StringOptions,
+} from './capabilities/core/schema.js';
+
+// --- Errors ---------------------------------------------------------------
+export {
+  ErrorKind,
+  FrameworkError,
+  classifyError,
+  isCancellation,
+  userError,
+  validationError,
+} from './foundation/operations/errors.js';
+export type { FrameworkErrorOptions } from './foundation/operations/errors.js';
+export { OperationCancelledError } from './foundation/operations/cancellation.js';
+export { RetryExhaustedError } from './capabilities/std/retry.js';
+export { TimeoutError } from './capabilities/std/timing.js';
+
+// --- Timing, retry and formatting -----------------------------------------
+// Also on `./timing`, `./retry` and `./format`. Those exist for a webview
+// bundle, which cannot import this barrel at all — it reaches `defineExtension`
+// and therefore `vscode`, which a browser build cannot resolve. Extension-host
+// code has no such problem and should not have to know which subpath a helper
+// lives in, least of all when `TimeoutError` and `RetryExhaustedError` are
+// already here and only the functions that throw them were somewhere else.
 export {
   debounce,
-  throttle,
-  withTiming,
   measureTime,
+  throttle,
   withTimeout,
-  TimeoutError,
-} from './std/timing.js';
+  withTiming,
+} from './capabilities/std/timing.js';
 export type {
   DebounceOptions,
   DebouncedFunction,
   ThrottleOptions,
   ThrottledFunction,
-  TimingResult,
-  TimingOptions,
-  WithTimeoutOptions,
   TimeoutOperation,
-} from './std/timing.js';
-
-// ============================================
-// std: retry (vscode-free; also exported as the ./retry subpath)
-// ============================================
-export { retry, RetryExhaustedError } from './std/retry.js';
-export type { RetryOptions, RetryJitter, RetryContext } from './std/retry.js';
-
-// ============================================
-// Localization
-// ============================================
+  TimingOptions,
+  TimingResult,
+  WithTimeoutOptions,
+} from './capabilities/std/timing.js';
+export { retry } from './capabilities/std/retry.js';
+export type { RetryContext, RetryJitter, RetryOptions } from './capabilities/std/retry.js';
 export {
-  l10n,
-  getLanguage,
-  isLanguage,
-  plural,
-  formatNumber,
-  formatDate,
-  formatRelativeTime,
-  pluralFor,
-  formatNumberFor,
   formatDateFor,
+  formatNumberFor,
   formatRelativeTimeFor,
   getOrCreateCached,
-} from './l10n/index.js';
+  pluralFor,
+} from './capabilities/l10n/format.js';
 export type {
-  L10nMessageOptions,
-  PluralForms,
-  NumberFormatOptions,
   DateFormatOptions,
+  NumberFormatOptions,
+  PluralForms,
   RelativeTimeUnit,
-} from './l10n/index.js';
+} from './capabilities/l10n/format.js';
+
+// --- Disposal -------------------------------------------------------------
+export { DisposableCollection, createScope } from './capabilities/core/disposable.js';
+
+// --- Where the host is running --------------------------------------------
+export { UiKind } from './foundation/platform/ports.js';
+export type { HostEnvironment, ResourceUri, WatchedUri } from './foundation/platform/ports.js';

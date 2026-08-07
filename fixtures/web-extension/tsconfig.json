@@ -1,0 +1,28 @@
+{
+  // Typecheck only; esbuild emits the browser bundle.
+  //
+  // `types: ["vscode"]` with no "node" is the point: if anything in this fixture
+  // or in the framework it pulls in reached for a Node built-in, this would fail
+  // to compile. That is the web-safety guarantee, checked rather than asserted.
+  "extends": "../../tsconfig.build.json",
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2023", "ESNext.Disposable", "WebWorker"],
+    "types": ["vscode"],
+    "noEmit": true,
+    // The root project emits; these only typecheck, so every emit-side option it
+    // sets has to be turned back off here (composite forbids noEmit, TS6304;
+    // isolatedDeclarations needs declaration, TS5069).
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    // The root project points rootDir at src/; with noEmit it only has to cover
+    // the files in *this* program.
+    "rootDir": ".",
+    "isolatedDeclarations": false
+  },
+  "include": ["src/**/*.ts"]
+}

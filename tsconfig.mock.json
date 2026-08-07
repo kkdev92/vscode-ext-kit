@@ -1,0 +1,26 @@
+{
+  // The mock kit's own project, referenced from tsconfig.build.json. It
+  // re-implements the vscode API surface, ported verbatim from v2 --
+  // isolatedDeclarations would demand an explicit annotation on every one of
+  // its ~150 mock members for zero consumer benefit (the shapes mirror
+  // @types/vscode), so exactly these five files compile with it off.
+  "extends": "./tsconfig.build.json",
+  "compilerOptions": {
+    // vitest: the ./testing/vitest subpath imports it (its whole purpose);
+    // vscode: the factories declare vscode.ExtensionContext etc.
+    "types": ["vscode", "vitest/globals"],
+    "isolatedDeclarations": false,
+    // Must differ from the inherited value, or both projects would fight over
+    // one file.
+    "tsBuildInfoFile": "node_modules/.tsbuildinfo/mock"
+  },
+  "include": [
+    "src/testing/mock/vscode-mock.ts",
+    "src/testing/mock/mock-factories.ts",
+    "src/testing/mock/mock-types.ts",
+    "src/testing/mock/vitest.ts",
+    "src/testing/mock/vitest-config.ts"
+  ],
+  // Clear the inherited exclude: it names exactly the files included here.
+  "exclude": []
+}

@@ -1,0 +1,22 @@
+{
+  "name": "web-extension",
+  "displayName": "vscode-ext-kit web extension fixture",
+  "description": "Verifies the framework loads and runs in the browser/worker extension host.",
+  "publisher": "ext-kit-fixtures",
+  "version": "0.0.0",
+  "private": true,
+  "engines": {
+    "vscode": "^1.125.0"
+  },
+  "browser": "./out/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "extKitWebFixture.probe",
+        "title": "Probe",
+        "category": "Ext Kit Web Fixture"
+      }
+    ]
+  }
+}

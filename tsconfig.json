@@ -1,35 +1,26 @@
 {
+  // Editor, typescript-eslint (projectService) and test-typecheck config, in
+  // one: it covers src and tests together, without emitting.
+  //
+  // `composite` MUST be false here: a composite project may not disable emit
+  // (TS6304), and `isolatedDeclarations` requires declaration or composite
+  // (TS5069). Invoke with `tsc -p tsconfig.json`, never via `tsc -b` (a
+  // non-composite project cannot be referenced from a build graph -- that is
+  // tsconfig.build.json's job).
+  "extends": "./tsconfig.build.json",
   "compilerOptions": {
-    "target": "ES2023",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "lib": ["ES2023", "ESNext.Disposable"],
-    "types": ["node", "vscode"],
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "strictFunctionTypes": true,
-    "strictBindCallApply": true,
-    "strictPropertyInitialization": true,
-    "noImplicitThis": true,
-    "useUnknownInCatchVariables": true,
-    "alwaysStrict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true,
-    "isolatedModules": true
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "isolatedDeclarations": false,
+    // tests/ sits outside the build project's rootDir; with noEmit the value
+    // only has to contain every included file.
+    "rootDir": "."
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "tests"]
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
+  // Clear the build project's mock-kit exclusions: the mock kit is
+  // type-checked here (under the relaxed flags above) like everything else.
+  "exclude": []
 }

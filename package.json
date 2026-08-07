@@ -1,7 +1,7 @@
 {
   "name": "@kkdev92/vscode-ext-kit",
-  "version": "2.1.0",
-  "description": "A lightweight utility library for VS Code extension development",
+  "version": "3.0.0-alpha.0",
+  "description": "A type-safe application framework for VS Code extension development",
   "author": "kkdev92",
   "license": "MIT",
   "repository": {
@@ -14,7 +14,8 @@
   "homepage": "https://github.com/kkdev92/vscode-ext-kit#readme",
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
-    "access": "public"
+    "access": "public",
+    "tag": "next"
   },
   "type": "module",
   "main": "./dist/index.js",
@@ -23,43 +24,35 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
-    },
-    "./timing": {
-      "types": "./dist/std/timing.d.ts",
-      "import": "./dist/std/timing.js",
-      "default": "./dist/std/timing.js"
-    },
-    "./retry": {
-      "types": "./dist/std/retry.d.ts",
-      "import": "./dist/std/retry.js",
-      "default": "./dist/std/retry.js"
-    },
-    "./format": {
-      "types": "./dist/l10n/format.d.ts",
-      "import": "./dist/l10n/format.js",
-      "default": "./dist/l10n/format.js"
-    },
-    "./webview-client": {
-      "types": "./dist/views/webview/client.d.ts",
-      "import": "./dist/views/webview/client.js",
-      "default": "./dist/views/webview/client.js"
+      "import": "./dist/index.js"
     },
     "./testing": {
       "types": "./dist/testing/index.d.ts",
-      "import": "./dist/testing/index.js",
-      "default": "./dist/testing/index.js"
+      "import": "./dist/testing/index.js"
     },
     "./testing/vitest": {
-      "types": "./dist/testing/vitest.d.ts",
-      "import": "./dist/testing/vitest.js",
-      "default": "./dist/testing/vitest.js"
+      "types": "./dist/testing/mock/vitest.d.ts",
+      "import": "./dist/testing/mock/vitest.js"
     },
     "./testing/vitest-config": {
-      "types": "./dist/testing/vitestConfig.d.ts",
-      "import": "./dist/testing/vitestConfig.js",
-      "default": "./dist/testing/vitestConfig.js"
+      "types": "./dist/testing/mock/vitest-config.d.ts",
+      "import": "./dist/testing/mock/vitest-config.js"
+    },
+    "./webview-client": {
+      "types": "./dist/capabilities/webview-client/index.d.ts",
+      "import": "./dist/capabilities/webview-client/index.js"
+    },
+    "./timing": {
+      "types": "./dist/capabilities/std/timing.d.ts",
+      "import": "./dist/capabilities/std/timing.js"
+    },
+    "./retry": {
+      "types": "./dist/capabilities/std/retry.d.ts",
+      "import": "./dist/capabilities/std/retry.js"
+    },
+    "./format": {
+      "types": "./dist/capabilities/l10n/format.d.ts",
+      "import": "./dist/capabilities/l10n/format.js"
     },
     "./package.json": "./package.json"
   },
@@ -68,26 +61,28 @@
     "src",
     "README.md",
     "CHANGELOG.md",
-    "MIGRATION.md",
     "LICENSE"
   ],
-  "engines": {
-    "vscode": "^1.125.0",
-    "node": ">=22.12.0"
-  },
   "peerDependencies": {
-    "vitest": ">=2"
+    "vitest": ">=4"
   },
   "peerDependenciesMeta": {
     "vitest": {
       "optional": true
     }
   },
+  "engines": {
+    "vscode": "^1.125.0",
+    "node": ">=22.12.0"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.1",
     "@types/vscode": "~1.125.0",
     "@vitest/coverage-v8": "^4.1.10",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/test-web": "^0.0.81",
+    "esbuild": "^0.28.1",
     "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
@@ -95,43 +90,88 @@
     "lint-staged": "^17.2.0",
     "prettier": "^3.9.6",
     "rimraf": "^6.1.3",
-    "typescript": "^6.0.3",
+    "typescript": "~6.0.3",
     "typescript-eslint": "^8.65.0",
     "vitest": "^4.1.10"
   },
   "scripts": {
-    "prepare": "husky",
-    "clean": "rimraf dist",
-    "build": "npm run clean && tsc",
+    "hooks": "husky",
+    "clean": "rimraf dist node_modules/.tsbuildinfo",
+    "build": "tsc -b tsconfig.build.json",
+    "prepack": "npm run clean && npm run build",
+    "typecheck": "tsc -b tsconfig.build.json && tsc -p tsconfig.json && tsc -p tsconfig.samples.json && tsc -p fixtures/extension-host/tsconfig.json && tsc -p fixtures/web-extension/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:smoke": "node scripts/smoke-consumer.mjs",
-    "format": "prettier --write \"src/**/*.ts\"",
-    "format:check": "prettier --check \"src/**/*.ts\"",
-    "lint": "eslint src tests",
-    "lint:fix": "eslint src tests --fix",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.tests.json",
+    "lint": "eslint src tests fixtures --max-warnings 0",
+    "lint:fix": "eslint src tests fixtures --fix",
+    "format": "prettier --write \"{src,tests,fixtures,docs}/**/*.ts\" \"{scripts,fixtures}/**/*.mjs\"",
+    "format:check": "prettier --check \"{src,tests,fixtures}/**/*.ts\" \"{scripts,fixtures}/**/*.mjs\"",
     "knip": "knip",
-    "prepublishOnly": "npm run clean && npm run lint && npm run typecheck && npm run knip && npm run test && npm run build"
+    "verify:package": "node scripts/verify-package.mjs",
+    "fixture:build": "node fixtures/extension-host/build.mjs",
+    "fixture:build:web": "node fixtures/web-extension/build.mjs",
+    "test:eh": "npm run build && npm run fixture:build && node fixtures/extension-host/run-test.mjs",
+    "test:web": "npm run build && npm run fixture:build:web && node fixtures/web-extension/run-test.mjs",
+    "quality": "npm run typecheck && npm run lint && npm run test:coverage && npm run knip"
   },
   "keywords": [
     "vscode",
     "vscode-extension",
     "extension",
-    "utility",
-    "logger",
+    "framework",
+    "dependency-injection",
+    "lifecycle",
     "commands",
-    "progress",
     "configuration",
-    "tree-view",
-    "webview",
+    "testing",
     "typescript"
   ],
   "lint-staged": {
-    "{src,tests}/**/*.ts": [
+    "{src,tests,fixtures}/**/*.ts": [
       "prettier --write",
       "eslint --fix"
+    ],
+    "docs/**/*.ts": [
+      "prettier --write"
     ]
+  },
+  "prettier": {
+    "semi": true,
+    "singleQuote": true,
+    "tabWidth": 2,
+    "trailingComma": "es5",
+    "printWidth": 100,
+    "endOfLine": "lf"
+  },
+  "knip": {
+    "project": [
+      "src/**/*.ts",
+      "fixtures/**/*.ts",
+      "fixtures/**/*.mjs",
+      "scripts/**/*.mjs"
+    ],
+    "entry": [
+      "src/index.ts",
+      "src/testing/index.ts",
+      "src/testing/mock/vitest.ts",
+      "src/testing/mock/vitest-config.ts",
+      "src/capabilities/webview-client/index.ts",
+      "src/capabilities/std/timing.ts",
+      "src/capabilities/std/retry.ts",
+      "src/capabilities/l10n/format.ts",
+      "fixtures/*/build.mjs",
+      "fixtures/*/run-test.mjs",
+      "fixtures/*/src/extension.ts",
+      "fixtures/*/src/test/index.ts"
+    ],
+    "ignoreDependencies": [
+      "lint-staged"
+    ]
+  },
+  "//allowScripts": "The host contract lanes need these two install scripts: esbuild fetches its platform binary, and @playwright/browser-chromium downloads the browser @vscode/test-web drives. Both are the package's own postinstall fetching its own artifact.",
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "@playwright/browser-chromium@1.62.1": true
   }
 }

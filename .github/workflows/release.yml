@@ -5,23 +5,36 @@ on:
     tags:
       - 'v*.*.*'
 
-permissions:
-  contents: write
-  id-token: write
+# Nothing at workflow level, deliberately. `id-token: write` is the publishing
+# capability under npm Trusted Publishing: GitHub injects the OIDC request
+# variables into *every step of every job* that holds it, so granting it at
+# workflow scope would put the credential in reach of each of the ~17
+# devDependencies the verification steps load. It is granted to one job, which
+# runs nothing but the publish.
+permissions: {}
 
 jobs:
-  publish:
+  # Everything that executes third-party code: install scripts, ESLint, tsc,
+  # the whole Vitest suite, and the packed-tarball checks. This job holds no
+  # credential beyond read access to its own checkout.
+  verify:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          # Nothing here uses git after the clone, so the job's token has no
+          # reason to sit in .git/config where a dependency could read it.
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version: 24
-          registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
 
       - name: Install dependencies
@@ -36,15 +49,63 @@ jobs:
       - name: Check for unused code
         run: npm run knip
 
-      - name: Run tests
-        run: npm test
+      # Same gate as CI: a release must not lower the bar a PR had to clear.
+      - name: Run tests with the coverage gate
+        run: npm run test:coverage
 
       - name: Build
         run: npm run build
 
-      # Auth comes from npm trusted publishing (OIDC) via id-token: write —
-      # there is no NODE_AUTH_TOKEN. The registry-url above is still required
-      # so npm targets registry.npmjs.org when exchanging the OIDC token.
+      # The same consumer-level checks CI runs, repeated here: a release must not
+      # be the first time the tarball is exercised.
+      - name: Verify the packed package
+        run: npm run verify:package
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+
+    # The gate that survives this file being rewritten. Everything else here is
+    # read from the pushed tag, so anyone who can push a tag can also delete the
+    # check they are meant to pass — but the environment's rules live in
+    # repository settings: a required reviewer, and a deployment policy that
+    # only admits `v*` tags. Name it in npm's Trusted Publishing configuration
+    # too and npm validates the claim server-side, which is the only place a
+    # gate cannot be edited by whoever triggered the run.
+    environment: npm-publish
+
+    permissions:
+      # npm Trusted Publishing (OIDC).
+      id-token: write
+      # `gh release create`.
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          # `gh release create` authenticates through GH_TOKEN below, and npm
+          # provenance is built from the CI environment rather than from git.
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      # `--ignore-scripts`, because this is the job holding the publishing
+      # credential and it should execute none of the tree's install hooks. The
+      # only thing that runs afterwards is `prepack` (rimraf + tsc), and neither
+      # of those needs one. Verification already happened in the job above.
+      - name: Install build dependencies
+        run: npm ci --ignore-scripts
+
+      # `prepack` cleans and rebuilds `dist/`, so the published tarball is built
+      # here rather than carried over. Auth comes from trusted publishing (OIDC)
+      # via id-token above — there is no NODE_AUTH_TOKEN. The registry-url is
+      # still required so npm targets registry.npmjs.org when exchanging it.
       - name: Publish to npm
         run: npm publish --provenance --access public
 
