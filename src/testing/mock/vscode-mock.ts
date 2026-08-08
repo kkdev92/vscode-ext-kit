@@ -1615,6 +1615,18 @@ function createMockWorkspaceNamespace(framework: MockFrameworkLike) {
     // Trusted by default, matching an ordinary local folder. Assign `false` to
     // exercise a restricted workspace.
     isTrusted: true,
+    // The other half of the trust API, and the half an extension that supports
+    // untrusted workspaces needs. Granting trust restarts the extension host
+    // only when some extension's *enablement* changes — and an extension that
+    // declared `untrustedWorkspaces.supported` was already enabled, so its own
+    // enablement does not change. It is restarted only incidentally, if some
+    // other installed extension flips, which it cannot count on. This event is
+    // the one guaranteed signal.
+    //
+    // Like `onDidChangeConfiguration` above, the listener is recovered from
+    // `mock.calls` and invoked by the test — assigning `isTrusted = true` first
+    // is what makes the callback see a trusted workspace.
+    onDidGrantWorkspaceTrust: fn((_listener: () => void) => ({ dispose: fn() })),
     getWorkspaceFolder: fn((_uri: vscode.Uri) => undefined as vscode.WorkspaceFolder | undefined),
     /** Simplified: returns `pathOrUri` itself for a string, or `.fsPath` for a Uri. */
     asRelativePath: fn(

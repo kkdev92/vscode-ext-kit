@@ -258,6 +258,37 @@ describe('createVSCodeMock: value-class fidelity', () => {
  * real API, so code passes its tests and fails in an editor.
  */
 describe('faithfulness to the real API', () => {
+  it('carries both halves of the workspace trust API', () => {
+    // `isTrusted` alone is a trap. Granting trust restarts the extension host
+    // only when some extension's enablement changes, and an extension that
+    // declared `untrustedWorkspaces.supported` was already enabled — so it is
+    // re-activated only if some *other* extension happens to flip, which it
+    // cannot count on. Without this event, whatever an untrusted window
+    // declined to read stays unread. The two are the whole stable API; the rest
+    // of the trust surface is proposed.
+    const mock = createVSCodeMock(vi);
+
+    expect(mock.workspace.isTrusted).toBe(true);
+    expect(typeof mock.workspace.onDidGrantWorkspaceTrust).toBe('function');
+  });
+
+  it('hands the trust listener back so a test can grant trust', () => {
+    const mock = createVSCodeMock(vi);
+    mock.workspace.isTrusted = false;
+
+    const reload = vi.fn(() => mock.workspace.isTrusted);
+    const subscription = mock.workspace.onDidGrantWorkspaceTrust(reload);
+
+    // Same shape as onDidChangeConfiguration: recover the listener from the
+    // spy and drive it, having set up the state it is meant to observe.
+    mock.workspace.isTrusted = true;
+    const [listener] = vi.mocked(mock.workspace.onDidGrantWorkspaceTrust).mock.calls[0] ?? [];
+    listener?.();
+
+    expect(reload).toHaveReturnedWith(true);
+    expect(typeof subscription.dispose).toBe('function');
+  });
+
   it("includes workspace.applyEdit — the kit's own editor helpers call it", async () => {
     const mock = createVSCodeMock(vi);
     expect(typeof mock.workspace.applyEdit).toBe('function');

@@ -138,6 +138,11 @@ const ProjectSettings = defineSettings({
     limit: setting.number({ default: 10, minimum: 1, maximum: 500 }),
     mode: setting.enum({ values: ['fast', 'thorough'], default: 'fast' }),
     exclude: setting.stringArray({ default: ['**/node_modules/**'] }),
+    // "Unset" is a value. The manifest has to say `["integer", "null"]` before
+    // VS Code will accept a null default, and `validate` has to let null
+    // through or every read of a cleared setting falls back to the default —
+    // this moves both halves at once.
+    maxWidth: setting.nullable(setting.integer({ default: 1200 }), { default: null }),
   },
 });
 

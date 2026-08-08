@@ -65,3 +65,66 @@ describe('setting.stringArray items', () => {
     expect(spec.validate(['a', 2]).ok).toBe(false);
   });
 });
+
+/**
+ * A setting whose "unset" state is a value.
+ *
+ * The manifest cannot accept a null default unless it declares the null in its
+ * type, and a spec whose `validate` rejects null makes every lenient read of a
+ * cleared setting fall back to the default — so the two halves have to move
+ * together, which is why this is one builder rather than advice.
+ */
+describe('setting.nullable', () => {
+  it('adds null to the declared type without disturbing the rest', () => {
+    const spec = setting.nullable(setting.integer({ default: 1200, minimum: 1 }));
+
+    expect(spec.type).toEqual(['integer', 'null']);
+    expect(spec.scope).toBe('window');
+    expect(spec.validate(null)).toEqual({ ok: true, value: null });
+    expect(spec.validate(800)).toEqual({ ok: true, value: 800 });
+  });
+
+  it('keeps the inner validation for everything that is not null', () => {
+    const spec = setting.nullable(setting.integer({ default: 1200, minimum: 10 }));
+
+    expect(spec.validate(4)).toMatchObject({ ok: false });
+    expect(spec.validate(1.5)).toMatchObject({ ok: false });
+    expect(spec.validate('1200')).toMatchObject({ ok: false });
+  });
+
+  it('carries the inner default over for a setting that is merely clearable', () => {
+    expect(setting.nullable(setting.integer({ default: 1200 })).default).toBe(1200);
+  });
+
+  it('takes null as the default for a setting that is unset until chosen', () => {
+    const spec = setting.nullable(setting.enum({ values: ['ai'], default: 'ai' }), {
+      default: null,
+    });
+
+    expect(spec.default).toBeNull();
+  });
+
+  it('puts null first among the allowed values, where enumDescriptions expects it', () => {
+    // `enum` and `enumDescriptions` pair up positionally in the manifest, so
+    // the description of "unset" has to be the first one.
+    const spec = setting.nullable(setting.enum({ values: ['fast', 'safe'], default: 'safe' }));
+
+    expect(spec.enum).toEqual([null, 'fast', 'safe']);
+  });
+
+  it('leaves a non-enumerated setting without an enum', () => {
+    expect(setting.nullable(setting.string({ default: '' })).enum).toBeUndefined();
+  });
+
+  it('does not add null twice when wrapping something already nullable', () => {
+    const once = setting.nullable(setting.string({ default: '' }));
+
+    expect(setting.nullable(once).type).toEqual(['string', 'null']);
+  });
+
+  it('preserves a non-default scope', () => {
+    const spec = setting.nullable(setting.string({ default: '', scope: 'resource' }));
+
+    expect(spec.scope).toBe('resource');
+  });
+});
