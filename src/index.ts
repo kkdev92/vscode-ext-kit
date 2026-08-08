@@ -126,6 +126,7 @@ export type {
   DefineSettingsOptions,
   SettingSpec,
   SettingSpecs,
+  SettingValueType,
   SettingsDefinition,
   SettingsValues,
 } from './foundation/settings/definition.js';

@@ -56,13 +56,32 @@ function equalJson(left: unknown, right: unknown): boolean {
 }
 
 /**
+ * Compares a JSON Schema `type`, which is a name or a list of them.
+ *
+ * Order-insensitive, because `["string","null"]` and `["null","string"]` mean
+ * the same thing to every JSON Schema reader including VS Code. `enum` is
+ * compared in order by contrast, and deliberately: `enumDescriptions` pairs
+ * with it positionally, so a reorder there is a real change.
+ */
+function sameType(inManifest: unknown, inSource: SettingSpec<unknown>['type']): boolean {
+  // `Array.isArray` narrows to `any[]`, which makes the map below unchecked.
+  const normalise = (value: unknown): string => {
+    const names: readonly unknown[] = value instanceof Array ? value : [value];
+    return names.map(String).sort().join('|');
+  };
+  return normalise(inManifest) === normalise(inSource);
+}
+
+/**
  * Produces pasteable mechanical fields for a missing setting.
  * The placeholder description is intentionally conspicuous: generated text
  * must not silently become user-facing documentation.
  */
 function contributionFor(spec: SettingSpec<unknown>): Record<string, unknown> {
   return {
-    type: spec.type,
+    // Copied so the pasteable JSON carries a plain array rather than whatever
+    // readonly view the spec happened to hold.
+    type: typeof spec.type === 'string' ? spec.type : [...spec.type],
     default: spec.default,
     ...(spec.enum === undefined ? {} : { enum: [...spec.enum] }),
     scope: spec.scope,
@@ -132,9 +151,11 @@ function checkSettings(manifest: Manifest, declared: DeclaredContributions): Mis
       }
       // Only the machine-facing facts. Descriptions, ordering and
       // `markdownDescription` are the manifest's to own.
-      if (entry['type'] !== spec.type) {
+      if (!sameType(entry['type'], spec.type)) {
         mismatches.push({
-          summary: `setting "${key}" is ${JSON.stringify(entry['type'])} in the manifest and "${spec.type}" in src`,
+          summary:
+            `setting "${key}" is ${JSON.stringify(entry['type'])} in the manifest ` +
+            `and ${JSON.stringify(spec.type)} in src`,
         });
       }
       if (!equalJson(entry['default'], spec.default)) {
