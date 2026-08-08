@@ -262,7 +262,9 @@ export const setting = {
       default:
         options === undefined || options.default === undefined ? inner.default : options.default,
       scope: inner.scope,
-      ...(inner.enum === undefined ? {} : { enum: [null, ...inner.enum] }),
+      ...(inner.enum === undefined
+        ? {}
+        : { enum: inner.enum.includes(null as T) ? inner.enum : [null, ...inner.enum] }),
       validate: (value) => (value === null ? { ok: true, value: null } : inner.validate(value)),
     };
   },

@@ -285,3 +285,73 @@ describe('FakeSettings tier resolution', () => {
     ).toBe('y');
   });
 });
+
+/**
+ * A setting the user has cleared.
+ *
+ * The point of `setting.nullable` is not the manifest type on its own — it is
+ * that the manifest type and `validate` have to agree. Declaring the union
+ * without letting null through would be worse than not declaring it: a lenient
+ * read would treat the cleared value as invalid, quietly hand back the default,
+ * and record a diagnostic saying so. This is that behaviour, at the level where
+ * it is decided.
+ */
+describe('a nullable setting, read through the accessor', () => {
+  const definition = defineSettings({
+    section: SECTION,
+    values: {
+      maxWidth: setting.nullable(setting.integer({ default: 1200 })),
+      sibling: setting.integer({ default: 1 }),
+    },
+  });
+
+  const read = (
+    policy: 'strict' | 'lenient',
+    capability: ReturnType<typeof createFakeSettings>
+  ): { values: Readonly<Record<string, unknown>>; diagnostics: string[] } => {
+    const diagnostics: string[] = [];
+    const accessor = createSettingsAccessor({
+      definition: { section: SECTION, values: definition.values, policy },
+      capability,
+      logger: createNoopLogger(),
+      onDiagnostic: (event) => diagnostics.push(event),
+    });
+    return { values: accessor.read().values, diagnostics };
+  };
+
+  it('keeps null instead of falling back to the default', () => {
+    const capability = createFakeSettings();
+    capability._set(SECTION, 'maxWidth', 'globalValue', null);
+
+    const { values, diagnostics } = read('lenient', capability);
+
+    expect(values['maxWidth']).toBeNull();
+    // Not a fallback, so nothing to report: null is what the setting allows.
+    expect(diagnostics).toEqual([]);
+  });
+
+  it('leaves a sibling key alone', () => {
+    const capability = createFakeSettings();
+    capability._set(SECTION, 'maxWidth', 'globalValue', null);
+    capability._set(SECTION, 'sibling', 'globalValue', 7);
+
+    expect(read('lenient', capability).values['sibling']).toBe(7);
+  });
+
+  it('still rejects a value that is neither null nor the inner type', () => {
+    const capability = createFakeSettings();
+    capability._set(SECTION, 'maxWidth', 'globalValue', 'wide');
+
+    const { values, diagnostics } = read('lenient', capability);
+
+    expect(values['maxWidth']).toBe(1200);
+    expect(diagnostics).not.toEqual([]);
+  });
+
+  it('accepts null under the strict policy too, rather than throwing', () => {
+    const capability = createFakeSettings();
+    capability._set(SECTION, 'maxWidth', 'globalValue', null);
+
+    expect(() => read('strict', capability)).not.toThrow();
+  });
+});

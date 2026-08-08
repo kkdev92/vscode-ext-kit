@@ -117,9 +117,14 @@ describe('setting.nullable', () => {
   });
 
   it('does not add null twice when wrapping something already nullable', () => {
-    const once = setting.nullable(setting.string({ default: '' }));
+    // Wrapping twice is not a thing anyone sets out to do, but it happens when
+    // a shared spec is reused — and a duplicate in either list is a manifest
+    // that disagrees with itself.
+    const once = setting.nullable(setting.enum({ values: ['fast', 'safe'], default: 'safe' }));
+    const twice = setting.nullable(once);
 
-    expect(setting.nullable(once).type).toEqual(['string', 'null']);
+    expect(twice.type).toEqual(['string', 'null']);
+    expect(twice.enum).toEqual([null, 'fast', 'safe']);
   });
 
   it('preserves a non-default scope', () => {
