@@ -1,6 +1,6 @@
 {
   "name": "@kkdev92/vscode-ext-kit",
-  "version": "3.0.0-alpha.1",
+  "version": "3.0.0-alpha.2",
   "description": "A type-safe application framework for VS Code extension development",
   "author": "kkdev92",
   "license": "MIT",
@@ -106,14 +106,14 @@
     "lint": "eslint src tests fixtures --max-warnings 0",
     "lint:fix": "eslint src tests fixtures --fix",
     "format": "prettier --write \"{src,tests,fixtures,docs}/**/*.ts\" \"{scripts,fixtures}/**/*.mjs\"",
-    "format:check": "prettier --check \"{src,tests,fixtures}/**/*.ts\" \"{scripts,fixtures}/**/*.mjs\"",
+    "format:check": "prettier --check \"{src,tests,fixtures,docs}/**/*.ts\" \"{scripts,fixtures}/**/*.mjs\"",
     "knip": "knip",
     "verify:package": "node scripts/verify-package.mjs",
     "fixture:build": "node fixtures/extension-host/build.mjs",
     "fixture:build:web": "node fixtures/web-extension/build.mjs",
     "test:eh": "npm run build && npm run fixture:build && node fixtures/extension-host/run-test.mjs",
     "test:web": "npm run build && npm run fixture:build:web && node fixtures/web-extension/run-test.mjs",
-    "quality": "npm run typecheck && npm run lint && npm run test:coverage && npm run knip"
+    "quality": "npm run format:check && npm run typecheck && npm run lint && npm run test:coverage && npm run knip"
   },
   "keywords": [
     "vscode",

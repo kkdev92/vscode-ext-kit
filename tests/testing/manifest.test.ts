@@ -170,3 +170,84 @@ describe('assertManifestMatches', () => {
     }).toThrow(/"sample\.refresh" is declared in src/u);
   });
 });
+
+/**
+ * A setting that means "unset".
+ *
+ * VS Code will not accept a null default unless the manifest declares
+ * `["string","null"]`, so a spec that cannot say that is a spec this assertion
+ * can never agree with — which is how it was found: the first extension to
+ * declare one had to normalise the manifest before it could be checked at all.
+ */
+describe('assertManifestMatches, on a nullable setting', () => {
+  const Nullable = defineSettings({
+    section: 'sample',
+    values: {
+      preset: setting.nullable(setting.enum({ values: ['ai'], default: 'ai' }), { default: null }),
+      width: setting.nullable(setting.integer({ default: 1200 })),
+    },
+  });
+
+  const manifest = (presetType: unknown, widthType: unknown): unknown => ({
+    contributes: {
+      configuration: {
+        properties: {
+          'sample.preset': {
+            type: presetType,
+            default: null,
+            enum: [null, 'ai'],
+            scope: 'window',
+          },
+          'sample.width': { type: widthType, default: 1200, scope: 'window' },
+        },
+      },
+    },
+  });
+
+  it('agrees with the union type the manifest has to declare', () => {
+    expect(() => {
+      assertManifestMatches(manifest(['string', 'null'], ['integer', 'null']), {
+        settings: [Nullable],
+      });
+    }).not.toThrow();
+  });
+
+  it('does not care what order the manifest lists the types in', () => {
+    // `["null","string"]` and `["string","null"]` are the same schema, and a
+    // reorder is not a change worth failing a build over.
+    expect(() => {
+      assertManifestMatches(manifest(['null', 'string'], ['null', 'integer']), {
+        settings: [Nullable],
+      });
+    }).not.toThrow();
+  });
+
+  it('still catches a manifest that forgot the null', () => {
+    expect(() => {
+      assertManifestMatches(manifest('string', ['integer', 'null']), { settings: [Nullable] });
+    }).toThrow(/"sample\.preset" is "string" in the manifest and \["string","null"\] in src/u);
+  });
+
+  it('prints a pasteable union type for a setting the manifest has not got', () => {
+    // One key, so the reported JSON is one object and can be parsed back.
+    const OnlyPreset = defineSettings({
+      section: 'sample',
+      values: { preset: Nullable.values.preset },
+    });
+
+    let message = '';
+    try {
+      assertManifestMatches({ contributes: {} }, { settings: [OnlyPreset] });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    // The JSON is meant to be pasted straight into `contributes`, so the union
+    // has to survive into it — a `type` of "string" there would be wrong in the
+    // one place the tool tells the reader to copy from.
+    const pasted: unknown = JSON.parse(message.slice(message.indexOf('{')));
+    expect(pasted).toMatchObject({
+      'sample.preset': { type: ['string', 'null'], default: null, enum: [null, 'ai'] },
+    });
+  });
+});

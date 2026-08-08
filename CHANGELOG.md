@@ -6,6 +6,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 From 1.0.0 onward this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0 releases followed it in spirit; their breaking changes are marked **Breaking**.
 
+## [3.0.0-alpha.2] - 2026-08-08
+
+Both of these came from migrating a second extension onto this. Neither showed
+up in this repository's own tests, because neither is something the framework
+uses itself — they are only reachable from the consumer side.
+
+They are worth the release on their own, but the way the first one landed is the
+better argument for it: once `assertManifestMatches` could compare a nullable
+setting, the first run against that extension found two settings whose manifest
+declared `"integer"` while the code had always accepted null and documented it
+as "no limit". A feature the extension shipped, that its settings editor would
+not let anyone use.
+
+### Added
+
+- **`setting.nullable`.** A setting that means "unset" is an ordinary VS Code
+  pattern and none of the builders could express it. The manifest has to declare
+  `["integer", "null"]` before the settings editor will accept a null default —
+  VS Code reports `"type": "string"` with `"default": null` as an error — and a
+  spec whose `validate` rejects null makes every lenient read of a cleared
+  setting fall back to the default. The two halves have to move together, which
+  is why this is a builder rather than a note in the docs. It wraps any spec:
+  the default carries over unless you pass one, and an enumerated spec gains
+  `null` at the front, where `enumDescriptions` expects it.
+- **`workspace.onDidGrantWorkspaceTrust` on the `vscode` mock.** With
+  `isTrusted` alone, an extension that declines to read something in an
+  untrusted window has no way to notice when trust is granted. The host is
+  restarted only if some extension's *enablement* changes, and an extension that
+  declared `untrustedWorkspaces.supported` was already enabled — so it is
+  re-activated only if some other extension happens to flip, which it cannot
+  count on. These two are the whole stable trust API; the rest of that surface
+  is proposed.
+
+### Changed
+
+- **`SettingSpec.type` accepts a list**, as JSON Schema does, and the new
+  `SettingValueType` includes `'null'`. Only `assertManifestMatches` read this
+  field, and it now compares types as a set — `["string","null"]` and
+  `["null","string"]` are the same schema, and a reorder is not worth failing a
+  build over. `enum` stays order-sensitive, because `enumDescriptions` pairs
+  with it positionally.
+
+### Fixed
+
+- **`assertManifestMatches` could not agree with a nullable setting.** It
+  compared `type` with `!==`, so an array never matched whatever the source
+  said, and the first extension to declare one had to normalise its manifest
+  before the check would run at all. The pasteable JSON it prints carries the
+  union too, which matters because that JSON is what it tells the reader to
+  copy.
+
 ## [3.0.0-alpha.1] - 2026-08-08
 
 **A different kind of package.** 2.x is a utility library you call from your own
@@ -775,6 +826,8 @@ platform support, toolchain currency, and release supply chain.
 
 Initial public release.
 
+[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.2...HEAD
+[3.0.0-alpha.2]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.1...v3.0.0-alpha.2
 [3.0.0-alpha.1]: https://github.com/kkdev92/vscode-ext-kit/compare/v2.1.0...v3.0.0-alpha.1
 [2.1.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v2.0.1...v2.1.0
 [2.0.1]: https://github.com/kkdev92/vscode-ext-kit/compare/v2.0.0...v2.0.1

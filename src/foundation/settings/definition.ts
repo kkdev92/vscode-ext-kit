@@ -27,9 +27,25 @@ export type SettingContributionScope =
  * Validation is synchronous. Defaults and successful values are returned by
  * reference, so callers should treat object and array values as immutable.
  */
+/**
+ * A JSON Schema type name, as `contributes.configuration` accepts it.
+ *
+ * `'null'` is in the list because VS Code will not accept a null default
+ * without it: a setting that means "unset" has to declare `["string", "null"]`
+ * or the settings editor rejects its own default.
+ */
+export type SettingValueType =
+  'boolean' | 'number' | 'integer' | 'string' | 'array' | 'object' | 'null';
+
 export interface SettingSpec<T> {
-  /** JSON Schema type, for the manifest side. */
-  readonly type: 'boolean' | 'number' | 'integer' | 'string' | 'array' | 'object';
+  /**
+   * JSON Schema type, for the manifest side.
+   *
+   * An array where the setting accepts more than one, exactly as the manifest
+   * spells it. {@link setting.nullable} produces those; a hand-written spec may
+   * as well.
+   */
+  readonly type: SettingValueType | readonly SettingValueType[];
   /** Value used when nothing is configured, and when a lenient read falls back. */
   readonly default: T;
   /** Where the setting may be configured. */
@@ -52,6 +68,16 @@ const issue = (message: string): ValidationResult<never> => ({
   ok: false,
   issues: [{ message }],
 });
+
+/**
+ * A spec's declared type(s) as a list.
+ *
+ * `Array.isArray` widens its argument to `any[]`, which loses the element type
+ * and makes every subsequent spread unchecked, so the narrowing is written out.
+ */
+function typeNames(type: SettingSpec<unknown>['type']): readonly SettingValueType[] {
+  return typeof type === 'string' ? [type] : type;
+}
 
 /**
  * Builders for common typed settings. They create definitions only and never
@@ -187,6 +213,53 @@ export const setting = {
         }
         return { ok: true, value: entries };
       },
+    };
+  },
+
+  /**
+   * Widens a setting to accept `null` as well.
+   *
+   * A setting that means "unset" is an ordinary VS Code pattern, and it is not
+   * something the other builders can express: the manifest has to say
+   * `"type": ["integer", "null"]` before the settings editor will accept a null
+   * default, and a spec whose `validate` rejects null makes every lenient read
+   * of an unset value fall back to the default instead.
+   *
+   * The default carries over from `inner` unless `default` is given. Say
+   * `{ default: null }` for the setting whose *unset* state is the default; omit
+   * it for one that has a real default but tolerates being cleared.
+   *
+   * An enumerated inner spec gains `null` at the front of its values, which is
+   * where the manifest convention puts it — and `enumDescriptions` is positional,
+   * so the description of "unset" goes first too.
+   *
+   * @example
+   * ```ts
+   * const values = {
+   *   // A real default, clearable.
+   *   'resize.maxWidth': setting.nullable(setting.integer({ default: 1200 })),
+   *   // Unset by default.
+   *   'resize.preset': setting.nullable(
+   *     setting.enum({ values: ['ai-optimized'], default: 'ai-optimized' }),
+   *     { default: null }
+   *   ),
+   * };
+   * ```
+   */
+  nullable<T>(
+    inner: SettingSpec<T>,
+    options?: { readonly default?: T | null }
+  ): SettingSpec<T | null> {
+    const declared = typeNames(inner.type);
+    return {
+      type: declared.includes('null') ? declared : [...declared, 'null'],
+      default:
+        options === undefined || options.default === undefined ? inner.default : options.default,
+      scope: inner.scope,
+      ...(inner.enum === undefined
+        ? {}
+        : { enum: inner.enum.includes(null as T) ? inner.enum : [null, ...inner.enum] }),
+      validate: (value) => (value === null ? { ok: true, value: null } : inner.validate(value)),
     };
   },
 };
