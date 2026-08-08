@@ -11,7 +11,7 @@ interface ProjectIndex {
   count(): number;
   rebuild(signal: AbortSignal): Promise<number>;
 }
-const ProjectIndex = serviceToken<ProjectIndex>('sample.projectIndex');
+export const ProjectIndex = serviceToken<ProjectIndex>('sample.projectIndex');
 
 // A command contract names the id once and fixes the argument and result types
 // for every caller.

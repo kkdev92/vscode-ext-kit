@@ -6,6 +6,59 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 From 1.0.0 onward this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0 releases followed it in spirit; their breaking changes are marked **Breaking**.
 
+## [3.0.0-alpha.3] - 2026-08-08
+
+Three gaps a third migration found. What is *not* here is as deliberate: two
+other candidates were rejected on the line between what the framework owes an
+extension and what an extension owes itself.
+
+### Added
+
+- **`defineExtension({ exports })`.** Some extensions publish an API — the
+  built-in Markdown preview reads `extendMarkdownIt` off one, and anything else
+  reads `extensions.getExtension(id).exports`. VS Code takes that value from
+  whatever `activate` resolves to, and it is normally built from services, which
+  do not exist until the application has started. Without a declaration the only
+  way to produce one was a mutable module variable that a hosted service filled
+  and `activate` read back. `exports` is that declaration: the framework builds
+  the value after every hosted service has started, from the same instances
+  everything else got, and resolves `activate` to it. Not a way to reach the
+  container — the framework resolves it, and a service stays reachable only
+  where it was declared.
+
+### Changed
+
+- **The `vscode` mock accepts `setContext`.** It is a VS Code built-in that no
+  extension registers, so rejecting it as an unknown command was the mock lying
+  about the platform — and mirroring a setting into a `when` clause is common
+  enough that every such extension would have had to work around it. Narrow on
+  purpose: other built-ins still reject, because they have effects a mock cannot
+  stand in for and resolving `undefined` would let a test claim it did something
+  it never did.
+
+### Fixed
+
+- **The quick-input adapter no longer reads `vscode` while being built.** Every
+  capability adapter is constructed at activation whether the extension declares
+  that capability or not, and this was the only one that read a `vscode` value
+  doing so (`QuickInputButtons.Back`) — which made it something every test double
+  had to supply, including for extensions that never open a quick pick. It is a
+  getter now.
+
+### Considered and rejected
+
+- **A log-level floor in the framework.** Two extensions have hand-written the
+  same thirty lines, which normally argues for moving it — but a
+  `LogOutputChannel` is the platform's answer and the level belongs to the user,
+  per channel, persisted, in the Output panel. Both of those extensions kept a
+  `logLevel` setting from before that was true. Making it cheap to keep a setting
+  that duplicates a platform control is not something the framework should do.
+- **`isDisposable` matching functions.** A function carrying `dispose` is not
+  disposed by the container, silently. Widening the check would blur a contract
+  that is currently one shape and clear, and the case that raised it — a
+  debounced callback — is better owned by a hosted service, which is where it
+  ended up. No consumer has actually shipped the shape.
+
 ## [3.0.0-alpha.2] - 2026-08-08
 
 Both of these came from migrating a second extension onto this. Neither showed
@@ -826,6 +879,8 @@ platform support, toolchain currency, and release supply chain.
 
 Initial public release.
 
+[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.3...HEAD
+[3.0.0-alpha.3]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.2...v3.0.0-alpha.3
 [Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.2...HEAD
 [3.0.0-alpha.2]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.1...v3.0.0-alpha.2
 [3.0.0-alpha.1]: https://github.com/kkdev92/vscode-ext-kit/compare/v2.1.0...v3.0.0-alpha.1

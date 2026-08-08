@@ -44,6 +44,7 @@ export { defineExtension } from './vscode/foundation/extension.js';
 export type {
   DefineExtensionOptions,
   ExtensionApplication,
+  ExtensionExports,
 } from './vscode/foundation/extension.js';
 
 export { defineModule } from './foundation/modules/definition.js';

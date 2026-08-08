@@ -61,6 +61,7 @@ import type {
   TreeViewCapability,
 } from '../platform/ports.js';
 import { createServiceContainer, resolveInjected } from '../services/container.js';
+import type { ServiceMap } from '../services/token.js';
 import type { ServiceContainer } from '../services/container.js';
 import { ServiceLifetime } from '../services/descriptors.js';
 import type { ServiceDescriptor } from '../services/descriptors.js';
@@ -157,6 +158,23 @@ export interface CreateApplicationOptions {
   readonly logSink?: LogSink | undefined;
   /** Receives lifecycle diagnostics. Observer failures never affect Application work. */
   readonly onDiagnostic?: ((diagnostic: HostDiagnostic) => void) | undefined;
+  /**
+   * What `activate` resolves to, for an extension that publishes an API.
+   *
+   * Built once, after every hosted service has started, and returned from
+   * `activate` — which is the only ordering that can work, because the services
+   * it is built from do not exist until the Application does.
+   *
+   * A declaration rather than a way to reach the container: the framework
+   * resolves it, so nothing else gains the ability to pull an arbitrary service
+   * out from outside the model.
+   */
+  readonly exports?:
+    | {
+        readonly inject: ServiceMap;
+        readonly create: (injected: Readonly<Record<string, unknown>>) => unknown;
+      }
+    | undefined;
 }
 
 /**
@@ -181,7 +199,7 @@ export interface Application {
    * framework-owned registrations and Resources. Cleanup failures are also
    * reported through diagnostics.
    */
-  activate(context: ExtensionHostContext): Promise<void>;
+  activate(context: ExtensionHostContext): Promise<unknown>;
   /**
    * Stops the Host through the single cleanup path. Idempotent and never
    * rejects; cleanup failures are emitted as diagnostics.
@@ -208,6 +226,8 @@ export interface Application {
  * ```
  */
 export function createApplication(options: CreateApplicationOptions): Application {
+  /** Filled by the start phase when `options.exports` is declared. */
+  let resolvedExports: unknown;
   const plan = options.plan;
   const rootLogger: Logger =
     options.logSink === undefined
@@ -978,6 +998,14 @@ export function createApplication(options: CreateApplicationOptions): Applicatio
           throw error;
         }
       }
+
+      // Last, so everything it is built from has started. A failure here fails
+      // activation like any other and unwinds through the same path.
+      if (options.exports !== undefined) {
+        resolvedExports = options.exports.create(
+          resolveInjected(options.exports.inject, activeContainer)
+        );
+      }
     },
 
     async stop({ remainingMs }) {
@@ -992,7 +1020,7 @@ export function createApplication(options: CreateApplicationOptions): Applicatio
     host,
     commands: createCommandExecutor(options.capabilities.commands),
 
-    async activate(context: ExtensionHostContext): Promise<void> {
+    async activate(context: ExtensionHostContext): Promise<unknown> {
       // The single failsafe — and the ONLY thing the framework puts on
       // context.subscriptions. The Extension Host may dispose subscriptions
       // while deactivate() is still pending, so this must remain safe in the
@@ -1004,6 +1032,7 @@ export function createApplication(options: CreateApplicationOptions): Applicatio
         },
       });
       await host.start();
+      return resolvedExports;
     },
 
     deactivate(): Promise<void> {

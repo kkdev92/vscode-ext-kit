@@ -120,3 +120,103 @@ describe('defineExtension boundary', () => {
     expect(vscodeMock.channels[0]?.disposed).toBe(true);
   });
 });
+
+/**
+ * What `activate` resolves to.
+ *
+ * VS Code reads an extension's API off that value — `extendMarkdownIt` for a
+ * markdown plugin, whatever another extension consumes for the rest. It has to
+ * be built from services, and services do not exist until the application has
+ * started, so without a declaration the only way to get one out is a mutable
+ * module variable filled by a hosted service and read afterwards. That is the
+ * shape this replaces.
+ */
+const { defineModule } = await import('../../../src/foundation/modules/definition.js');
+const { serviceToken } = await import('../../../src/foundation/services/token.js');
+
+describe('defineExtension exports', () => {
+  const Counter = serviceToken<{ next(): number }>('sample.counter');
+
+  const counterModule = defineModule('counter', (module): undefined => {
+    module.services.singleton(Counter, () => {
+      let value = 0;
+      return {
+        next: () => {
+          value += 1;
+          return value;
+        },
+      };
+    });
+    return undefined;
+  });
+
+  it('resolves activate to the declared value, built from services', async () => {
+    const app = defineExtension({
+      name: 'Sample',
+      modules: [counterModule],
+      exports: {
+        inject: { counter: Counter },
+        create: ({ counter }) => ({ next: (): number => counter.next() }),
+      },
+    });
+
+    const api = await app.activate(makeContext());
+
+    expect(api.next()).toBe(1);
+    expect(api.next()).toBe(2);
+    await app.deactivate();
+  });
+
+  it('resolves to undefined when nothing is declared', async () => {
+    const app = defineExtension({ name: 'Sample', modules: [] });
+
+    await expect(app.activate(makeContext())).resolves.toBeUndefined();
+
+    await app.deactivate();
+  });
+
+  it('hands back the same service instance the rest of the application uses', async () => {
+    // Not a second container and not a second copy — the point of resolving it
+    // through the framework rather than rebuilding it in `activate`.
+    let fromHostedService: { next(): number } | undefined;
+    const observer = defineModule('observer', (module): undefined => {
+      module.hostedServices.add({
+        id: 'observer',
+        inject: { counter: Counter },
+        start: (_context, { counter }) => {
+          fromHostedService = counter;
+        },
+      });
+      return undefined;
+    });
+
+    const app = defineExtension({
+      name: 'Sample',
+      modules: [counterModule, observer],
+      exports: { inject: { counter: Counter }, create: ({ counter }) => counter },
+    });
+
+    const api = await app.activate(makeContext());
+
+    expect(api).toBe(fromHostedService);
+    await app.deactivate();
+  });
+
+  it('fails activation when building the value throws, and disposes the channel', async () => {
+    vscodeMock.channels.length = 0;
+    const app = defineExtension({
+      name: 'Sample',
+      modules: [counterModule],
+      exports: {
+        inject: { counter: Counter },
+        create: (): never => {
+          throw new Error('api construction failed');
+        },
+      },
+    });
+
+    await expect(app.activate(makeContext())).rejects.toThrow('api construction failed');
+    // Rolled back like any other activation failure.
+    expect(vscodeMock.channels[0]?.disposed).toBe(true);
+  });
+});

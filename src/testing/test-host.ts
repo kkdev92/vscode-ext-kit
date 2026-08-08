@@ -283,8 +283,11 @@ export function createTestHost(options: CreateTestHostOptions): TestHost {
       return diagnostics.map((diagnostic) => diagnostic.event);
     },
 
-    start(): Promise<void> {
-      return application.activate({ subscriptions });
+    async start(): Promise<void> {
+      // `activate` resolves to the application's declared exports, if it has
+      // any. The Test Host runs a plan rather than an extension entry point, so
+      // there is nothing here to hand them to.
+      await application.activate({ subscriptions });
     },
 
     stop(): Promise<void> {
