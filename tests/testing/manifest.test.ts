@@ -188,10 +188,7 @@ describe('assertManifestMatches, on a nullable setting', () => {
     },
   });
 
-  const manifest = (
-    presetType: unknown,
-    widthType: unknown
-  ): unknown => ({
+  const manifest = (presetType: unknown, widthType: unknown): unknown => ({
     contributes: {
       configuration: {
         properties: {

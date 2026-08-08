@@ -35,13 +35,7 @@ export type SettingContributionScope =
  * or the settings editor rejects its own default.
  */
 export type SettingValueType =
-  | 'boolean'
-  | 'number'
-  | 'integer'
-  | 'string'
-  | 'array'
-  | 'object'
-  | 'null';
+  'boolean' | 'number' | 'integer' | 'string' | 'array' | 'object' | 'null';
 
 export interface SettingSpec<T> {
   /**
