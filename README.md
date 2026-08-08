@@ -11,7 +11,7 @@ runs it, and tears it down through exactly one path.
 _Built for extensions big enough that "what does this thing actually register?"
 has stopped being obvious._
 
-> **Status:** `3.0.0-alpha.2`, published on the `next` tag. `latest` on npm is
+> **Status:** `3.0.0-alpha.3`, published on the `next` tag. `latest` on npm is
 > still the 2.x utility library — a different codebase with a different shape.
 > See [Coming from 2.x](#coming-from-2x).
 

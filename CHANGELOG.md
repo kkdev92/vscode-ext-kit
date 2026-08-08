@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 From 1.0.0 onward this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0 releases followed it in spirit; their breaking changes are marked **Breaking**.
 
-## [Unreleased]
+## [3.0.0-alpha.3] - 2026-08-08
 
 Three gaps a third migration found. What is *not* here is as deliberate: two
 other candidates were rejected on the line between what the framework owes an
@@ -879,7 +879,8 @@ platform support, toolchain currency, and release supply chain.
 
 Initial public release.
 
-[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.2...HEAD
+[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.3...HEAD
+[3.0.0-alpha.3]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.2...v3.0.0-alpha.3
 [Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.2...HEAD
 [3.0.0-alpha.2]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.1...v3.0.0-alpha.2
 [3.0.0-alpha.1]: https://github.com/kkdev92/vscode-ext-kit/compare/v2.1.0...v3.0.0-alpha.1
