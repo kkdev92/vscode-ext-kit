@@ -38,6 +38,7 @@ same code runs in a test and in the editor.
 - [Testing](#testing)
 - [Keeping package.json honest](#keeping-packagejson-honest)
 - [The escape hatch](#the-escape-hatch)
+- [Publishing an API](#publishing-an-api)
 
 ## Ambient services
 
@@ -744,3 +745,57 @@ export const hoverModule = defineModule('hover', (module): undefined => {
 
 The goal is not that no code outside the framework exists — it is that every
 place you left it is searchable, owned, and unwound with everything else.
+
+## Publishing an API
+
+Some extensions are consumed by other extensions. The built-in Markdown preview
+reads `extendMarkdownIt` off a plugin extension; anything else reads
+`extensions.getExtension(id).exports`. Either way VS Code takes the value from
+whatever `activate` resolves to.
+
+That value is normally built from services, and services do not exist until the
+application has started — so without a declaration the only way to produce one
+is a mutable module variable that a hosted service fills and `activate` reads
+back, hoping it did. `exports` is that declaration: the framework builds the
+value after every hosted service has started, from the same instances the rest
+of the application got, and resolves `activate` to it.
+
+<!-- sample: docs/samples/extension-api.ts -->
+
+```ts
+import { defineExtension } from '@kkdev92/vscode-ext-kit';
+
+import { CountProjects, ProjectIndex, projectsModule } from './commands-and-services.js';
+
+// Some extensions publish an API: another extension reads it off
+// `extensions.getExtension(id).exports`, and the built-in Markdown preview
+// reads `extendMarkdownIt` the same way. VS Code takes it from whatever
+// `activate` resolves to.
+//
+// That value has to be built from services, and services do not exist until the
+// application has started -- so declaring it is what lets the framework build it
+// at the one moment it can. `create` runs after every hosted service has
+// started, with the same instances everything else got.
+export const app = defineExtension({
+  name: 'Sample',
+  modules: [projectsModule],
+  exports: {
+    inject: { index: ProjectIndex },
+    // No annotations: `index` is typed from `inject`, and `activate` resolves to
+    // whatever this returns.
+    create: ({ index }) => ({
+      count: (): number => index.count(),
+      rebuild: (signal: AbortSignal): Promise<number> => index.rebuild(signal),
+    }),
+  },
+});
+
+// Resolves to `{ count(): number; rebuild(signal): Promise<number> }`.
+export const activate = app.activate;
+export const deactivate = app.deactivate;
+
+export const countProjects = (): Promise<number> => app.commands.execute(CountProjects);
+```
+
+Nothing else gains access to the container. The framework resolves the
+declaration; a service is still reachable only where it was declared.

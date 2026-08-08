@@ -1580,10 +1580,24 @@ function createMockCommandsNamespace(
         };
       }
     ),
-    /** Dispatches to a registered handler, and rejects for an unknown id. */
+    /**
+     * Dispatches to a registered handler, and rejects for an unknown id.
+     *
+     * `setContext` is the exception, and the only one. It is a VS Code built-in
+     * that no extension registers, so rejecting it would be the mock lying
+     * about the platform — and an extension mirroring a setting into a `when`
+     * clause is a common enough shape that every one of them would have to work
+     * around it. Other built-ins are left rejecting on purpose: they have
+     * effects a mock cannot stand in for, and silently resolving `undefined`
+     * would hide a test that never did what it claimed. The call is still
+     * recorded, so `mock.calls` is how a test asserts the key was published.
+     */
     executeCommand: fn(async (commandId: string, ...args: unknown[]): Promise<unknown> => {
       const handler = handlers.get(commandId);
       if (handler === undefined) {
+        if (commandId === 'setContext') {
+          return undefined;
+        }
         throw new Error(`command '${commandId}' not found`);
       }
       return await handler(...args);

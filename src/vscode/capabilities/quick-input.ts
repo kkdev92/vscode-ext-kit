@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 
 import type {
   InputBoxLike,
+  QuickInputButtonLike,
   QuickInputCapability,
   QuickPickItemLike,
   QuickPickLike,
@@ -31,6 +32,13 @@ export function createVSCodeQuickInputCapability(): QuickInputCapability {
     createInputBox(): InputBoxLike {
       return vscode.window.createInputBox();
     },
-    backButton: vscode.QuickInputButtons.Back,
+    // A getter, not a value. Every adapter is built at activation whether the
+    // extension declares quick input or not, and this was the only one that
+    // read a `vscode` value while doing so — which made
+    // `vscode.QuickInputButtons` something a test double had to supply for an
+    // extension that never opens a quick pick.
+    get backButton(): QuickInputButtonLike {
+      return vscode.QuickInputButtons.Back;
+    },
   };
 }

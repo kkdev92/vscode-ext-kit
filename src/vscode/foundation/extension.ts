@@ -24,6 +24,7 @@ import { createCommandExecutor } from '../../foundation/commands/binder.js';
 import type { CommandExecutor } from '../../foundation/commands/binder.js';
 import type { HostDiagnostic } from '../../foundation/hosting/application-host.js';
 import type { ModuleDefinition } from '../../foundation/modules/definition.js';
+import type { Injected, ServiceMap } from '../../foundation/services/token.js';
 import { createVSCodeCommandCapability } from './commands.js';
 import { createVSCodeEnvironmentCapability } from './environment.js';
 import { createVSCodeEditorCapability } from '../capabilities/editor.js';
@@ -42,6 +43,48 @@ import {
 } from '../capabilities/storage.js';
 import { createVSCodeSettingsCapability } from './settings.js';
 import { createLogChannelSink } from './logging.js';
+
+/**
+ * What an extension publishes to other extensions.
+ *
+ * VS Code reads it off whatever `activate` resolves to, so it has to be built
+ * during activation and after the services it is made of — declaring it lets
+ * the framework do both, instead of the extension keeping a mutable module
+ * variable and hoping it was filled.
+ *
+ * @example
+ * ```ts
+ * const app = defineExtension({
+ *   name: 'Sample',
+ *   modules: [sampleModule],
+ *   exports: {
+ *     inject: { index: ProjectIndex },
+ *     create: ({ index }) => ({ count: () => index.count() }),
+ *   },
+ * });
+ *
+ * // Resolves to { count(): number }
+ * export const activate = app.activate;
+ * ```
+ */
+export interface ExtensionExports<TMap extends ServiceMap, TApi> {
+  readonly inject: TMap;
+  readonly create: (injected: Injected<TMap>) => TApi;
+}
+
+/**
+ * {@link defineExtension} options for an extension that publishes an API.
+ *
+ * Separate from {@link DefineExtensionOptions} rather than an intersection with
+ * it: TypeScript infers `TMap` and `TApi` from a parameter it can read
+ * directly, and stops inferring once the declaration is behind an `&`.
+ */
+export interface DefineExtensionOptionsWithExports<
+  TMap extends ServiceMap,
+  TApi,
+> extends DefineExtensionOptions {
+  readonly exports: ExtensionExports<TMap, TApi>;
+}
 
 /** Options for {@link defineExtension}. */
 export interface DefineExtensionOptions {
@@ -70,12 +113,12 @@ export interface DefineExtensionOptions {
  * `deactivate` is the single cleanup path; `activate` registers only a
  * synchronous failsafe on `context.subscriptions`.
  */
-export interface ExtensionApplication {
+export interface ExtensionApplication<TApi = void> {
   /**
    * Declared as a property, not a method, so `export const activate = app.activate`
    * is safe: an extracted method would lose its receiver.
    */
-  readonly activate: (context: vscode.ExtensionContext) => Promise<void>;
+  readonly activate: (context: vscode.ExtensionContext) => Promise<TApi>;
   /** Idempotent entry to the application's single asynchronous stop path. */
   readonly deactivate: () => Promise<void>;
   /** Typed command invocation, usable from anywhere in the extension. */
@@ -102,7 +145,18 @@ export interface ExtensionApplication {
  * export const deactivate = app.deactivate;
  * ```
  */
-export function defineExtension(options: DefineExtensionOptions): ExtensionApplication {
+// The exports overload comes first on purpose: TypeScript takes the earliest
+// match, and the plain one accepts these options too — leaving `TMap`
+// uninferred and the `create` parameter implicitly `any`.
+export function defineExtension<TMap extends ServiceMap, TApi>(
+  options: DefineExtensionOptionsWithExports<TMap, TApi>
+): ExtensionApplication<TApi>;
+export function defineExtension(options: DefineExtensionOptions): ExtensionApplication;
+export function defineExtension(
+  options: DefineExtensionOptions & {
+    readonly exports?: ExtensionExports<ServiceMap, unknown> | undefined;
+  }
+): ExtensionApplication<unknown> {
   const plan = compileApplication({
     name: options.name,
     modules: options.modules,
@@ -117,7 +171,7 @@ export function defineExtension(options: DefineExtensionOptions): ExtensionAppli
     plan,
     commands: createCommandExecutor(capability),
 
-    activate: async (context: vscode.ExtensionContext): Promise<void> => {
+    activate: async (context: vscode.ExtensionContext): Promise<unknown> => {
       // Created here, not at import time: creating a channel is a VS Code call.
       //
       // Deliberately NOT pushed onto context.subscriptions: VS Code may dispose
@@ -147,12 +201,13 @@ export function defineExtension(options: DefineExtensionOptions): ExtensionAppli
           editors: createVSCodeEditorCapability(),
           webviews: createVSCodeWebviewCapability(context.extensionUri),
         },
+        ...(options.exports === undefined ? {} : { exports: options.exports }),
         logSink: createLogChannelSink(channel),
         ...(options.onDiagnostic === undefined ? {} : { onDiagnostic: options.onDiagnostic }),
       });
 
       try {
-        await application.activate(context);
+        return await application.activate(context);
       } catch (error) {
         // Activation rolled back; nothing will log through this channel again.
         channel.dispose();

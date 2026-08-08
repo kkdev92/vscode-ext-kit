@@ -258,6 +258,26 @@ describe('createVSCodeMock: value-class fidelity', () => {
  * real API, so code passes its tests and fails in an editor.
  */
 describe('faithfulness to the real API', () => {
+  it('accepts setContext, which no extension registers', async () => {
+    // A VS Code built-in. Rejecting it would be the mock lying about the
+    // platform, and mirroring a setting into a `when` clause is common enough
+    // that every such extension would have to work around it.
+    const mock = createVSCodeMock(vi);
+
+    await expect(
+      mock.commands.executeCommand('setContext', 'ext.enabled', true)
+    ).resolves.toBeUndefined();
+    expect(mock.commands.executeCommand).toHaveBeenCalledWith('setContext', 'ext.enabled', true);
+  });
+
+  it('still rejects a built-in it cannot stand in for', () => {
+    // Narrow on purpose: resolving `undefined` for something with real effects
+    // would let a test claim it did something it never did.
+    const mock = createVSCodeMock(vi);
+
+    return expect(mock.commands.executeCommand('vscode.open')).rejects.toThrow(/not found/u);
+  });
+
   it('carries both halves of the workspace trust API', () => {
     // `isTrusted` alone is a trap. Granting trust restarts the extension host
     // only when some extension's enablement changes, and an extension that
