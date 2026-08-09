@@ -11,9 +11,9 @@ runs it, and tears it down through exactly one path.
 _Built for extensions big enough that "what does this thing actually register?"
 has stopped being obvious._
 
-> **Status:** `3.0.0-alpha.3`, published on the `next` tag. `latest` on npm is
-> still the 2.x utility library — a different codebase with a different shape.
-> See [Coming from 2.x](#coming-from-2x).
+> **Status:** `3.0.0` — the current release. 2.x was a utility library with a
+> different shape; it continues on `v2-maintenance` and anything pinned to
+> `^2.x` is unaffected. See [Coming from 2.x](#coming-from-2x).
 
 ---
 
@@ -53,11 +53,8 @@ has stopped being obvious._
 ## Installation
 
 ```bash
-npm install @kkdev92/vscode-ext-kit@next
+npm install @kkdev92/vscode-ext-kit
 ```
-
-The `@next` is not optional yet. `latest` is the 2.x utility library, so the
-plain name installs a different package with a different shape.
 
 Subpaths, all ESM:
 

@@ -1,6 +1,6 @@
 {
   "name": "@kkdev92/vscode-ext-kit",
-  "version": "3.0.0-alpha.3",
+  "version": "3.0.0",
   "description": "A type-safe application framework for VS Code extension development",
   "author": "kkdev92",
   "license": "MIT",
@@ -14,8 +14,7 @@
   "homepage": "https://github.com/kkdev92/vscode-ext-kit#readme",
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
-    "access": "public",
-    "tag": "next"
+    "access": "public"
   },
   "type": "module",
   "main": "./dist/index.js",
