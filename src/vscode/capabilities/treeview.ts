@@ -107,6 +107,27 @@ function toTreeDataProvider<T>(source: TreeDataSource<T>): vscode.TreeDataProvid
 }
 
 /**
+ * Reads a drop payload back into the ids `onDrop` is promised.
+ *
+ * Returns `undefined` for anything else — malformed JSON, or JSON that is not
+ * an array of strings — because a drop this controller cannot make sense of is
+ * better ignored than reported: the user dragged something, and a dialog about
+ * a data-transfer payload would explain nothing they can act on.
+ */
+function parseSourceIds(raw: string): readonly string[] | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(parsed) || !parsed.every((id) => typeof id === 'string')) {
+    return undefined;
+  }
+  return parsed;
+}
+
+/**
  * Builds the platform's drag-and-drop controller from declared intent.
  * Only stable element ids cross the serialized data-transfer boundary; object
  * identity and service instances must never be placed in a drag payload.
@@ -129,7 +150,15 @@ function toDragAndDropController<T>(
       if (transferItem === undefined) {
         return;
       }
-      const sourceIds = JSON.parse(await transferItem.asString()) as string[];
+      // Checked rather than cast. `handleDrag` above writes this payload, but
+      // nothing guarantees the drop came from there — the mime type is the
+      // extension's own declared string, and any producer that writes it lands
+      // here. `onDrop` promises `readonly string[]`, so a payload that is not
+      // one is dropped rather than handed on with the types lying about it.
+      const sourceIds = parseSourceIds(await transferItem.asString());
+      if (sourceIds === undefined) {
+        return;
+      }
       await (declared as { onDrop(ids: readonly string[], target: T | undefined): unknown }).onDrop(
         sourceIds,
         target
