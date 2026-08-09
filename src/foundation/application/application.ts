@@ -61,8 +61,8 @@ import type {
   TreeViewCapability,
 } from '../platform/ports.js';
 import { createServiceContainer, resolveInjected } from '../services/container.js';
-import type { ServiceMap } from '../services/token.js';
 import type { ServiceContainer } from '../services/container.js';
+import type { ServiceMap } from '../services/token.js';
 import { ServiceLifetime } from '../services/descriptors.js';
 import type { ServiceDescriptor } from '../services/descriptors.js';
 import { createSettingsAccessor } from '../settings/accessor.js';

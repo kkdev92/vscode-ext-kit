@@ -360,6 +360,64 @@ describe('wiring the view', () => {
     expect(dropped).toEqual([{ ids: ['a', 'b'], target: { id: 'target' } }]);
   });
 
+  it('ignores a drop payload that is not a list of ids', async () => {
+    // `handleDrag` writes this payload, but nothing guarantees the drop came
+    // from there: the mime type is the extension's own declared string, and any
+    // producer that writes it lands here. `onDrop` promises `readonly string[]`,
+    // so a payload that is not one must not reach it with the types lying.
+    for (const payload of ['not json', '"a string"', '42', 'null', '{"ids":["a"]}', '["a",1]']) {
+      const dropped: unknown[] = [];
+      const { created } = create(
+        sourceOf(() => ({ id: 'x', label: 'X' })),
+        {
+          dragAndDrop: {
+            mimeType: 'application/vnd.code.tree.sample',
+            onDrop: (ids: readonly string[]) => dropped.push(ids),
+          },
+        }
+      );
+      const controller = created.options['dragAndDropController'] as {
+        handleDrop(
+          target: Row | undefined,
+          transfer: { get(mime: string): { asString(): Promise<string> } | undefined }
+        ): Promise<void>;
+      };
+
+      await expect(
+        controller.handleDrop(undefined, {
+          get: () => ({ asString: () => Promise.resolve(payload) }),
+        })
+      ).resolves.toBeUndefined();
+
+      expect(dropped, `payload ${payload} reached onDrop`).toEqual([]);
+    }
+  });
+
+  it('accepts an empty id list, which is a valid drop', async () => {
+    const dropped: unknown[] = [];
+    const { created } = create(
+      sourceOf(() => ({ id: 'x', label: 'X' })),
+      {
+        dragAndDrop: {
+          mimeType: 'application/vnd.code.tree.sample',
+          onDrop: (ids: readonly string[]) => dropped.push(ids),
+        },
+      }
+    );
+    const controller = created.options['dragAndDropController'] as {
+      handleDrop(
+        target: Row | undefined,
+        transfer: { get(mime: string): { asString(): Promise<string> } | undefined }
+      ): Promise<void>;
+    };
+
+    await controller.handleDrop(undefined, {
+      get: () => ({ asString: () => Promise.resolve('[]') }),
+    });
+
+    expect(dropped).toEqual([[]]);
+  });
+
   it('does nothing on a drop carrying no payload for its mime type', async () => {
     const dropped: unknown[] = [];
     const { created } = create(
