@@ -6,6 +6,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 From 1.0.0 onward this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0 releases followed it in spirit; their breaking changes are marked **Breaking**.
 
+## [3.0.0] - 2026-08-08
+
+The 3.x line leaves prerelease. Nothing in the API changed from
+`3.0.0-alpha.3` — this release moves the `latest` dist-tag, which is the part
+that was still pending.
+
+**`npm install @kkdev92/vscode-ext-kit` now installs the framework.** 2.x was a
+utility library with a different shape; it continues on `v2-maintenance`, and
+anything pinned to `^2.x` resolves exactly as it did. Only a fresh, unpinned
+install changes.
+
+### What arrived across the alphas
+
+Read [3.0.0-alpha.1](#300-alpha1---2026-08-07) for the shape of the thing — an
+immutable plan, compiled and validated before VS Code is touched, run by a host
+that owns one cleanup path. The two alphas after it were consumer-driven, and
+what they fixed says something about how this was built:
+
+- [3.0.0-alpha.2](#300-alpha2---2026-08-08) — a setting that means "unset", and
+  the other half of the workspace-trust API. The first found a real bug in the
+  extension that motivated it on its first run: two settings the manifest
+  declared as `"integer"` while the code had always accepted null and documented
+  it as "no limit".
+- [3.0.0-alpha.3](#300-alpha3---2026-08-08) — declaring what `activate` resolves
+  to, so an extension that publishes an API stops keeping a mutable module
+  variable and hoping a hosted service filled it.
+
+Every one of those came from migrating a real extension, not from reviewing this
+repository. Three now run on it, each verified in a real Extension Host.
+
+### Fixed
+
+- **A tree view's drop payload is checked rather than cast.** `handleDrop`
+  parsed the data transfer and asserted `string[]`. `handleDrag` writes that
+  payload, but the mime type is the extension's own declared string and any
+  producer that writes it lands in the handler — so a number, `null` or an array
+  of objects could reach `onDrop`, which promises `readonly string[]`. Found by
+  a whole-codebase security review; filed as robustness rather than a
+  vulnerability, since the impact lives in consumer code.
+
 ## [3.0.0-alpha.3] - 2026-08-08
 
 Three gaps a third migration found. What is *not* here is as deliberate: two
@@ -879,7 +919,8 @@ platform support, toolchain currency, and release supply chain.
 
 Initial public release.
 
-[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.3...HEAD
+[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.3...v3.0.0
 [3.0.0-alpha.3]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.2...v3.0.0-alpha.3
 [Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.2...HEAD
 [3.0.0-alpha.2]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.1...v3.0.0-alpha.2
