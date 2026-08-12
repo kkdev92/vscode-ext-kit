@@ -16,8 +16,12 @@ valid answer.
 ## Reporting a vulnerability
 
 1. **Do not open a public issue.**
-2. Use GitHub's **Report a vulnerability** button in the repository's Security
-   tab.
+2. Open a private report:
+   <https://github.com/kkdev92/vscode-ext-kit/security/advisories/new>
+
+   That is the **Report a vulnerability** button in the repository's Security
+   tab; the link goes straight to it. Private reporting is enabled, so the
+   advisory stays between us until there is a fix to describe.
 
 Please include the version, the extension host (desktop or web), and the smallest
 reproduction you have. A failing test against the Test Host is ideal.
