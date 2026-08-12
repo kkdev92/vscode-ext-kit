@@ -30,6 +30,23 @@ export function fakeUri(path: string): WatchedUri {
 }
 
 /**
+ * Drops trailing separators from a base path.
+ *
+ * A scan rather than `/\/+$/`, which is quadratic: the engine retries the greedy
+ * `\/+` from every position before `$` rejects it, so a base of many separators
+ * costs time in the square of its length. Nothing here is attacker-reachable — a
+ * base uri comes from the test that built it — but a fake is published code, and
+ * counting backwards is both linear and easier to read than the regex was.
+ */
+function withoutTrailingSlashes(path: string): string {
+  let end = path.length;
+  while (end > 0 && path[end - 1] === '/') {
+    end -= 1;
+  }
+  return path.slice(0, end);
+}
+
+/**
  * Routes an emitted uri the way a native watcher would: a relative pattern only
  * sees files under its base folder, and the glob then decides.
  *
@@ -47,7 +64,7 @@ function compileWatchMatcher(pattern: string | RelativePatternLike): (uri: Watch
     const matches = compileFullPathGlobMatcher(pattern);
     return (uri) => matches(uri.fsPath);
   }
-  const base = normalize(pattern.baseUri.path).replace(/\/+$/, '');
+  const base = withoutTrailingSlashes(normalize(pattern.baseUri.path));
   const matches = compileFullPathGlobMatcher(pattern.pattern);
   return (uri) => {
     const path = normalize(uri.fsPath);
