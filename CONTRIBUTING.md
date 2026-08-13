@@ -120,6 +120,10 @@ missing a method.
 
 ## Tests
 
+**New behaviour needs a test, and so does a fix.** Pure logic goes in the suite
+that mirrors its path under `tests/`; anything that depends on what VS Code
+actually does with a handler belongs in `fixtures/extension-host`.
+
 A test is worth having only if it fails when the behaviour is wrong. Two habits
 this repo enforces:
 
