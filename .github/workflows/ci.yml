@@ -154,8 +154,17 @@ jobs:
         run: npm run verify:package
 
   # Non-blocking: TypeScript 7 is already npm's `latest`, so consumers default
-  # to it, but typescript-eslint supports only `>=4.8.4 <6.1.0`, which pins the
-  # build to 6.0.x. This lane keeps the gap visible instead of implicit.
+  # to it, while this repository builds with 6.0.x. Two separate reasons, and
+  # only the first is machine-enforced: typescript-eslint declares
+  # `typescript >=4.8.4 <6.1.0`, and it is the only dev dependency that declares
+  # a range at all — so that is the one to re-check when it lifts. The rest of
+  # the toolchain declares nothing and is not ready in practice either.
+  #
+  # The lane resolves `latest` on purpose: it is a canary against a moving
+  # target, so pinning it would remove the only thing it measures. Scorecard
+  # flags the unpinned install (Pinned-Dependencies); that is accepted and
+  # dismissed rather than satisfied. `--ignore-scripts` is the part worth
+  # having — an unpinned install has no reason to run lifecycle hooks.
   typescript7:
     runs-on: ubuntu-latest
     continue-on-error: true
@@ -174,7 +183,7 @@ jobs:
         run: npm ci
 
       - name: Override TypeScript with the 7.x line
-        run: npm install --no-save typescript@7
+        run: npm install --no-save --ignore-scripts typescript@7
 
       - name: Report compiler version
         run: npx tsc --version
