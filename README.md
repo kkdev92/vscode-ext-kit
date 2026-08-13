@@ -281,6 +281,8 @@ trusted for things it cannot do.
 - **Leak detection has the same boundary**: it sees what the framework tracks, and nothing else
 - **Cancellation is cooperative**: aborting a signal asks a handler to stop; one that ignores its signal keeps running, and the framework cannot terminate it
 - **The Test Host does not reproduce VS Code**: it renders no UI, interprets no contribution point, and does not substitute a direct `import "vscode"`
+- **No editor events yet**: `Editors` hands you the active editor and cross-file edits, but there is no `onDidChangeActive` / `onDidChangeSelection` / `onDidChangeDocument`; subscribing means reaching for `vscode` directly and disposing by hand, which is the one place the single-cleanup-owner rule leaks
+- **No log-level filtering, deliberately**: the framework writes to a `LogOutputChannel` and VS Code owns the level — per channel, persisted, in the Output panel. An extension cannot raise its own channel's level, so a `logLevel` setting of your own can only ever make the log quieter
 - **No generated API reference yet**, and no step-by-step migration guide from 2.x
 
 ---
@@ -393,9 +395,9 @@ For vulnerability reporting, see [SECURITY.md](SECURITY.md).
 Contributions are welcome — thank you for helping make this better 🙌
 Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-`npm run quality` is the gate: typecheck, lint, tests with per-layer coverage
-floors, and dead-code detection. Two more lanes run the framework in a real
-desktop Extension Host and a real browser worker.
+`npm run quality` is the gate: formatting, typecheck, lint, tests with per-layer
+coverage floors, and dead-code detection. Two more lanes run the framework in a
+real desktop Extension Host and a real browser worker.
 
 If you're planning a larger change, opening an issue first is appreciated. One
 thing to know about direction: adding a second way to do something that already
@@ -409,9 +411,10 @@ This is a personal project maintained in spare time. It is active, but support
 is best-effort: I'll do my best to review issues and PRs, and releases may be a
 bit slow sometimes — thank you for your patience.
 
-The `3.x` line is pre-release. Breaking changes are expected between alphas and
-are listed in the [CHANGELOG](CHANGELOG.md). `2.x` remains `latest` on npm and
-still takes bug fixes.
+`3.0.0` is the current release and holds `latest` on npm, so a fresh
+`npm install` gets the framework. `2.x` continues on `v2-maintenance` and still
+takes bug fixes; anything pinned to `^2.x` resolves there and is unaffected.
+Breaking changes are listed in the [CHANGELOG](CHANGELOG.md).
 
 Helpful things when reporting bugs:
 
