@@ -4,6 +4,7 @@
 [![CI](https://github.com/kkdev92/vscode-ext-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/kkdev92/vscode-ext-kit/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue.svg)](https://www.typescriptlang.org/)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14048/badge)](https://www.bestpractices.dev/projects/14048)
 
 An application framework for VS Code extensions. You declare what your extension
 is made of; the framework validates that declaration before touching VS Code,
