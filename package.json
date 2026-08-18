@@ -11,7 +11,7 @@
   "bugs": {
     "url": "https://github.com/kkdev92/vscode-ext-kit/issues"
   },
-  "homepage": "https://github.com/kkdev92/vscode-ext-kit#readme",
+  "homepage": "https://kkdev92.dev/",
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public"
