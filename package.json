@@ -2,7 +2,10 @@
   "name": "@kkdev92/vscode-ext-kit",
   "version": "3.0.0",
   "description": "A type-safe application framework for VS Code extension development",
-  "author": "kkdev92",
+  "author": {
+    "name": "kkdev92",
+    "url": "https://kkdev92.dev/"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
