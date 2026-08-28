@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 From 1.0.0 onward this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0 releases followed it in spirit; their breaking changes are marked **Breaking**.
 
+## [Unreleased]
+
+### Changed
+
+- **Breaking:** `engines.vscode` raised from `^1.125.0` to `^1.134.0`, in step
+  with `@types/vscode` moving to `~1.134.0`. Extensions built on this package
+  inherit the floor and must declare at least `^1.134.0` themselves.
+
+  The two versions move together on purpose. `vsce` refuses to package an
+  extension whose `@types/vscode` is newer than its `engines.vscode`
+  (`validateVSCodeTypesCompatibility`, compared on major and minor only), and
+  the reason behind that check applies here even though this package is a
+  library and never meets `vsce`: types above the floor let code compile
+  against an API the declared minimum does not have. Raising only the types is
+  what a grouped dependency update proposes by default, and it is why this
+  entry exists rather than a lockfile-only bump.
+
+  DefinitelyTyped had been lagging the stable channel badly — `1.125.0` was the
+  newest type package for months against a stable line already past 1.131. It
+  has since caught up to `1.134.0`, one release behind the current 1.135.
+
+- Dev dependencies: `vitest` and `@vitest/coverage-v8` 4.1.10 → 4.1.11,
+  `eslint` 10.8.1 → 10.9.0. Both are already within the declared ranges, so
+  only the lockfile moves.
+
+- The Extension Host and web fixtures declare `^1.134.0` to match, and the
+  `VSCODE_VERSION` example in `fixtures/README.md` moves off 1.131.0, which
+  would no longer activate them.
+
 ## [3.0.0] - 2026-08-08
 
 The 3.x line leaves prerelease. Nothing in the API changed from
@@ -922,7 +951,6 @@ Initial public release.
 [Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0...HEAD
 [3.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.3...v3.0.0
 [3.0.0-alpha.3]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.2...v3.0.0-alpha.3
-[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.2...HEAD
 [3.0.0-alpha.2]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.1...v3.0.0-alpha.2
 [3.0.0-alpha.1]: https://github.com/kkdev92/vscode-ext-kit/compare/v2.1.0...v3.0.0-alpha.1
 [2.1.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v2.0.1...v2.1.0
