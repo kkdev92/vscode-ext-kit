@@ -4,12 +4,13 @@
 
 | Version         | Supported | Notes                                           |
 | --------------- | --------- | ----------------------------------------------- |
-| `3.0.0-alpha.x` | ✅        | this branch; not published to npm yet           |
-| `2.1.x`         | ✅        | `latest` on npm, maintained on `v2-maintenance` |
+| `4.0.x`         | ✅        | `latest` on npm                                 |
+| `3.0.x`         | ✅        | same API as 4.0.x, VS Code floor `^1.125.0`     |
+| `2.1.x`         | ✅        | maintained on `v2-maintenance`; `^2.x` resolves here |
 | `2.0.x`         | ❌        | upgrade to `2.1.x`                              |
 | `0.x`, `1.x`    | ❌        | unsupported                                     |
 
-The 2.x and 3.x lines are different codebases. A fix for one is not automatically
+The 2.x and 3.x/4.x lines are different codebases. A fix for one is not automatically
 a fix for the other; a report should say which line it applies to, and "both" is a
 valid answer.
 
