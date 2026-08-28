@@ -9,7 +9,7 @@ assignees: ''
 ## Environment
 
 - **Package Version**: (e.g., 0.2.0)
-- **VS Code Version**: (e.g., 1.125.0)
+- **VS Code Version**: (e.g., 1.134.0)
 - **Node.js Version**: (e.g., 20.0.0)
 - **OS**: (e.g., Windows 11, macOS 14, Ubuntu 24.04)
 

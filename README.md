@@ -352,16 +352,19 @@ The [CHANGELOG](CHANGELOG.md) carries the full old-to-new mapping.
 
 |                  |                                                                                                                                       |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| VS Code          | `^1.125.0` — your extension declares the same `engines.vscode`; CI tests stable                                                       |
+| VS Code          | `^1.134.0` — your extension declares the same `engines.vscode`; CI tests stable                                                       |
 | Extension hosts  | desktop and web, both covered by CI                                                                                                   |
 | Node (to build)  | `>=22.12.0`                                                                                                                           |
 | Module format    | **ESM only** — `require()` of any subpath fails by design; bundle as extensions normally do                                           |
 | TypeScript `lib` | `ESNext.Disposable` (the public types name `Symbol.dispose`) and one of `DOM` / `WebWorker` / `@types/node` (they name `AbortSignal`) |
 | TypeScript       | 6.0.x is what this repo builds with; 7.x compiles the package in a non-blocking CI lane                                               |
 
-The floor is `1.125.0` because that is the newest `@types/vscode` there is, so it
-is the newest API this package can name at all. VS Code updates itself and CI
-tests stable, so treat the floor as a formality rather than a tested target.
+The floor is `1.134.0` because that is the newest `@types/vscode` there is, so it
+is the newest API this package can name at all. The two move together: `vsce`
+refuses to package an extension whose `@types/vscode` outruns its
+`engines.vscode`, and raising only the types would let code compile against an
+API the declared floor does not have. VS Code updates itself and CI tests stable,
+so treat the floor as a formality rather than a tested target.
 `scripts/verify-package.mjs` checks the `lib` requirements against the packed
 `.d.ts` files on every CI run, so that row is verified rather than remembered.
 
