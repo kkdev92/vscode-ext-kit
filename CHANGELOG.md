@@ -8,11 +8,11 @@ Pre-1.0 releases followed it in spirit; their breaking changes are marked **Brea
 
 ## [4.0.0] - 2026-08-29
 
-**A floor raise and nothing else.** The API is byte-for-byte what `3.0.0`
-exposed — no additions, no removals, no behaviour changes. The major is here
-because `engines.vscode` moved, which cascades to every extension built on this
-package, and that is what a major is for. The previous floor raise shipped the
-same way, as `2.0.0`.
+**A floor raise, essentially.** The public API is what `3.0.0` exposed — no
+additions, no removals, no signature changes — and the one implementation change
+below is behaviour-preserving. The major is here because `engines.vscode` moved,
+which cascades to every extension built on this package, and that is what a
+major is for. The previous floor raise shipped the same way, as `2.0.0`.
 
 If your extension already declares `^1.134.0` or later, upgrading is a version
 number and nothing more. If it does not, raise it in the same commit — `vsce`
@@ -38,15 +38,31 @@ will refuse to package otherwise, which is the whole subject of this release.
   newest type package for months against a stable line already past 1.131. It
   has since caught up to `1.134.0`, one release behind the current 1.135.
 
-- Dev dependencies: `vitest` and `@vitest/coverage-v8` 4.1.10 → 4.1.11,
-  `eslint` 10.8.1 → 10.9.0. Both are already within the declared ranges, so
-  only the lockfile moves.
+- Dev dependencies, measured across the whole `3.0.0`→`4.0.0` span rather than
+  per pull request: `vitest` and `@vitest/coverage-v8` 4.1.10 → 4.1.11, `eslint`
+  10.8.0 → 10.9.0, `typescript-eslint` 8.66.0 → 8.67.0, `@types/node` 26.1.2 →
+  26.2.0, `knip` 6.31.0 → 6.32.2. All within the declared ranges, so only the
+  lockfile moves. **TypeScript stays on 6.0** — `typescript-eslint` declares
+  `typescript >=4.8.4 <6.1.0`, so 7.x would break type-aware linting outright.
+
+- A development-scope advisory (`nanoid`, high, transitive through vitest) was
+  cleared. It never shipped: the published package has zero runtime
+  dependencies, which `verify:package` asserts on every run.
 
 - The Extension Host and web fixtures declare `^1.134.0` to match, and the
   `VSCODE_VERSION` example in `fixtures/README.md` moves off 1.131.0, which
   would no longer activate them.
 
 ### Fixed
+
+- **A quadratic regex is gone from the fake file watcher.** `/\/+$/`, stripping
+  trailing separators, made the engine retry the greedy `\/+` from every position
+  before `$` rejected it — quadratic in the number of separators, and CodeQL
+  flags it as `js/polynomial-redos`. **It was not a vulnerability here**: the
+  input is a `RelativePattern` the *test author* constructed, and nothing
+  untrusted reaches a fake. It is fixed because `src/testing/` is published code
+  and the defect is real regardless of who can reach it. Counting backwards is
+  linear and reads better than the regex did; behaviour is identical.
 
 - **`SECURITY.md` listed the wrong supported versions.** It still described
   `3.0.0-alpha.x` as "not published to npm yet" and `2.1.x` as holding `latest`
