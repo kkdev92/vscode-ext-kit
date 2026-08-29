@@ -25,6 +25,15 @@ const ProjectSettings = defineSettings({
   },
 });
 
+// A section the extension reads but does not own. `contributed: false` says
+// so: the manifest check will not ask package.json for it, and `describePlan`
+// reports it as read rather than declared.
+export const EditorSettings = defineSettings({
+  section: 'editor',
+  values: { tabSize: setting.integer({ default: 4, minimum: 1 }) },
+  contributed: false,
+});
+
 export const DescribeSettings = defineCommandContract<readonly [], string>({
   id: 'sample.describeSettings',
 });

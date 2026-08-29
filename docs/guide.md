@@ -148,6 +148,15 @@ const ProjectSettings = defineSettings({
   },
 });
 
+// A section the extension reads but does not own. `contributed: false` says
+// so: the manifest check will not ask package.json for it, and `describePlan`
+// reports it as read rather than declared.
+export const EditorSettings = defineSettings({
+  section: 'editor',
+  values: { tabSize: setting.integer({ default: 4, minimum: 1 }) },
+  contributed: false,
+});
+
 export const DescribeSettings = defineCommandContract<readonly [], string>({
   id: 'sample.describeSettings',
 });
@@ -820,6 +829,10 @@ The same document is available without writing code: `npx vscode-ext-kit plan
 ./out/extension.js` prints it, `--format mermaid` or `--format dot` draws the
 modules, services and edges, and `--check` turns a preflight failure into an
 exit code and a list of problems — the shape a CI step wants.
+`npx vscode-ext-kit manifest ./out/extension.js` compares the same plan with
+`package.json` — the comparison `assertManifestMatches` makes, from the command
+line — and `--apply` adds the commands and settings the manifest is missing,
+with placeholders where a person has to write the words.
 
 ## Keeping package.json honest
 

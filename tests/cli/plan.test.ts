@@ -117,6 +117,6 @@ describe.skipIf(!built)('vscode-ext-kit plan', () => {
 
     expect(result.code).toBe(2);
     expect(result.stderr).toContain('unknown option --colour');
-    expect(result.stderr).toContain('usage: vscode-ext-kit plan');
+    expect(result.stderr).toContain('usage: vscode-ext-kit <command>');
   });
 });

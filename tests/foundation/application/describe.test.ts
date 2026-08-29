@@ -240,6 +240,7 @@ describe('describePlan', () => {
       {
         section: 'sample.projects',
         policy: 'lenient',
+        contributed: true,
         values: [
           {
             key: 'sample.projects.enabled',

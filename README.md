@@ -266,15 +266,26 @@ public signature names but the package does not export cannot ship.
 
 ## Command Line
 
-The package ships one command. It reads the plan an extension compiles at
-import time and prints it, so what the extension registers can be reviewed,
-diffed and drawn without starting VS Code.
+The package ships one command with two subcommands. Both read the plan an
+extension compiles at import time, so what the extension registers can be
+reviewed, diffed, drawn and checked against `package.json` without starting
+VS Code.
 
 ```bash
 npx vscode-ext-kit plan ./out/extension.js                    # the plan as JSON
 npx vscode-ext-kit plan ./out/extension.js --format mermaid   # modules, services and their edges
 npx vscode-ext-kit plan ./out/extension.js --check            # exit 1 with every problem preflight found
+
+npx vscode-ext-kit manifest ./out/extension.js                # every disagreement with package.json
+npx vscode-ext-kit manifest ./out/extension.js --apply        # add the commands and settings it is missing
 ```
+
+`manifest` makes the comparison `assertManifestMatches` makes in a test, from
+the command line. `--apply` adds what the manifest is missing and the source
+can supply — commands and settings, with placeholder titles and descriptions
+marked `TODO` — and reports what a person has to decide: a view without a
+container, a default the two sides disagree on, an entry only the manifest
+has.
 
 The entry module is evaluated with a stand-in for `vscode`, which only exists
 inside an extension host. That works because nothing in this package touches

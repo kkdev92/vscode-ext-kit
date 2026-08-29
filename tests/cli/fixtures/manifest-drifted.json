@@ -1,0 +1,15 @@
+{
+  "name": "sample",
+  "contributes": {
+    "commands": [{ "command": "sample.clear", "title": "Clear" }],
+    "configuration": {
+      "title": "Sample",
+      "properties": {
+        "sample.limit": { "type": "number", "default": 5, "description": "How many." }
+      }
+    },
+    "views": {
+      "explorer": [{ "id": "sample.other", "name": "Other" }]
+    }
+  }
+}

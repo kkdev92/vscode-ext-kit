@@ -69,6 +69,21 @@ describe('assertManifestMatches', () => {
     }).not.toThrow();
   });
 
+  it('does not ask the manifest for a section the extension only reads', () => {
+    // `editor.tabSize` is VS Code's. Declaring it gives the extension the same
+    // typed accessor; `contributed: false` says the manifest must not carry it.
+    const Editor = defineSettings({
+      section: 'editor',
+      values: { tabSize: setting.integer({ default: 4 }) },
+      contributed: false,
+    });
+
+    expect(() => {
+      assertManifestMatches(agreeingManifest(), { ...declared, settings: [Options, Editor] });
+    }).not.toThrow();
+    expect(diffManifest(agreeingManifest(), { settings: [Editor] })).toEqual([]);
+  });
+
   it('names a command src declares and the manifest is missing, with the JSON to paste', () => {
     const manifest = agreeingManifest() as { contributes: { commands: unknown[] } };
     manifest.contributes.commands = [{ command: 'sample.refresh', title: 'Refresh' }];

@@ -93,6 +93,8 @@ export interface SettingsSectionDescription {
   readonly section: string;
   /** How an invalid configured value is treated: `'strict'` or `'lenient'`. */
   readonly policy: string;
+  /** Whether the extension contributes the section, or only reads one the host or another extension owns. */
+  readonly contributed: boolean;
   readonly values: readonly SettingDescription[];
   readonly moduleId: string;
 }
@@ -332,6 +334,7 @@ export function describePlan(plan: ApplicationPlan): ApplicationPlanDescription 
     settings: plan.settings.map((registration) => ({
       section: registration.section,
       policy: registration.policy,
+      contributed: registration.contributed,
       values: Object.entries(registration.values).map(([name, spec]) => ({
         key: `${registration.section}.${name}`,
         type: typeNames(spec),

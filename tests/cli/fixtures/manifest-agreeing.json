@@ -1,0 +1,21 @@
+{
+  "name": "sample",
+  "contributes": {
+    "commands": [{ "command": "sample.refresh", "title": "Refresh" }],
+    "configuration": {
+      "title": "Sample",
+      "properties": {
+        "sample.limit": { "type": "number", "default": 10, "minimum": 1, "description": "How many." },
+        "sample.mode": {
+          "type": "string",
+          "enum": ["fast", "thorough"],
+          "default": "fast",
+          "description": "How hard to look."
+        }
+      }
+    },
+    "views": {
+      "explorer": [{ "id": "sample.projects", "name": "Projects" }]
+    }
+  }
+}

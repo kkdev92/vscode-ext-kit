@@ -306,6 +306,46 @@ export const app = defineExtension({ name: 'consumer', modules: [greeting] });
   } catch (error) {
     note(false, `the CLI failed against the installed package:\n${error.stderr ?? error.message}`);
   }
+
+  // 6. `manifest`, from the installed package. The consumer's package.json
+  // contributes nothing, so the one command its plan declares must come back
+  // as missing — through the package's `./testing` entry, resolved from a real
+  // install rather than this repository's layout.
+  const cli = join(
+    consumer,
+    'node_modules',
+    ...packageName.split('/'),
+    'bin',
+    'vscode-ext-kit.mjs'
+  );
+  try {
+    run(
+      process.execPath,
+      [
+        cli,
+        'manifest',
+        join(consumer, 'consumer-plan.mjs'),
+        '--manifest',
+        join(consumer, 'package.json'),
+        '--format',
+        'json',
+      ],
+      consumer
+    );
+    note(false, 'the CLI reported no manifest disagreement where one exists');
+  } catch (error) {
+    const mismatches = error.status === 1 ? JSON.parse(error.stdout) : [];
+    const [only] = mismatches;
+    note(
+      mismatches.length === 1 &&
+        only.kind === 'command' &&
+        only.direction === 'missing-in-manifest' &&
+        only.id === 'consumer.hello',
+      error.status === 1
+        ? 'the CLI diffs a consumer manifest from the installed package'
+        : `the CLI failed to diff the consumer manifest:\n${error.stderr ?? error.message}`
+    );
+  }
 } finally {
   rmSync(work, { recursive: true, force: true });
 }

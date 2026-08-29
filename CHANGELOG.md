@@ -82,6 +82,26 @@ Pre-1.0 releases followed it in spirit; their breaking changes are marked **Brea
   it concerns, and the JSON that would settle it when the fix is mechanical.
   The assertion is unchanged and built on top of it.
 
+- **`vscode-ext-kit manifest`: the manifest check, from the command line.**
+  It compares the plan an extension compiles with its `package.json` — the
+  comparison `assertManifestMatches` makes in a test — and reports every
+  disagreement, as text or JSON, with exit code 1 when there is one. `--apply`
+  adds what the manifest is missing and the source can supply: commands and
+  settings, complete in everything mechanical and with placeholder titles and
+  descriptions a person has to replace. What a person has to decide is
+  reported and left alone: a view needs a container the declaration does not
+  name, a drifted default has two candidates, and an entry only the manifest
+  has may be there on purpose.
+
+- **`defineSettings({ contributed: false })`, for a section the extension only
+  reads.** `editor.tabSize` belongs to VS Code. An extension that declares it,
+  to read it through the same typed accessor as its own settings, was
+  indistinguishable from one that owns it — so the manifest check asked
+  `package.json` for it. The declaration now says which it is: `describePlan`
+  carries the answer as `contributed`, and `diffManifest`,
+  `assertManifestMatches` and the command line leave a section that is not
+  contributed out of the comparison.
+
 - **An API reference, generated from the JSDoc.** `npm run docs:api` renders
   every public entry point with TypeDoc, and CI runs it with warnings as
   errors. Setting that up found what the warnings exist to find: types that
