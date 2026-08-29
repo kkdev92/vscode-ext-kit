@@ -710,6 +710,59 @@ every extension's deactivation against a few seconds and then exits; the
 framework's own budget sits inside that, and past it pending work is abandoned.
 Knowing _which_ work is the difference between a mystery and a fix.
 
+### The plan, as data
+
+Diagnostics say what is happening; `describePlan` says what was declared. It
+turns a compiled plan into JSON — module ids, service tokens and the edges
+between them, command ids and titles, settings keys and defaults, watcher
+globs, view ids — with nothing callable in it.
+
+<!-- sample: docs/samples/describe-plan.ts -->
+
+```ts
+import { describePlan } from '@kkdev92/vscode-ext-kit';
+
+import { app } from './extension.js';
+
+/**
+ * What this extension registers, as JSON.
+ *
+ * Commit the output and a pull request shows the topology change beside the
+ * code change: a new command, a service that gained a dependency, a watcher
+ * whose glob moved. Deterministic, so a diff means a declaration changed.
+ */
+export function planAsJson(): string {
+  return JSON.stringify(describePlan(app.plan), null, 2);
+}
+
+/** Every command in the plan, with the module that declared it. */
+export function commandOwners(): readonly string[] {
+  return describePlan(app.plan).commands.map((command) => `${command.id} (${command.moduleId})`);
+}
+
+/**
+ * The service graph as edges, which is most of what a dependency diagram is.
+ *
+ * Token ids, not token objects: the description carries nothing callable, so
+ * there is nothing here to resolve or mutate.
+ */
+export function serviceEdges(): readonly string[] {
+  return describePlan(app.plan).services.flatMap((service) =>
+    Object.values(service.dependencies).map((dependency) => `${service.token} -> ${dependency}`)
+  );
+}
+```
+
+It is deterministic and in declaration order, so the output is worth
+committing: a diff in the file means a declaration changed, which is the
+review question `git diff` on a large module rarely answers directly. The same
+document is what a manifest cross-check and a dependency diagram want, and it
+is the honest answer to "what does this extension actually register?" for
+anyone — or anything — reading the codebase for the first time.
+
+Secret _keys_ appear, because a declared key is metadata the source already
+states in the clear. Secret values do not exist at plan time.
+
 ## Keeping package.json honest
 
 VS Code reads the manifest before any extension code runs, so `src` and
