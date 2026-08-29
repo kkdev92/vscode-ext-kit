@@ -23,6 +23,8 @@ import type { ApplicationPlan } from '../../foundation/application/plan.js';
 import { createCommandExecutor } from '../../foundation/commands/binder.js';
 import type { CommandExecutor } from '../../foundation/commands/binder.js';
 import type { HostDiagnostic } from '../../foundation/hosting/application-host.js';
+import { InvalidHostStateError } from '../../foundation/internal/errors.js';
+import { ErrorKind, FrameworkError } from '../../foundation/operations/errors.js';
 import type { ModuleDefinition } from '../../foundation/modules/definition.js';
 import type { Injected, ServiceMap } from '../../foundation/services/token.js';
 import { createVSCodeCommandCapability } from './commands.js';
@@ -112,6 +114,14 @@ export interface DefineExtensionOptions {
  *
  * `deactivate` is the single cleanup path; `activate` registers only a
  * synchronous failsafe on `context.subscriptions`.
+ *
+ * One application per definition. A second `activate` while the first is
+ * starting or running joins that start and resolves to the same value; after
+ * `deactivate`, or after a start that failed, it rejects with a
+ * `FrameworkError` of kind `activation` (code `EXTENSION_NOT_RESTARTABLE`)
+ * rather than building a second application. VS Code activates an extension
+ * once per session, so this only shows up in a test that reuses one
+ * definition — build one per test, or run the plan through `createTestHost`.
  */
 export interface ExtensionApplication<TApi = void> {
   /**
@@ -172,6 +182,31 @@ export function defineExtension(
     commands: createCommandExecutor(capability),
 
     activate: async (context: vscode.ExtensionContext): Promise<unknown> => {
+      // One application per definition. A second call while the first is
+      // starting or running joins it: the host's start is single-flight, so
+      // this resolves to the same value and creates nothing. Once the host has
+      // stopped or failed there is nothing to join, and building a fresh
+      // application here would give VS Code an extension it never asked for,
+      // on a log channel it never saw closed. The host says no; the facade
+      // says it in the vocabulary a consumer already handles.
+      if (application !== undefined) {
+        try {
+          return await application.activate(context);
+        } catch (error) {
+          if (error instanceof InvalidHostStateError) {
+            const state = application.host.state;
+            throw new FrameworkError({
+              kind: ErrorKind.Activation,
+              code: 'EXTENSION_NOT_RESTARTABLE',
+              message: `"${options.name}" cannot be activated again: its application is ${state}.`,
+              details: { state },
+              cause: error,
+            });
+          }
+          throw error;
+        }
+      }
+
       // Created here, not at import time: creating a channel is a VS Code call.
       //
       // Deliberately NOT pushed onto context.subscriptions: VS Code may dispose
