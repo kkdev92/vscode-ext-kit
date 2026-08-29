@@ -63,6 +63,18 @@ Pre-1.0 releases followed it in spirit; their breaking changes are marked **Brea
   `PreflightError` is exported from the root, so the error can be recognised
   with `instanceof` rather than by its name.
 
+### Changed
+
+- **`defineExtension` is single-use, like the extension host it serves.** A
+  second `activate` while the first is starting or running now joins that
+  start and resolves to the same value; after `deactivate`, or after a start
+  that failed, it rejects with a `FrameworkError` of kind `activation` (code
+  `EXTENSION_NOT_RESTARTABLE`) instead of quietly building a second application
+  and a second log channel. VS Code activates an extension once per session,
+  so nothing changes in the editor; the change shows up only in a test that
+  activates one `defineExtension` result twice — build one per test, or run
+  the plan through `createTestHost`, which is what it is for.
+
 ## [4.0.1] - 2026-08-29
 
 **A patch to the tree-view adapter, plus four corrections to what the project

@@ -269,6 +269,7 @@ generated API reference is not built yet.
 - A command's result and its rejection both reach the caller
 - The plan is immutable: mutating a definition after compilation cannot change what runs
 - Fakes and real adapters satisfy the same contract suite
+- `activate` is single-use: a second call while starting or running joins the same start and resolves to the same value; after `deactivate` it rejects rather than rebuilding the application behind VS Code's back
 
 ---
 
