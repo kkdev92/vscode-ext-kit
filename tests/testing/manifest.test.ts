@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 
 import { defineCommandContract } from '../../src/foundation/commands/contract.js';
 import { defineSettings, setting } from '../../src/foundation/settings/definition.js';
-import { assertManifestMatches } from '../../src/testing/manifest.js';
+import { assertManifestMatches, diffManifest } from '../../src/testing/manifest.js';
 
 const Refresh = defineCommandContract({ id: 'sample.refresh' });
 const Clear = defineCommandContract({ id: 'sample.clear' });
@@ -249,5 +249,87 @@ describe('assertManifestMatches, on a nullable setting', () => {
     expect(pasted).toMatchObject({
       'sample.preset': { type: ['string', 'null'], default: null, enum: [null, 'ai'] },
     });
+  });
+});
+
+/**
+ * The same comparison, as data.
+ *
+ * A tool that prints, counts or applies the mechanical part of the fix needs
+ * more than a sentence: which contribution point, which side, which id, and
+ * whether there is JSON that settles it. The assertion is built on this, so
+ * the two can never disagree about what disagrees.
+ */
+describe('diffManifest', () => {
+  const declared = { commands: [Refresh, Clear], settings: [Options], views: ['sample.tree'] };
+
+  /** The agreeing manifest with one problem of each kind introduced. */
+  function disagreeingManifest(): unknown {
+    const manifest = agreeingManifest() as {
+      contributes: {
+        commands: unknown[];
+        configuration: { properties: Record<string, Record<string, unknown>> };
+        views: Record<string, unknown[]>;
+      };
+    };
+    // One command gone, one nobody handles.
+    manifest.contributes.commands = [
+      { command: 'sample.refresh', title: 'Refresh' },
+      { command: 'sample.ghost', title: 'Ghost' },
+    ];
+    // A type that drifted.
+    manifest.contributes.configuration.properties['sample.limit'] = {
+      type: 'number',
+      default: 10,
+      scope: 'window',
+    };
+    // The declared view missing, an undeclared one present.
+    manifest.contributes.views = { sampleContainer: [{ id: 'sample.other', name: 'Other' }] };
+    return manifest;
+  }
+
+  it('returns nothing when the two agree', () => {
+    expect(diffManifest(agreeingManifest(), declared)).toEqual([]);
+  });
+
+  it('reports each disagreement as data, in the order the checks run', () => {
+    const mismatches = diffManifest(disagreeingManifest(), declared);
+
+    expect(mismatches.map((m) => [m.kind, m.direction, m.id])).toEqual([
+      ['command', 'missing-in-manifest', 'sample.clear'],
+      ['command', 'missing-in-src', 'sample.ghost'],
+      ['setting', 'drift', 'sample.limit'],
+      ['view', 'missing-in-manifest', 'sample.tree'],
+      ['view', 'missing-in-src', 'sample.other'],
+    ]);
+  });
+
+  it('attaches the JSON to paste only where the fix is mechanical', () => {
+    const mismatches = diffManifest(disagreeingManifest(), declared);
+    const byId = new Map(mismatches.map((m) => [m.id, m]));
+
+    // A missing command has a mechanical shape; the title is a placeholder.
+    expect(byId.get('sample.clear')?.paste).toContain('"command": "sample.clear"');
+    // A missing view needs a container, which is a decision, not a fact in src.
+    expect(byId.get('sample.tree')?.paste).toBeUndefined();
+    // Drift is a disagreement about a value, not an absence; there is nothing to paste.
+    expect(byId.get('sample.limit')?.paste).toBeUndefined();
+  });
+
+  it('is exactly what the assertion reports, one summary per line', () => {
+    const manifest = disagreeingManifest();
+    const summaries = diffManifest(manifest, declared).map((m) => m.summary);
+
+    let message = '';
+    try {
+      assertManifestMatches(manifest, declared);
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    expect(message).toContain(`${String(summaries.length)} place(s)`);
+    for (const summary of summaries) {
+      expect(message).toContain(summary);
+    }
   });
 });

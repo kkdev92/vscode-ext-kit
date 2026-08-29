@@ -49,8 +49,8 @@ export type { ApplicationInspection } from '../foundation/application/applicatio
 // Manifest and source remain separate because VS Code consumes contributions
 // before activation. This assertion makes source declarations authoritative
 // only for their mechanical overlap; human-facing manifest text stays manual.
-export { assertManifestMatches } from './manifest.js';
-export type { DeclaredContributions } from './manifest.js';
+export { assertManifestMatches, diffManifest } from './manifest.js';
+export type { DeclaredContributions, ManifestMismatch } from './manifest.js';
 
 export { createFakeMemento, createFakeSecrets, createFakeStorage } from './fakes/fake-storage.js';
 export type { FakeMemento, FakeSecrets, FakeStorage } from './fakes/fake-storage.js';

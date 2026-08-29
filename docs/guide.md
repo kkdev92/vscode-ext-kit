@@ -869,6 +869,11 @@ generating the manifest from TypeScript turns `package.json` into a file a human
 still has to hand-edit. Verifying the overlap costs one test and leaves both
 files written by the people who own them.
 
+The comparison is also available as data: `diffManifest` returns every
+disagreement with the contribution point it concerns, which side is missing it
+— or `drift`, when both have it and disagree — the id, and the JSON that would
+settle it when the fix is mechanical. The assertion above is built on it.
+
 ## The escape hatch
 
 <!-- sample: docs/samples/raw-registration.ts -->

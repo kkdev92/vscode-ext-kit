@@ -26,8 +26,20 @@ export interface DeclaredContributions {
   readonly views?: readonly string[];
 }
 
-/** A single disagreement between the manifest and what `src` declares. */
-interface Mismatch {
+/**
+ * One disagreement between `package.json` and what `src` declares.
+ *
+ * `kind` says which contribution point, `direction` which side is missing
+ * something — or `drift`, when both have the entry and disagree about it — and
+ * `id` the command, setting key or view it concerns. `summary` says the same
+ * thing to a person; `paste` is the JSON that would settle it, present when the
+ * fix is mechanical and absent when only a person can supply it (a view needs
+ * a container; a command needs a title).
+ */
+export interface ManifestMismatch {
+  readonly kind: 'command' | 'setting' | 'view';
+  readonly direction: 'missing-in-manifest' | 'missing-in-src' | 'drift';
+  readonly id: string;
   readonly summary: string;
   /** JSON to paste into `contributes`, when the fix is mechanical. */
   readonly paste?: string;
@@ -102,17 +114,20 @@ function viewIds(manifest: Manifest): readonly string[] {
     .filter((id): id is string => typeof id === 'string');
 }
 
-function checkCommands(manifest: Manifest, declared: DeclaredContributions): Mismatch[] {
+function checkCommands(manifest: Manifest, declared: DeclaredContributions): ManifestMismatch[] {
   if (declared.commands === undefined) {
     return [];
   }
   const inManifest = new Set(commandIds(manifest));
   const inSource = new Set(declared.commands.map((contract) => contract.descriptor.id));
-  const mismatches: Mismatch[] = [];
+  const mismatches: ManifestMismatch[] = [];
 
   for (const id of inSource) {
     if (!inManifest.has(id)) {
       mismatches.push({
+        kind: 'command',
+        direction: 'missing-in-manifest',
+        id,
         summary: `command "${id}" is declared in src but missing from contributes.commands`,
         paste: JSON.stringify({ command: id, title: 'TODO' }, null, 2),
       });
@@ -120,8 +135,10 @@ function checkCommands(manifest: Manifest, declared: DeclaredContributions): Mis
   }
   for (const id of inManifest) {
     if (!inSource.has(id)) {
-      // The palette would offer a command nothing handles.
       mismatches.push({
+        kind: 'command',
+        direction: 'missing-in-src',
+        id,
         summary: `command "${id}" is in contributes.commands but no contract declares it`,
       });
     }
@@ -129,13 +146,19 @@ function checkCommands(manifest: Manifest, declared: DeclaredContributions): Mis
   return mismatches;
 }
 
-function checkSettings(manifest: Manifest, declared: DeclaredContributions): Mismatch[] {
+function checkSettings(manifest: Manifest, declared: DeclaredContributions): ManifestMismatch[] {
   if (declared.settings === undefined) {
     return [];
   }
   const properties = manifest.contributes?.configuration?.properties ?? {};
-  const mismatches: Mismatch[] = [];
+  const mismatches: ManifestMismatch[] = [];
   const expected = new Set<string>();
+  const drift = (id: string, summary: string): ManifestMismatch => ({
+    kind: 'setting',
+    direction: 'drift',
+    id,
+    summary,
+  });
 
   for (const group of declared.settings) {
     for (const [name, spec] of Object.entries(group.values)) {
@@ -144,40 +167,49 @@ function checkSettings(manifest: Manifest, declared: DeclaredContributions): Mis
       const entry = properties[key];
       if (entry === undefined) {
         mismatches.push({
+          kind: 'setting',
+          direction: 'missing-in-manifest',
+          id: key,
           summary: `setting "${key}" is declared in src but missing from contributes.configuration`,
           paste: JSON.stringify({ [key]: contributionFor(spec) }, null, 2),
         });
         continue;
       }
-      // Only the machine-facing facts. Descriptions, ordering and
-      // `markdownDescription` are the manifest's to own.
       if (!sameType(entry['type'], spec.type)) {
-        mismatches.push({
-          summary:
+        mismatches.push(
+          drift(
+            key,
             `setting "${key}" is ${JSON.stringify(entry['type'])} in the manifest ` +
-            `and ${JSON.stringify(spec.type)} in src`,
-        });
+              `and ${JSON.stringify(spec.type)} in src`
+          )
+        );
       }
       if (!equalJson(entry['default'], spec.default)) {
-        mismatches.push({
-          summary:
+        mismatches.push(
+          drift(
+            key,
             `setting "${key}" defaults to ${JSON.stringify(entry['default'])} in the manifest ` +
-            `and ${JSON.stringify(spec.default)} in src`,
-        });
+              `and ${JSON.stringify(spec.default)} in src`
+          )
+        );
       }
       if (spec.enum !== undefined && !equalJson(entry['enum'], [...spec.enum])) {
-        mismatches.push({
-          summary:
+        mismatches.push(
+          drift(
+            key,
             `setting "${key}" allows ${JSON.stringify(entry['enum'])} in the manifest ` +
-            `and ${JSON.stringify(spec.enum)} in src`,
-        });
+              `and ${JSON.stringify(spec.enum)} in src`
+          )
+        );
       }
       if ((entry['scope'] ?? DEFAULT_MANIFEST_SCOPE) !== spec.scope) {
-        mismatches.push({
-          summary:
+        mismatches.push(
+          drift(
+            key,
             `setting "${key}" is scoped ${JSON.stringify(entry['scope'] ?? DEFAULT_MANIFEST_SCOPE)} ` +
-            `in the manifest and "${spec.scope}" in src`,
-        });
+              `in the manifest and "${spec.scope}" in src`
+          )
+        );
       }
     }
   }
@@ -185,8 +217,10 @@ function checkSettings(manifest: Manifest, declared: DeclaredContributions): Mis
   const sections = declared.settings.map((group) => `${group.section}.`);
   for (const key of Object.keys(properties)) {
     if (sections.some((prefix) => key.startsWith(prefix)) && !expected.has(key)) {
-      // A setting the user can change that the extension never reads.
       mismatches.push({
+        kind: 'setting',
+        direction: 'missing-in-src',
+        id: key,
         summary: `setting "${key}" is contributed but no declaration in src reads it`,
       });
     }
@@ -194,7 +228,7 @@ function checkSettings(manifest: Manifest, declared: DeclaredContributions): Mis
   return mismatches;
 }
 
-function checkViews(manifest: Manifest, declared: DeclaredContributions): Mismatch[] {
+function checkViews(manifest: Manifest, declared: DeclaredContributions): ManifestMismatch[] {
   if (declared.views === undefined) {
     return [];
   }
@@ -203,12 +237,50 @@ function checkViews(manifest: Manifest, declared: DeclaredContributions): Mismat
   return [
     ...[...inSource]
       .filter((id) => !inManifest.has(id))
-      .map((id) => ({
+      .map((id): ManifestMismatch => ({
+        kind: 'view',
+        direction: 'missing-in-manifest',
+        id,
+        // No `paste`: a view needs a container, and which one is a design
+        // decision the declaration does not carry.
         summary: `view "${id}" is registered in src but missing from contributes.views`,
       })),
     ...[...inManifest]
       .filter((id) => !inSource.has(id))
-      .map((id) => ({ summary: `view "${id}" is contributed but nothing in src registers it` })),
+      .map((id): ManifestMismatch => ({
+        kind: 'view',
+        direction: 'missing-in-src',
+        id,
+        summary: `view "${id}" is contributed but nothing in src registers it`,
+      })),
+  ];
+}
+
+/**
+ * Every disagreement between `package.json` and the declarations in `src`, as
+ * data, in the order the checks run: commands, then settings, then views.
+ *
+ * The same comparison {@link assertManifestMatches} makes, without the throw —
+ * for a tool that wants to print, count or apply the mechanical part of the
+ * fix itself. An empty result means the two agree on everything this checks.
+ *
+ * @example
+ * ```ts
+ * const mismatches = diffManifest(manifest, { commands: Object.values(Contracts) });
+ * for (const mismatch of mismatches.filter((m) => m.direction === 'missing-in-manifest')) {
+ *   console.log(mismatch.paste ?? mismatch.summary);
+ * }
+ * ```
+ */
+export function diffManifest(
+  manifest: unknown,
+  declared: DeclaredContributions
+): readonly ManifestMismatch[] {
+  const parsed = (manifest ?? {}) as Manifest;
+  return [
+    ...checkCommands(parsed, declared),
+    ...checkSettings(parsed, declared),
+    ...checkViews(parsed, declared),
   ];
 }
 
@@ -246,12 +318,7 @@ function checkViews(manifest: Manifest, declared: DeclaredContributions): Mismat
  * @throws when anything disagrees, listing every disagreement at once
  */
 export function assertManifestMatches(manifest: unknown, declared: DeclaredContributions): void {
-  const parsed = (manifest ?? {}) as Manifest;
-  const mismatches = [
-    ...checkCommands(parsed, declared),
-    ...checkSettings(parsed, declared),
-    ...checkViews(parsed, declared),
-  ];
+  const mismatches = diffManifest(manifest, declared);
   if (mismatches.length === 0) {
     return;
   }
