@@ -376,7 +376,7 @@ so treat the floor as a formality rather than a tested target.
 
 - **`ERR_REQUIRE_ESM` or `require() of ES Module`**: the package is ESM only, by design; bundle your extension with esbuild/webpack/rollup, which is what VS Code extensions normally do anyway
 - **`Symbol.dispose` or `AbortSignal` is not defined in the types**: add `ESNext.Disposable` and one of `DOM` / `WebWorker` / `@types/node` to `lib` — see [Platform Requirements](#platform-requirements)
-- **An error at import time, before anything ran**: that is preflight, and it is working; the message names the duplicate id, the missing service or the cycle
+- **An error at import time, before anything ran**: that is preflight, and it is working; the message names the duplicate id, the missing service or the cycle, and `problems` on the error carries each one as a code a script can act on
 - **A command is greyed out in the Command Palette**: that is `enablement` / `commandPalette` `when` in your `package.json`, not something this package controls
 - **A text editor command's result is `undefined`**: VS Code runs those handlers fire-and-forget and discards what they return; use `module.commands.handle` with `Editors.active` when the caller needs the result
 - **`vscode` cannot be resolved in tests**: point Vitest's `resolve.alias` at `@kkdev92/vscode-ext-kit/testing/vitest`, or merge `vscodeExtKitVitestConfig`

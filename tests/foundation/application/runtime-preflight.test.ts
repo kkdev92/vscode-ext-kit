@@ -163,7 +163,14 @@ describe('runtime preflight during activation', () => {
       environment: { isTrusted: false },
     });
 
-    await expect(host.start()).rejects.toBeInstanceOf(PreflightError);
+    const failure: unknown = await host.start().catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(PreflightError);
+    // The code the environment check produced survives the throw, so a caller
+    // can tell an untrusted workspace from a missing folder without reading
+    // the sentence.
+    expect((failure as PreflightError).problems).toEqual([
+      expect.objectContaining({ code: 'TRUST_REQUIRED', moduleId: expect.any(String) }),
+    ]);
 
     // The point of running before binding: nothing was registered.
     expect(host.commands.registeredIds).toEqual([]);

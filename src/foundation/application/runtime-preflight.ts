@@ -22,7 +22,13 @@ export type PreflightSeverity = (typeof PreflightSeverity)[keyof typeof Prefligh
 /** One runtime-preflight finding associated with a Module. */
 export interface RuntimeIssue {
   readonly severity: PreflightSeverity;
-  /** Stable, machine-readable code. */
+  /**
+   * Stable, machine-readable code.
+   *
+   * Errors: `WORKSPACE_REQUIRED`, `TRUST_REQUIRED`, `LOCAL_FILESYSTEM_REQUIRED`,
+   * `NODE_MODULE_IN_WEB_HOST`. Warnings: `COMPATIBILITY_UNSPECIFIED_IN_WEB_HOST`,
+   * `UI_PREFERRED_ON_REMOTE`.
+   */
   readonly code: string;
   readonly message: string;
   /** Module the finding belongs to. */
@@ -43,7 +49,7 @@ export interface RuntimeIssue {
  * const issues = runtimePreflight(plan, environment.read());
  * const errors = issues.filter((issue) => issue.severity === 'error');
  * if (errors.length > 0) {
- *   throw new PreflightError(errors.map((issue) => issue.message));
+ *   throw new PreflightError(errors);
  * }
  * ```
  *
