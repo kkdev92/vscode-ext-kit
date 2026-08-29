@@ -29,7 +29,7 @@ export type ValidationResult<T> =
  * Minimal validator contract. The core depends on no validator library.
  *
  * Any synchronous Standard Schema v1 validator is also accepted; see
- * {@link toValidator}.
+ * `toValidator`.
  */
 export interface Validator<T> {
   validate(value: unknown): ValidationResult<T>;

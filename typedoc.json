@@ -1,0 +1,20 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "src/index.ts",
+    "src/testing/index.ts",
+    "src/testing/mock/vitest.ts",
+    "src/testing/mock/vitest-config.ts",
+    "src/capabilities/webview-client/index.ts",
+    "src/capabilities/std/timing.ts",
+    "src/capabilities/std/retry.ts",
+    "src/capabilities/l10n/format.ts"
+  ],
+  "tsconfig": "tsconfig.json",
+  "out": "docs/api",
+  "readme": "none",
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "validation": { "notExported": true, "invalidLink": true, "notDocumented": false },
+  "treatWarningsAsErrors": true
+}

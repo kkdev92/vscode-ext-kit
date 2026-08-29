@@ -42,8 +42,9 @@ npm run test:coverage   # the same suite, with the coverage gate
 npm run lint            # type-aware ESLint over src + tests, --max-warnings 0
 npm run format          # prettier
 npm run knip            # dead code
+npm run docs:api        # TypeDoc into docs/api; warnings are errors
 npm run verify:package  # pack, install into a throwaway consumer, import every subpath
-npm run quality         # typecheck + lint + test:coverage + knip — the gate CI runs
+npm run quality         # typecheck + lint + test:coverage + knip + docs:api — the gate CI runs
 ```
 
 `tsc -b --noEmit` does not work (TS6310: project references need `composite`, and

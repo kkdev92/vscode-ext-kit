@@ -300,7 +300,7 @@ export const s = {
    *
    * Keys come from the input, which for a record is the whole point — and
    * `JSON.parse` produces `__proto__` as a genuine own property, so a record
-   * built from parsed JSON can carry one. See {@link define} for why that key
+   * built from parsed JSON can carry one. See `defineOwn` in `foundation/internal/record.ts` for why that key
    * is not written with `output[key] = …`.
    */
   record<Value>(

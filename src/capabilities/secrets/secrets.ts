@@ -2,7 +2,7 @@
  * Secret-storage services above the platform's encrypted secrets port.
  *
  * Public surface: {@link SecretStore} addresses dynamic user-chosen keys,
- * {@link SecretStorage} narrows that store to one string key, and
+ * `SecretStorage` narrows that store to one string key, and
  * {@link SecretAccessor} adds JSON serialization plus synchronous Standard
  * Schema validation for a declared structured secret.
  *
@@ -177,7 +177,7 @@ export function createSecretStorage(capability: SecretsCapability, key: string):
 /**
  * A typed secret scoped to one key.
  *
- * The structured flavour of {@link SecretStorage}: values are JSON-serialized,
+ * The structured flavour of `SecretStorage`: values are JSON-serialized,
  * and when a schema is declared they are validated against it in both
  * directions — before a write is serialized, and after a read is parsed.
  */

@@ -1504,7 +1504,7 @@ function createMockWindowNamespace(framework: MockFrameworkLike) {
     }),
     /**
      * `Dark` by default. A plain mutable field, so a test can assign it
-     * directly — use {@link _setColorTheme} instead when listeners registered
+     * directly — use `_setColorTheme` instead when listeners registered
      * through `onDidChangeActiveColorTheme` also need to fire.
      */
     activeColorTheme: { kind: ColorThemeKind.Dark } as vscode.ColorTheme,

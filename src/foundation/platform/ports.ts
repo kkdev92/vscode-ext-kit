@@ -515,7 +515,7 @@ export interface StatusBarCapability {
 }
 
 /** A language filter. Structurally a `vscode.DocumentFilter`. */
-interface LanguageFilterLike {
+export interface LanguageFilterLike {
   readonly language?: string | undefined;
   readonly scheme?: string | undefined;
   readonly pattern?: string | undefined;

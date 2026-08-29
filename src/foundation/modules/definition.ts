@@ -387,7 +387,7 @@ export interface SecretCollection {
 /**
  * Records VS Code APIs the framework has no model for. The callback receives
  * the Module scopes needed to participate in ownership and activation rollback;
- * see {@link RawRegistrationDefinition}.
+ * see `RawRegistrationDefinition`.
  */
 export interface RawRegistrationCollection<TUses extends ServiceMap = Record<never, never>> {
   /** Registers with declared dependencies. */
@@ -485,22 +485,41 @@ export interface DefineModuleOptions<TUses extends ServiceMap = Record<never, ne
  * compiled into an Application plan. Callback functions and deliberately
  * opaque nested application objects retain their identity. No service instance
  * or platform registration exists until activation.
+ *
+ * To a consumer this is a handle: `defineModule` produces it, `defineExtension`
+ * consumes it. The registration records it carries are the framework's own
+ * and not a public contract — `describePlan`, on the compiled application, is
+ * the readable form.
  */
 export interface ModuleDefinition {
   readonly id: string;
+  /** @internal */
   readonly services: readonly ServiceDescriptor[];
+  /** @internal */
   readonly commands: readonly CommandDefinition[];
+  /** @internal */
   readonly textEditorCommands: readonly TextEditorCommandDefinition[];
+  /** @internal */
   readonly hostedServices: readonly HostedServiceDefinition[];
+  /** @internal */
   readonly settings: readonly SettingsRegistration[];
+  /** @internal */
   readonly storage: readonly StorageRegistration[];
+  /** @internal */
   readonly secrets: readonly SecretRegistration[];
+  /** @internal */
   readonly fileWatchers: readonly FileWatcherDefinition[];
+  /** @internal */
   readonly statusBarItems: readonly StatusBarItemDefinition[];
+  /** @internal */
   readonly languageStatusItems: readonly LanguageStatusItemDefinition[];
+  /** @internal */
   readonly treeViews: readonly TreeViewDefinition[];
+  /** @internal */
   readonly webviewViews: readonly WebviewViewDefinition[];
+  /** @internal */
   readonly webviewSerializers: readonly WebviewPanelSerializerDefinition[];
+  /** @internal */
   readonly rawRegistrations: readonly RawRegistrationDefinition[];
   /** Declared host compatibility. */
   readonly compatibility: ModuleCompatibility;

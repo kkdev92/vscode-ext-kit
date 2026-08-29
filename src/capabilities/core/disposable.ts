@@ -13,7 +13,7 @@
  * A returned promise is not awaited; asynchronous cleanup belongs in a hosted
  * service or `ResourceScope`.
  */
-interface DisposableLike {
+export interface DisposableLike {
   dispose(): unknown;
 }
 
@@ -109,7 +109,7 @@ export class DisposableCollection implements DisposableLike {
 }
 
 /** The part of `vscode.ExtensionContext` that {@link createScope} needs. */
-interface SubscriptionsHost {
+export interface SubscriptionsHost {
   readonly subscriptions: { push(disposable: DisposableLike): void };
 }
 

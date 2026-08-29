@@ -78,7 +78,7 @@ export interface RetryOptions {
    */
   readonly signal?: AbortSignal;
   /**
-   * Per-attempt timeout. A timed-out attempt throws {@link TimeoutError}, which
+   * Per-attempt timeout. A timed-out attempt throws `TimeoutError` (from `./timing`), which
    * is then treated like any other failure.
    */
   readonly timeoutMs?: number;

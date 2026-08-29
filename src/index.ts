@@ -374,3 +374,46 @@ export { DisposableCollection, createScope } from './capabilities/core/disposabl
 // --- Where the host is running --------------------------------------------
 export { UiKind } from './foundation/platform/ports.js';
 export type { HostEnvironment, ResourceUri, WatchedUri } from './foundation/platform/ports.js';
+
+// --- Types that public signatures name ---------------------------------------
+// A consumer handed one of these should be able to write its type. They are
+// the contracts behind existing exports, not another way to reach anything.
+export type {
+  AccessibilityInformationLike,
+  CommandLike,
+  CommandLinkLike,
+  LanguageFilterLike,
+  LanguageSelectorLike,
+  MarkdownLike,
+  NotificationSeverity,
+  PlatformRegistration,
+  ProgressArea,
+  ProgressReporterLike,
+  QuickInputButtonLike,
+  QuickInputCapability,
+  QuickPickItemLike,
+  RelativePatternLike,
+  TooltipLike,
+  TreeDataSource,
+  TreeDragAndDrop,
+  TreeItemLike,
+} from './foundation/platform/ports.js';
+export type { DisposableLike } from './capabilities/core/disposable.js';
+// What `defineStatusBarItem` and `defineLanguageStatusItem` return.
+export type { StatusBarItemDefinition } from './capabilities/ui/definition.js';
+export type { LanguageStatusItemDefinition } from './capabilities/ui/definition.js';
+export type { CommandDescriptor } from './foundation/commands/contract.js';
+export type { SchemaPathSegment } from './capabilities/core/schema.js';
+export type { RememberedChoice } from './capabilities/ui/notifications.js';
+export type { Emitter } from './foundation/internal/emitter.js';
+// Why an operation was cancelled and what kind of ingress started it: both are
+// read off values existing exports hand out (`OperationCancelledError.reason`,
+// `OperationContext.kind`), so both the constants and the types are here.
+export { CancellationReason } from './foundation/operations/cancellation.js';
+export { OperationKind } from './foundation/operations/context.js';
+export type { SubscriptionsHost } from './capabilities/core/disposable.js';
+export type { WebviewLike } from './capabilities/views/webview/rpc.js';
+export type { WebviewCspSourceLike } from './capabilities/views/webview/html.js';
+export type { DefineExtensionOptionsWithExports } from './vscode/foundation/extension.js';
+export type { StandardSchemaResult } from './foundation/commands/contract.js';
+export type { SettingBaseOptions } from './foundation/settings/definition.js';

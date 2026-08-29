@@ -257,8 +257,10 @@ Values you pass around: `ok` `err` `unwrap` `mapResult` and the `s.*` schema
 builders; `FrameworkError` with `userError` / `validationError` / `classifyError`
 / `isCancellation`; `DisposableCollection` and `createScope`.
 
-Full signatures live in the `.d.ts` files and the JSDoc on each export; a
-generated API reference is not built yet.
+Full signatures live in the `.d.ts` files and the JSDoc on each export.
+`npm run docs:api` renders that JSDoc into an API reference under `docs/api/`
+(TypeDoc); CI runs it with warnings as errors, so a broken link or a type a
+public signature names but the package does not export cannot ship.
 
 ---
 
@@ -308,7 +310,7 @@ trusted for things it cannot do.
 - **The Test Host does not reproduce VS Code**: it renders no UI, interprets no contribution point, and does not substitute a direct `import "vscode"`
 - **No editor events yet**: `Editors` hands you the active editor and cross-file edits, but there is no `onDidChangeActive` / `onDidChangeSelection` / `onDidChangeDocument`; subscribing means reaching for `vscode` directly and disposing by hand, which is the one place the single-cleanup-owner rule leaks
 - **No log-level filtering, deliberately**: the framework writes to a `LogOutputChannel` and VS Code owns the level — per channel, persisted, in the Output panel. An extension cannot raise its own channel's level, so a `logLevel` setting of your own can only ever make the log quieter
-- **No generated API reference yet**, and no step-by-step migration guide from 2.x
+- **No hosted API reference yet** — it is generated from the JSDoc (`npm run docs:api`) but not published — and no step-by-step migration guide from 2.x
 
 ---
 
