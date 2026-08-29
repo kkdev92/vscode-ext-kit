@@ -467,12 +467,20 @@ function applyMismatches(manifest, mismatches) {
 async function runManifest(options, description) {
   const format = formatOf(options, 'manifest', ['text', 'json']);
   const manifestPath = resolvePath(options.manifest ?? 'package.json');
-  if (!existsSync(manifestPath)) {
-    throw new UsageError(
-      `${manifestPath} does not exist; point --manifest at the extension's package.json`
-    );
+  // Read first and explain a missing file afterwards, rather than checking for
+  // it and then reading: the file can change between the two, and the read is
+  // the only check that means anything.
+  let text;
+  try {
+    text = readFileSync(manifestPath, 'utf8');
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      throw new UsageError(
+        `${manifestPath} does not exist; point --manifest at the extension's package.json`
+      );
+    }
+    throw error;
   }
-  const text = readFileSync(manifestPath, 'utf8');
   const manifest = JSON.parse(text);
   const { diffManifest } = await loadKit(options.kit, './testing', 'diffManifest');
   const declared = declaredContributions(description);
