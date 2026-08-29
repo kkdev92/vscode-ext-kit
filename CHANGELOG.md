@@ -6,7 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 From 1.0.0 onward this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0 releases followed it in spirit; their breaking changes are marked **Breaking**.
 
-## [Unreleased]
+## [4.0.1] - 2026-08-29
+
+**A patch to the tree-view adapter, plus four corrections to what the project
+says about itself.** The public API is unchanged — the emitted `.d.ts` files
+differ from `4.0.0` in comments only. The one behaviour change is that a
+custom `TreeDataSource`'s `dispose()` now runs once instead of twice; the
+shipped providers never noticed the difference.
 
 ### Fixed
 
@@ -1023,7 +1029,8 @@ platform support, toolchain currency, and release supply chain.
 
 Initial public release.
 
-[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v4.0.0...HEAD
+[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v4.0.1...HEAD
+[4.0.1]: https://github.com/kkdev92/vscode-ext-kit/compare/v4.0.0...v4.0.1
 [4.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0...v4.0.0
 [3.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.3...v3.0.0
 [3.0.0-alpha.3]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.2...v3.0.0-alpha.3
