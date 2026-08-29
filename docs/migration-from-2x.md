@@ -315,8 +315,15 @@ honest](guide.md#keeping-packagejson-honest) has the test. Run it now: a
 migration that renamed a section or fixed a default is exactly when the two
 drift.
 
-`npx vscode-ext-kit plan ./dist/extension.js --check` is the same idea one level
-up — preflight, from the command line, against the built entry.
+The same comparison is available without writing the test:
+`npx vscode-ext-kit manifest ./dist/extension.js` reports every disagreement
+between the built entry's plan and `package.json`, and `--apply` adds the
+commands and settings the manifest is missing, with placeholder titles and
+descriptions for a person to replace. A section the extension only reads —
+`editor`, say — is declared with `contributed: false`, so neither check asks the
+manifest for it. `npx vscode-ext-kit plan ./dist/extension.js --check` is the
+same idea one level up: preflight, from the command line, against the built
+entry.
 
 ## 9. Add an Extension Host lane
 
