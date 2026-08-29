@@ -22,6 +22,9 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "vscode-ext-kit": "./bin/vscode-ext-kit.mjs"
+  },
   "sideEffects": false,
   "exports": {
     ".": {
@@ -59,6 +62,7 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "bin",
     "dist",
     "src",
     "README.md",
@@ -107,8 +111,8 @@
     "test:coverage": "vitest run --coverage",
     "lint": "eslint src tests fixtures --max-warnings 0",
     "lint:fix": "eslint src tests fixtures --fix",
-    "format": "prettier --write \"{src,tests,fixtures,docs}/**/*.ts\" \"{scripts,fixtures}/**/*.mjs\"",
-    "format:check": "prettier --check \"{src,tests,fixtures,docs}/**/*.ts\" \"{scripts,fixtures}/**/*.mjs\"",
+    "format": "prettier --write \"{src,tests,fixtures,docs}/**/*.ts\" \"{bin,scripts,fixtures,tests}/**/*.{mjs,cjs}\"",
+    "format:check": "prettier --check \"{src,tests,fixtures,docs}/**/*.ts\" \"{bin,scripts,fixtures,tests}/**/*.{mjs,cjs}\"",
     "knip": "knip",
     "verify:package": "node scripts/verify-package.mjs",
     "fixture:build": "node fixtures/extension-host/build.mjs",
@@ -136,6 +140,9 @@
     ],
     "docs/**/*.ts": [
       "prettier --write"
+    ],
+    "{bin,scripts}/**/*.{mjs,cjs}": [
+      "prettier --write"
     ]
   },
   "prettier": {
@@ -149,12 +156,15 @@
   "knip": {
     "project": [
       "src/**/*.ts",
+      "bin/**/*.{mjs,cjs}",
       "fixtures/**/*.ts",
       "fixtures/**/*.mjs",
       "scripts/**/*.mjs"
     ],
     "entry": [
       "src/index.ts",
+      "bin/vscode-stub-hooks.mjs",
+      "bin/vscode-stub.cjs",
       "src/testing/index.ts",
       "src/testing/mock/vitest.ts",
       "src/testing/mock/vitest-config.ts",
