@@ -12,11 +12,12 @@ runs it, and tears it down through exactly one path.
 _Built for extensions big enough that "what does this thing actually register?"
 has stopped being obvious._
 
-> **Status:** `4.0.1` — the current release. It is `3.0.0` with the VS Code
-> floor raised to `^1.134.0` and a fix in the tree-view adapter; the API is
-> unchanged. 2.x was a utility library with a different shape; it continues on
-> `v2-maintenance` and anything pinned to `^2.x` is unaffected. See
-> [Coming from 2.x](#coming-from-2x).
+> **Status:** `4.1.0` — the current release. It adds introspection and tooling
+> to `4.0.1` — a plan as JSON, a preflight failure as data, a command-line
+> tool, an API reference, a migration guide — and changes nothing that existed;
+> the VS Code floor stays `^1.134.0`. 2.x was a utility library with a
+> different shape; it continues on `v2-maintenance` and anything pinned to
+> `^2.x` is unaffected. See [Coming from 2.x](#coming-from-2x).
 
 ---
 
@@ -456,7 +457,7 @@ This is a personal project maintained in spare time. It is active, but support
 is best-effort: I'll do my best to review issues and PRs, and releases may be a
 bit slow sometimes — thank you for your patience.
 
-`4.0.1` is the current release and holds `latest` on npm, so a fresh
+`4.1.0` is the current release and holds `latest` on npm, so a fresh
 `npm install` gets the framework. `2.x` continues on `v2-maintenance` and still
 takes bug fixes; anything pinned to `^2.x` resolves there and is unaffected.
 Breaking changes are listed in the [CHANGELOG](CHANGELOG.md).
