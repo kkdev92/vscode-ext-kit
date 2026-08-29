@@ -22,7 +22,7 @@ import { describe, expect, it } from 'vitest';
  * compiled should not use this marker, or readers will reasonably assume the
  * exact block passed `tsc`.
  */
-const PAGES = ['README.md', join('docs', 'guide.md')];
+const PAGES = ['README.md', join('docs', 'guide.md'), join('docs', 'migration-from-2x.md')];
 const SAMPLES = join('docs', 'samples');
 // `\n+` because Prettier puts a blank line between an HTML comment and the
 // fence after it. Requiring exactly one newline made `npm run format` break

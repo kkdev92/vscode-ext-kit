@@ -115,6 +115,16 @@ Pre-1.0 releases followed it in spirit; their breaking changes are marked **Brea
   its readable form. The reference is not hosted yet; the output is under
   `docs/api/`, ignored by git.
 
+- **A migration guide from 2.x.** `docs/migration-from-2x.md` gives the order to
+  do the work in: inventory the existing `activate`, classify what it registers,
+  move all of it into one module as raw registrations first — so the host owns
+  activation and cleanup from the first commit — then turn each entry into the
+  declaration it is: hosted services for initialisation and loops, owned scopes
+  for subscriptions, settings and storage declarations, the escape hatch for
+  what has no model. It finishes with the Test Host, the manifest check and an
+  Extension Host lane, and its two code samples compile and are checked against
+  the page like every other sample.
+
 ### Changed
 
 - **`defineExtension` is single-use, like the extension host it serves.** A
@@ -250,7 +260,7 @@ install changes.
 
 ### What arrived across the alphas
 
-Read [3.0.0-alpha.1](#300-alpha1---2026-08-07) for the shape of the thing — an
+Read [3.0.0-alpha.1](#300-alpha1---2026-08-08) for the shape of the thing — an
 immutable plan, compiled and validated before VS Code is touched, run by a host
 that owns one cleanup path. The two alphas after it were consumer-driven, and
 what they fixed says something about how this was built:
