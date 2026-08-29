@@ -270,6 +270,42 @@ console.log(JSON.stringify(results));
   } catch (error) {
     note(false, `consumer.ts typecheck failed:\n${error.stdout ?? error.message}`);
   }
+
+  // 5. The command-line tool, run from the installed package against a plan
+  // the consumer wrote. The only place the `vscode` stand-in meets a real
+  // install rather than this repository's own layout.
+  writeFileSync(
+    join(consumer, 'consumer-plan.mjs'),
+    `import { defineCommandContract, defineExtension, defineModule } from '${packageName}';
+const Hello = defineCommandContract({ id: 'consumer.hello', title: 'Hello' });
+const greeting = defineModule('greeting', (module) => {
+  module.commands.handle(Hello, () => undefined);
+  return undefined;
+});
+export const app = defineExtension({ name: 'consumer', modules: [greeting] });
+`
+  );
+  try {
+    const described = JSON.parse(
+      run(
+        process.execPath,
+        [
+          join(consumer, 'node_modules', ...packageName.split('/'), 'bin', 'vscode-ext-kit.mjs'),
+          'plan',
+          join(consumer, 'consumer-plan.mjs'),
+          '--format',
+          'json',
+        ],
+        consumer
+      )
+    );
+    note(
+      described.name === 'consumer' && described.commands[0]?.id === 'consumer.hello',
+      'the CLI describes a consumer plan from the installed package'
+    );
+  } catch (error) {
+    note(false, `the CLI failed against the installed package:\n${error.stderr ?? error.message}`);
+  }
 } finally {
   rmSync(work, { recursive: true, force: true });
 }

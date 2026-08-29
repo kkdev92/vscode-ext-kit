@@ -816,6 +816,11 @@ anyone — or anything — reading the codebase for the first time.
 Secret _keys_ appear, because a declared key is metadata the source already
 states in the clear. Secret values do not exist at plan time.
 
+The same document is available without writing code: `npx vscode-ext-kit plan
+./out/extension.js` prints it, `--format mermaid` or `--format dot` draws the
+modules, services and edges, and `--check` turns a preflight failure into an
+exit code and a list of problems — the shape a CI step wants.
+
 ## Keeping package.json honest
 
 VS Code reads the manifest before any extension code runs, so `src` and

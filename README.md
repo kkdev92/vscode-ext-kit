@@ -27,6 +27,7 @@ has stopped being obvious._
 - [Quick Start](#quick-start)
 - [Why vscode-ext-kit](#why-vscode-ext-kit)
 - [Usage](#usage)
+- [Command Line](#command-line)
 - [What Is Guaranteed](#what-is-guaranteed)
 - [Known Limitations](#known-limitations)
 - [How It Works](#how-it-works)
@@ -258,6 +259,27 @@ builders; `FrameworkError` with `userError` / `validationError` / `classifyError
 
 Full signatures live in the `.d.ts` files and the JSDoc on each export; a
 generated API reference is not built yet.
+
+---
+
+## Command Line
+
+The package ships one command. It reads the plan an extension compiles at
+import time and prints it, so what the extension registers can be reviewed,
+diffed and drawn without starting VS Code.
+
+```bash
+npx vscode-ext-kit plan ./out/extension.js                    # the plan as JSON
+npx vscode-ext-kit plan ./out/extension.js --format mermaid   # modules, services and their edges
+npx vscode-ext-kit plan ./out/extension.js --check            # exit 1 with every problem preflight found
+```
+
+The entry module is evaluated with a stand-in for `vscode`, which only exists
+inside an extension host. That works because nothing in this package touches
+VS Code before `activate` — and it means module-scope code in the extension
+must not either, which the framework already asks for. Export the
+`defineExtension` result as `app` (or name the export with `--export`); the
+JSON is what `describePlan` returns.
 
 ---
 

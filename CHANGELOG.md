@@ -63,6 +63,17 @@ Pre-1.0 releases followed it in spirit; their breaking changes are marked **Brea
   `PreflightError` is exported from the root, so the error can be recognised
   with `instanceof` rather than by its name.
 
+- **A command-line tool: `vscode-ext-kit plan`.** It reads the plan an
+  extension compiles at import time and prints it — as the JSON `describePlan`
+  returns, as a Mermaid or Graphviz graph of modules, services and the edges
+  between them, or, with `--check`, as an exit code and the list of problems
+  preflight found. The entry module is evaluated with a stand-in for `vscode`,
+  which only exists inside an extension host; that works because nothing in
+  this package touches VS Code before `activate`, and it holds an extension's
+  module-scope code to the rule the framework already asks of it. The tool
+  lives in `bin/` and is exercised by `verify:package` against the installed
+  tarball, not just the repository's own layout.
+
 ### Changed
 
 - **`defineExtension` is single-use, like the extension host it serves.** A
