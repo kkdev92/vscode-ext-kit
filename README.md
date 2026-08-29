@@ -310,7 +310,7 @@ trusted for things it cannot do.
 - **The Test Host does not reproduce VS Code**: it renders no UI, interprets no contribution point, and does not substitute a direct `import "vscode"`
 - **No editor events yet**: `Editors` hands you the active editor and cross-file edits, but there is no `onDidChangeActive` / `onDidChangeSelection` / `onDidChangeDocument`; subscribing means reaching for `vscode` directly and disposing by hand, which is the one place the single-cleanup-owner rule leaks
 - **No log-level filtering, deliberately**: the framework writes to a `LogOutputChannel` and VS Code owns the level — per channel, persisted, in the Output panel. An extension cannot raise its own channel's level, so a `logLevel` setting of your own can only ever make the log quieter
-- **No hosted API reference yet** — it is generated from the JSDoc (`npm run docs:api`) but not published — and no step-by-step migration guide from 2.x
+- **No hosted API reference yet** — it is generated from the JSDoc (`npm run docs:api`) but not published
 
 ---
 
@@ -371,7 +371,11 @@ Three consequences worth knowing before you port:
 Typed storage keeps 2.x's envelope format, so values written by a 2.x build are
 read by a 3.x build, and the mock kit is unchanged.
 
-The [CHANGELOG](CHANGELOG.md) carries the full old-to-new mapping.
+The [CHANGELOG](CHANGELOG.md) carries the full old-to-new mapping, and
+[Migrating from 2.x](docs/migration-from-2x.md) the order to do the work in:
+inventory, classification, one module holding everything as raw registrations
+first, then each entry turned into the declaration it is, and finally the Test
+Host, the manifest check and an Extension Host lane.
 
 ---
 
