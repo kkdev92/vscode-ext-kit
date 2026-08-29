@@ -293,3 +293,33 @@ describe('createResourceScope', () => {
     });
   });
 });
+
+describe('inspect', () => {
+  const scopeOptions = { signal: new AbortController().signal };
+
+  it('names the scope, counts its entries and walks its attached children', () => {
+    const root = createResourceScope('extension', scopeOptions);
+    root.deferAsync(() => Promise.resolve());
+    const child = root.detachedChild('projects');
+    child.defer(() => undefined);
+
+    expect(root.inspect()).toEqual({ name: 'extension', size: 1, children: [] });
+
+    root.attach(child);
+
+    expect(root.inspect()).toEqual({
+      name: 'extension',
+      size: 2,
+      children: [{ name: 'extension/projects', size: 1, children: [] }],
+    });
+  });
+
+  it('reports nothing once disposed', async () => {
+    const root = createResourceScope('extension', scopeOptions);
+    root.attach(root.detachedChild('projects'));
+
+    await root.dispose();
+
+    expect(root.inspect()).toEqual({ name: 'extension', size: 0, children: [] });
+  });
+});

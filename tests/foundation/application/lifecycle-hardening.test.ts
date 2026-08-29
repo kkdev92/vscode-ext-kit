@@ -16,7 +16,9 @@ declare const process: {
 
 import { createApplication } from '../../../src/foundation/application/application.js';
 import { compileApplication } from '../../../src/foundation/application/plan.js';
+import { defineCommandContract } from '../../../src/foundation/commands/contract.js';
 import { createApplicationHost } from '../../../src/foundation/hosting/application-host.js';
+import type { HostDiagnostic } from '../../../src/foundation/hosting/application-host.js';
 import { defineModule } from '../../../src/foundation/modules/definition.js';
 import { serviceToken } from '../../../src/foundation/services/token.js';
 import { createFakeCommands } from '../../../src/testing/fakes/fake-commands.js';
@@ -120,7 +122,7 @@ describe('activation failure with hosted services', () => {
         return undefined;
       });
 
-      const events: string[] = [];
+      const diagnostics: HostDiagnostic[] = [];
       const app = createApplication({
         plan: compileApplication({
           name: 'sample',
@@ -128,7 +130,7 @@ describe('activation failure with hosted services', () => {
           shutdown: { timeoutMs: 200 },
         }),
         capabilities: { commands: createFakeCommands(), environment: createFakeEnvironment({}) },
-        onDiagnostic: (diagnostic) => events.push(diagnostic.event),
+        onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
       });
 
       const pending = app.activate({ subscriptions: [] });
@@ -136,7 +138,12 @@ describe('activation failure with hosted services', () => {
       await vi.advanceTimersByTimeAsync(250);
       await settled;
 
-      expect(events).toContain('application.shutdownTimeout');
+      const timeout = diagnostics.find(
+        (diagnostic) => diagnostic.event === 'application.shutdownTimeout'
+      );
+      // Which loop was abandoned matters as much as the fact that one was: a
+      // count alone leaves the reader to guess which service ignored its signal.
+      expect(timeout?.details).toMatchObject({ phase: 'background', pending: 1 });
     } finally {
       vi.useRealTimers();
     }
@@ -396,5 +403,84 @@ describe('sync-only guards claim the discarded rejection', () => {
       expect(() => validator.validate([])).toThrow(/Standard Schema validate/);
     });
     expect(unhandled).toEqual([]);
+  });
+});
+
+describe('shutdown timeout diagnostics', () => {
+  const Slow = defineCommandContract<readonly [], void>({ id: 'sample.slow', title: 'Slow' });
+
+  it('names the hosted service and the operation still holding the budget', async () => {
+    vi.useFakeTimers();
+    try {
+      const module = defineModule('sample', (builder): undefined => {
+        // Ignores its signal, so the stop hook holds the budget to the end.
+        builder.commands.handle(Slow, () => new Promise<void>(() => undefined));
+        // Two services, so the report distinguishes the one being stopped from
+        // the one that has not been asked yet. Stop order is reverse, so the
+        // stuck one goes first and the first one never gets its turn.
+        builder.hostedServices.add({ id: 'sample.first', stop: () => undefined });
+        builder.hostedServices.add({
+          id: 'sample.stuck',
+          stop: () => new Promise<void>(() => undefined),
+        });
+        return undefined;
+      });
+
+      const diagnostics: HostDiagnostic[] = [];
+      const commands = createFakeCommands();
+      const app = createApplication({
+        plan: compileApplication({
+          name: 'sample',
+          modules: [module],
+          shutdown: { timeoutMs: 200 },
+        }),
+        capabilities: { commands, environment: createFakeEnvironment({}) },
+        onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+      });
+      await app.activate({ subscriptions: [] });
+
+      // Started and never settles: the handler ignores its signal, the way one
+      // that forgot to check it would.
+      void commands.execute('sample.slow').catch(() => undefined);
+      const stopping = app.deactivate();
+      await vi.advanceTimersByTimeAsync(250);
+      await stopping;
+
+      const timeout = diagnostics.find(
+        (diagnostic) => diagnostic.event === 'application.shutdownTimeout'
+      );
+      expect(timeout?.details).toMatchObject({
+        phase: 'stop-hook',
+        budgetMs: 200,
+        // `started` is what is still up and untouched; the one inside its own
+        // `stop` is named separately, because "still running" and "refusing to
+        // stop" call for different things from whoever reads this.
+        hostedServices: { started: ['sample.first'], stopping: 'sample.stuck' },
+        operations: [{ name: 'sample.slow', kind: 'command' }],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('forgets an operation once it settles', async () => {
+    const Quick = defineCommandContract<readonly [], void>({ id: 'sample.quick', title: 'Quick' });
+    const module = defineModule('sample', (builder): undefined => {
+      builder.commands.handle(Quick, () => undefined);
+      return undefined;
+    });
+    const commands = createFakeCommands();
+    const app = createApplication({
+      plan: compileApplication({ name: 'sample', modules: [module] }),
+      capabilities: { commands, environment: createFakeEnvironment({}) },
+    });
+    await app.activate({ subscriptions: [] });
+
+    await commands.execute('sample.quick');
+
+    // Otherwise the tracking map grows for the life of the extension, and a
+    // shutdown diagnostic would name every command ever run.
+    expect(app.inspect().operations).toEqual([]);
+    await app.deactivate();
   });
 });

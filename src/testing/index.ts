@@ -44,6 +44,7 @@ export type {
 
 export { createTestHost } from './test-host.js';
 export type { CreateTestHostOptions, LeakReport, ServiceOverrides, TestHost } from './test-host.js';
+export type { ApplicationInspection } from '../foundation/application/application.js';
 
 // Manifest and source remain separate because VS Code consumes contributions
 // before activation. This assertion makes source declarations authoritative

@@ -16,7 +16,7 @@
  * require the low-level mock or, for authoritative behavior, an Extension Host.
  */
 import { createApplication } from '../foundation/application/application.js';
-import type { Application } from '../foundation/application/application.js';
+import type { Application, ApplicationInspection } from '../foundation/application/application.js';
 import type { ApplicationPlan } from '../foundation/application/plan.js';
 import type { HostDiagnostic } from '../foundation/hosting/application-host.js';
 import { ServiceLifetime } from '../foundation/services/descriptors.js';
@@ -145,6 +145,15 @@ export interface TestHost {
   stop(): Promise<void>;
   /** What the framework still owns. Assert this is empty after `stop()`. */
   leaks(): LeakReport;
+  /**
+   * The same ownership, named rather than counted: the scope trees, the hosted
+   * services that are up, the operations that have not settled.
+   *
+   * `leaks()` answers "did anything survive `stop()`"; this answers "what, and
+   * whose is it". Reach for it when a leak assertion fails, or to assert that
+   * a specific module's scope is the one still holding something.
+   */
+  inspect(): ApplicationInspection;
 }
 
 /** Options for {@link createTestHost}. */
@@ -300,6 +309,10 @@ export function createTestHost(options: CreateTestHostOptions): TestHost {
         resources: application.host.resourceCount,
         commands: commands.registeredIds,
       };
+    },
+
+    inspect(): ApplicationInspection {
+      return application.inspect();
     },
   };
 }

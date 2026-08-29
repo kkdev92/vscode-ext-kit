@@ -107,7 +107,11 @@ export type { LogEntry, LogFields, Logger, LogSink } from './foundation/logging/
 // For a service, which has no operation to take `context.logger` from.
 export { Log } from './foundation/logging/token.js';
 export type { ResourceScope } from './foundation/resources/resource-scope.js';
-export type { Registration, RegistrationScope } from './foundation/resources/registration-scope.js';
+export type {
+  Registration,
+  RegistrationScope,
+  ScopeInspection,
+} from './foundation/resources/registration-scope.js';
 
 // --- Background lifetime and the managed raw-API escape hatch --------------
 export type {

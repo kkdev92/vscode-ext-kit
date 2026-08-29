@@ -1,6 +1,6 @@
 import { ScopeCleanupError } from '../internal/errors.js';
 import { claimRejection, isThenable } from '../internal/thenable.js';
-import type { Registration } from './registration-scope.js';
+import type { Registration, ScopeInspection } from './registration-scope.js';
 
 /** Options for {@link createResourceScope}. */
 export interface ResourceScopeOptions {
@@ -94,6 +94,13 @@ export interface ResourceScope {
    * same promise.
    */
   dispose(): Promise<void>;
+
+  /**
+   * Reports what this scope and its attached children still hold. Safe to call
+   * while disposal is in progress, which is exactly when a shutdown that ran
+   * out of budget wants to know.
+   */
+  inspect(): ScopeInspection;
 }
 
 interface ScopeInternals {
@@ -113,6 +120,9 @@ const internals = new WeakMap<ResourceScope, ScopeInternals>();
  */
 export function createResourceScope(name: string, options: ResourceScopeOptions): ResourceScope {
   const cleanups: Array<() => void | Promise<void>> = [];
+  // Tracked apart from `cleanups`, which holds opaque callbacks: a child is
+  // the one entry that can name itself, and naming is the point of `inspect`.
+  const children: ResourceScope[] = [];
   let disposed = false;
   let disposePromise: Promise<void> | undefined;
 
@@ -131,6 +141,7 @@ export function createResourceScope(name: string, options: ResourceScopeOptions)
       }
     }
     cleanups.length = 0;
+    children.length = 0;
 
     if (errors.length > 0) {
       throw new ScopeCleanupError(name, errors);
@@ -230,7 +241,16 @@ export function createResourceScope(name: string, options: ResourceScopeOptions)
         );
       }
       childInternals.attached = true;
+      children.push(child);
       cleanups.push(() => child.dispose());
+    },
+
+    inspect(): ScopeInspection {
+      return {
+        name,
+        size: cleanups.length,
+        children: children.map((child) => child.inspect()),
+      };
     },
 
     dispose(): Promise<void> {

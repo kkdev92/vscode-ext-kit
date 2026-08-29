@@ -3,6 +3,7 @@ import { CancellationReason, OperationCancelledError } from '../operations/cance
 import {
   createRegistrationScope,
   type RegistrationScope,
+  type ScopeInspection,
 } from '../resources/registration-scope.js';
 import { createResourceScope, type ResourceScope } from '../resources/resource-scope.js';
 import { HostState, StopReason, acceptsWork, isTerminalState } from './host-state.js';
@@ -48,6 +49,21 @@ export interface HostDiagnostic {
   readonly details?: Readonly<Record<string, unknown>>;
 }
 
+/**
+ * What the Host still owns, as plain data.
+ *
+ * The counts on {@link ApplicationHost} answer "did anything leak?"; this
+ * answers "what, and whose is it?" without handing out the scopes themselves.
+ */
+export interface HostInspection {
+  /** Current lifecycle state. */
+  readonly state: HostState;
+  /** Synchronous registrations, or undefined before `start()` runs. */
+  readonly registrations: ScopeInspection | undefined;
+  /** Asynchronous resources, or undefined before `start()` runs. */
+  readonly resources: ScopeInspection | undefined;
+}
+
 /** Options for {@link createApplicationHost}. */
 export interface ApplicationHostOptions {
   /** Application name, used in scope names and diagnostics. */
@@ -70,6 +86,16 @@ export interface ApplicationHostOptions {
   readonly shutdownTimeoutMs?: number | undefined;
   /** Receives lifecycle diagnostics. Exceptions from the observer are ignored. */
   readonly onDiagnostic?: ((diagnostic: HostDiagnostic) => void) | undefined;
+  /**
+   * Names what the application still has in flight, merged into the details of
+   * a shutdown-timeout diagnostic.
+   *
+   * The Host owns scopes and a deadline; it does not know what a hosted
+   * service or an operation is called. Called only when the budget is
+   * exhausted, and never trusted to succeed — an exception here is swallowed
+   * like any other observability failure.
+   */
+  readonly describeRemaining?: (() => Readonly<Record<string, unknown>>) | undefined;
 }
 
 /**
@@ -136,6 +162,9 @@ export interface ApplicationHost {
    * settle while non-cooperative asynchronous work is still pending.
    */
   stop(reason: StopReason): Promise<void>;
+
+  /** What the Host still owns, for leak reports and shutdown diagnostics. */
+  inspect(): HostInspection;
 }
 
 /**
@@ -159,6 +188,21 @@ export function createApplicationHost(options: ApplicationHostOptions): Applicat
   let startAttempted = false;
   let registrations: RegistrationScope | undefined;
   let resources: ResourceScope | undefined;
+
+  /**
+   * Asks the application what it still has running, tolerating a failure.
+   *
+   * Same rule as `emit` below: this exists to explain a timeout, and an
+   * explanation that could itself fail the stop pipeline would be worse than
+   * no explanation at all.
+   */
+  const remainingWork = (): Readonly<Record<string, unknown>> => {
+    try {
+      return options.describeRemaining?.() ?? {};
+    } catch {
+      return {};
+    }
+  };
 
   const emit = (event: string, details?: Readonly<Record<string, unknown>>): void => {
     const listener = options.onDiagnostic;
@@ -267,15 +311,33 @@ export function createApplicationHost(options: ApplicationHostOptions): Applicat
     // start's unwinding, the stop hook and resource disposal all share it. A
     // start hook that ignores its signal must not be able to hold stop() past
     // the budget.
-    const deadlineAt = Date.now() + shutdownTimeoutMs;
+    const startedAt = Date.now();
+    const deadlineAt = startedAt + shutdownTimeoutMs;
     const remainingMs = (): number => Math.max(0, deadlineAt - Date.now());
+
+    /**
+     * What an exhausted budget reports beyond the phase it stopped in.
+     *
+     * "It timed out" leaves the same question open every time: which hosted
+     * service, which operation, which scope is still holding on. Ids, names
+     * and counts answer it; arguments, payloads and object references stay
+     * out, because a diagnostic ends up in whatever log gets pasted into an
+     * issue.
+     */
+    const timeoutDetails = (phase: string): Readonly<Record<string, unknown>> => ({
+      phase,
+      budgetMs: shutdownTimeoutMs,
+      elapsedMs: Date.now() - startedAt,
+      ...remainingWork(),
+      ...(resources === undefined ? {} : { resources: resources.inspect() }),
+    });
 
     beginStop(reason);
 
     const withBudget = async (phase: string, work: () => Promise<void>): Promise<void> => {
       const remaining = remainingMs();
       if (remaining <= 0) {
-        emit('application.shutdownTimeout', { phase });
+        emit('application.shutdownTimeout', timeoutDetails(phase));
         return;
       }
 
@@ -297,7 +359,7 @@ export function createApplicationHost(options: ApplicationHostOptions): Applicat
       try {
         // Past the budget we stop waiting; the pending work is abandoned, not awaited.
         if ((await Promise.race([settled, timeout])) === 'timeout') {
-          emit('application.shutdownTimeout', { phase });
+          emit('application.shutdownTimeout', timeoutDetails(phase));
         }
       } finally {
         if (timer !== undefined) {
@@ -389,6 +451,14 @@ export function createApplicationHost(options: ApplicationHostOptions): Applicat
         // beginStop is called from synchronous dispose paths; it must not throw.
         emit('application.cleanupFailed', { phase: 'beginStop', error });
       }
+    },
+
+    inspect(): HostInspection {
+      return {
+        state,
+        registrations: registrations?.inspect(),
+        resources: resources?.inspect(),
+      };
     },
 
     stop(reason: StopReason): Promise<void> {
