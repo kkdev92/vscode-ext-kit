@@ -88,7 +88,7 @@ export interface RegistrationScope {
    * Disposes every entry in LIFO order.
    *
    * A single failure never stops the remaining entries; all failures are
-   * collected and thrown together as a {@link ScopeCleanupError}. Repeated
+   * collected and thrown together as a `ScopeCleanupError`. Repeated
    * calls after the first are no-ops.
    */
   dispose(): void;

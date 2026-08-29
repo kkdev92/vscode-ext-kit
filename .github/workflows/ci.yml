@@ -56,6 +56,12 @@ jobs:
       - name: Check for unused code
         run: npm run knip
 
+      # The API reference, with warnings as errors: a broken `{@link}`, or a
+      # type a public signature names that the package does not export, fails
+      # here rather than shipping as a hole in the documentation.
+      - name: Generate the API reference
+        run: npm run docs:api
+
   # Real Extension Host. The only lane that can verify the shutdown contract the
   # whole design rests on -- and the one that found VS Code disposes
   # context.subscriptions *during* deactivate(), not after it.

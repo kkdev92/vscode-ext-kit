@@ -84,6 +84,29 @@ export type {
 export { createRecordingLogSink } from './fakes/recording-log-sink.js';
 export type { RecordingLogSink } from './fakes/recording-log-sink.js';
 
+// --- Port types the fakes implement or hand back ----------------------------
+// Named by the fakes' public signatures; exported so a test can type what it
+// scripts and what it receives.
+export type {
+  ActiveTextEditor,
+  CancellationTokenLike,
+  FileWatcherHandle,
+  InputBoxLike,
+  LanguageStatusItemFields,
+  LanguageStatusItemHandle,
+  LocalizedMessage,
+  NotificationActionLike,
+  QuickPickLike,
+  SettingsChangeSource,
+  StatusBarItemFields,
+  StatusBarItemHandle,
+  WebviewPanelSurface,
+  WebviewViewSurface,
+} from '../foundation/platform/ports.js';
+export type { Application, ExtensionHostContext } from '../foundation/application/application.js';
+export type { ApplicationHost, HostInspection } from '../foundation/hosting/application-host.js';
+export type { HostState, StopReason } from '../foundation/hosting/host-state.js';
+
 // --- Partial stand-in for direct `vscode` imports ---------------------------
 // This is deliberately lower-level than TestHost. It implements the subset
 // documented by its builders, not the whole VS Code API. Factories accept the

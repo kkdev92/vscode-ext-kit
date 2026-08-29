@@ -90,7 +90,7 @@ export interface ResourceScope {
   /**
    * Disposes every entry in LIFO order, awaiting async cleanups one at a time
    * so ordering is preserved. Failures are collected, not short-circuited, and
-   * thrown together as a {@link ScopeCleanupError}. Calling twice returns the
+   * thrown together as a `ScopeCleanupError`. Calling twice returns the
    * same promise.
    */
   dispose(): Promise<void>;

@@ -115,7 +115,7 @@ export interface TestHost {
   readonly statusBar: FakeStatusBar;
   /** The fake language status area the plan's items render on. */
   readonly languageStatus: FakeLanguageStatus;
-  /** The fake quick input the {@link QuickInput} service resolves to. */
+  /** The fake quick input the `QuickInput` service resolves to. */
   readonly quickInput: FakeQuickInput;
   /** The fake tree view registry the plan's views register into. */
   readonly treeViews: FakeTreeViews;

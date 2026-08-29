@@ -31,7 +31,7 @@
  *
  * - **`resolve.alias`** points every Vite-resolved `import ... from 'vscode'` at
  *   the mock in
- *   {@link ./vitest.js `@kkdev92/vscode-ext-kit/testing/vitest`}. This makes the
+ *   `@kkdev92/vscode-ext-kit/testing/vitest`. This makes the
  *   replacement a project configuration rule instead of per-test mock setup,
  *   and also covers a built bundle when Vite keeps it in the module graph.
  * - **`server.deps.inline`** stops Vitest from externalizing this package.

@@ -101,7 +101,7 @@ import type { ApplicationPlan } from './plan.js';
  * Declared structurally so the runtime core never imports `vscode`; a real
  * `ExtensionContext` satisfies it.
  */
-interface ExtensionHostContext {
+export interface ExtensionHostContext {
   readonly subscriptions: { push(disposable: { dispose(): unknown }): void };
 }
 

@@ -64,3 +64,5 @@ mkdocs/
 # CLAUDE.md
 CLAUDE.md
 
+# Generated API reference (`npm run docs:api`)
+docs/api/

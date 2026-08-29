@@ -82,6 +82,19 @@ Pre-1.0 releases followed it in spirit; their breaking changes are marked **Brea
   it concerns, and the JSON that would settle it when the fix is mechanical.
   The assertion is unchanged and built on top of it.
 
+- **An API reference, generated from the JSDoc.** `npm run docs:api` renders
+  every public entry point with TypeDoc, and CI runs it with warnings as
+  errors. Setting that up found what the warnings exist to find: types that
+  public signatures name — the port a tree provider returns, the surface a fake
+  hands back, the options `setting.boolean` takes, the reason on a cancelled
+  operation — which the package never exported, so a consumer could receive one
+  and not be able to write its type. They are exported now, from the entry
+  whose signatures name them. `{@link}` tags that pointed at internal symbols
+  became plain code. `ApplicationPlan`'s members are marked internal: the plan
+  is a handle for `createTestHost` and `describePlan`, and `describePlan` is
+  its readable form. The reference is not hosted yet; the output is under
+  `docs/api/`, ignored by git.
+
 ### Changed
 
 - **`defineExtension` is single-use, like the extension host it serves.** A

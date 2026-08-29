@@ -55,7 +55,7 @@ export function toPickSeparator(label = ''): QuickPickItemLike {
   return { label, kind: SEPARATOR_KIND };
 }
 
-/** Options accepted by {@link pickOne} and {@link pickMany}. */
+/** Options accepted by `pickOne` and `pickMany`. */
 export interface PickOptions<T extends QuickPickItemLike = QuickPickItemLike> {
   /** Title shown at the top of the picker. */
   readonly title?: string;
@@ -310,7 +310,7 @@ export async function pickMany<T extends QuickPickItemLike>(
   return (await pickFromQuickPick(capability, items, opts, true)) as T[] | undefined;
 }
 
-/** Options for {@link inputText}. */
+/** Options for `inputText`. */
 export interface InputTextOptions {
   /** Prompt text to display. */
   readonly prompt: string;
@@ -322,7 +322,7 @@ export interface InputTextOptions {
   readonly password?: boolean;
   /**
    * Validation function. May be asynchronous. A non-empty message blocks
-   * acceptance; a thrown/rejected error rejects {@link inputText}.
+   * acceptance; a thrown/rejected error rejects `inputText`.
    */
   readonly validate?: (value: string) => string | undefined | Promise<string | undefined>;
   /**
@@ -584,7 +584,7 @@ export interface PickButtonOptions {
 }
 
 /**
- * Builds a {@link QuickInputButtonLike}, accepting a codicon name in place
+ * Builds a `QuickInputButtonLike`, accepting a codicon name in place
  * of a hand-built theme icon the same way {@link toPickItem}
  * does for item icons.
  *

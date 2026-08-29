@@ -64,24 +64,46 @@ interface ShutdownPolicy {
  * binding does not discover an internal id clash or broken dependency graph.
  * Platform conflicts and host-dependent requirements can still fail activation
  * and are rolled back by the Application Host.
+ *
+ * To a consumer this is a handle: `defineExtension` produces it, `createTestHost`
+ * and `describePlan` consume it. Its members carry the framework's own
+ * definition records and are not a public contract — `describePlan` is the
+ * readable form, and the shape a tool should depend on.
  */
 export interface ApplicationPlan {
+  /** @internal */
   readonly name: string;
+  /** @internal */
   readonly modules: readonly ModuleDefinition[];
+  /** @internal */
   readonly services: readonly ServiceDescriptor[];
+  /** @internal */
   readonly commands: readonly CommandDefinition[];
+  /** @internal */
   readonly textEditorCommands: readonly TextEditorCommandDefinition[];
+  /** @internal */
   readonly hostedServices: readonly HostedServiceDefinition[];
+  /** @internal */
   readonly settings: readonly SettingsRegistration[];
+  /** @internal */
   readonly storage: readonly StorageRegistration[];
+  /** @internal */
   readonly secrets: readonly SecretRegistration[];
+  /** @internal */
   readonly fileWatchers: readonly FileWatcherDefinition[];
+  /** @internal */
   readonly statusBarItems: readonly StatusBarItemDefinition[];
+  /** @internal */
   readonly languageStatusItems: readonly LanguageStatusItemDefinition[];
+  /** @internal */
   readonly treeViews: readonly TreeViewDefinition[];
+  /** @internal */
   readonly webviewViews: readonly WebviewViewDefinition[];
+  /** @internal */
   readonly webviewSerializers: readonly WebviewPanelSerializerDefinition[];
+  /** @internal */
   readonly rawRegistrations: readonly RawRegistrationDefinition[];
+  /** @internal */
   readonly shutdown: ShutdownPolicy;
 }
 

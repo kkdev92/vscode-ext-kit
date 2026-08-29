@@ -57,7 +57,7 @@ export interface SettingSpec<T> {
 }
 
 /** Common options for every `setting.*` builder. */
-interface BaseOptions<T> {
+export interface SettingBaseOptions<T> {
   readonly default: T;
   readonly scope?: SettingContributionScope | undefined;
 }
@@ -96,7 +96,7 @@ function typeNames(type: SettingSpec<unknown>['type']): readonly SettingValueTyp
  * ```
  */
 export const setting = {
-  boolean(options: BaseOptions<boolean>): SettingSpec<boolean> {
+  boolean(options: SettingBaseOptions<boolean>): SettingSpec<boolean> {
     return {
       type: 'boolean',
       default: options.default,
@@ -107,7 +107,7 @@ export const setting = {
   },
 
   number(
-    options: BaseOptions<number> & { readonly minimum?: number; readonly maximum?: number }
+    options: SettingBaseOptions<number> & { readonly minimum?: number; readonly maximum?: number }
   ): SettingSpec<number> {
     return {
       type: 'number',
@@ -136,7 +136,7 @@ export const setting = {
    * makes the same distinction.
    */
   integer(
-    options: BaseOptions<number> & { readonly minimum?: number; readonly maximum?: number }
+    options: SettingBaseOptions<number> & { readonly minimum?: number; readonly maximum?: number }
   ): SettingSpec<number> {
     return {
       type: 'integer',
@@ -157,7 +157,7 @@ export const setting = {
     };
   },
 
-  string(options: BaseOptions<string>): SettingSpec<string> {
+  string(options: SettingBaseOptions<string>): SettingSpec<string> {
     return {
       type: 'string',
       default: options.default,
@@ -168,7 +168,7 @@ export const setting = {
   },
 
   enum<const TValues extends readonly [string, ...string[]]>(
-    options: BaseOptions<TValues[number]> & { readonly values: TValues }
+    options: SettingBaseOptions<TValues[number]> & { readonly values: TValues }
   ): SettingSpec<TValues[number]> {
     return {
       type: 'string',
@@ -191,7 +191,7 @@ export const setting = {
    * Patterns are tested as supplied; avoid stateful `g` or `y` flags.
    */
   stringArray(
-    options: BaseOptions<readonly string[]> & {
+    options: SettingBaseOptions<readonly string[]> & {
       readonly items?: { readonly minLength?: number; readonly pattern?: RegExp };
     }
   ): SettingSpec<readonly string[]> {

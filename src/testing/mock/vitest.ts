@@ -24,7 +24,7 @@
  * );
  * ```
  *
- * Unlike {@link ../testing/index.js `@kkdev92/vscode-ext-kit/testing`} — which
+ * Unlike `@kkdev92/vscode-ext-kit/testing` — which
  * takes an injected `{ fn }` and works with any runner — this module imports
  * `vi` directly, because an aliased module is resolved before any test file
  * runs and so has no chance to be handed a framework. That's also why the mock
