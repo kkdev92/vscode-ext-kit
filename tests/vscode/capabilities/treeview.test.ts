@@ -15,8 +15,18 @@ import type { TreeDataSource, TreeItemLike } from '../../../src/foundation/platf
  * Extension Host lane.
  */
 const vscodeMock = vi.hoisted(() => {
+  /** Every emitter the *adapter* constructed, in order. The view's own checkbox event does not go through this class. */
+  const emitters: { readonly disposeCount: number; readonly listenerCount: number }[] = [];
+
   class EventEmitter<T> {
     private readonly listeners = new Set<(event: T) => void>();
+    disposeCount = 0;
+    constructor() {
+      emitters.push(this);
+    }
+    get listenerCount(): number {
+      return this.listeners.size;
+    }
     event = (listener: (event: T) => void): { dispose(): void } => {
       this.listeners.add(listener);
       return {
@@ -31,8 +41,34 @@ const vscodeMock = vi.hoisted(() => {
       }
     }
     dispose(): void {
+      this.disposeCount += 1;
       this.listeners.clear();
     }
+  }
+
+  /** The native view's checkbox event, kept apart from the adapter's emitters. */
+  function checkboxEvent(): {
+    listeners: Set<(event: unknown) => void>;
+    event: (listener: (event: unknown) => void) => { dispose(): void };
+    fire: (event: unknown) => void;
+  } {
+    const listeners = new Set<(event: unknown) => void>();
+    return {
+      listeners,
+      event: (listener) => {
+        listeners.add(listener);
+        return {
+          dispose: (): void => {
+            listeners.delete(listener);
+          },
+        };
+      },
+      fire: (event) => {
+        for (const listener of [...listeners]) {
+          listener(event);
+        }
+      },
+    };
   }
 
   class TreeItem {
@@ -85,12 +121,13 @@ const vscodeMock = vi.hoisted(() => {
     viewId: string;
     options: Record<string, unknown>;
     view: { dispose(): void; disposed: boolean };
-    checkboxEmitter: EventEmitter<unknown>;
+    checkboxEmitter: ReturnType<typeof checkboxEvent>;
   }
   const createdViews: CreatedView[] = [];
 
   return {
     createdViews,
+    emitters,
     module: {
       EventEmitter,
       TreeItem,
@@ -101,7 +138,7 @@ const vscodeMock = vi.hoisted(() => {
       TreeItemCheckboxState: { Unchecked: 0, Checked: 1 },
       window: {
         createTreeView(viewId: string, options: Record<string, unknown>) {
-          const checkboxEmitter = new EventEmitter<unknown>();
+          const checkboxEmitter = checkboxEvent();
           const view = {
             onDidChangeCheckboxState: checkboxEmitter.event,
             disposed: false,
@@ -141,6 +178,7 @@ function sourceOf(
 /** Creates a view and returns what the platform was handed. */
 function create(source: TreeDataSource<Row>, options = {}) {
   vscodeMock.createdViews.length = 0;
+  vscodeMock.emitters.length = 0;
   const registration = createVSCodeTreeViewCapability().create(
     'sample.tree',
     source as TreeDataSource<never>,
@@ -156,7 +194,10 @@ function create(source: TreeDataSource<Row>, options = {}) {
     getParent?(element: Row): unknown;
     onDidChangeTreeData?: (listener: (element: Row | undefined) => void) => { dispose(): void };
   };
-  return { registration, created, provider };
+  // The change-event bridge, when the source has one. The adapter builds it
+  // before it asks the platform for a view, so it is the first emitter seen.
+  const emitter = vscodeMock.emitters[0];
+  return { registration, created, provider, emitter };
 }
 
 describe('rendering a row', () => {
@@ -440,7 +481,7 @@ describe('wiring the view', () => {
 });
 
 describe('disposal', () => {
-  it('disposes the view and the source it renders', () => {
+  it('disposes the view and leaves the source to its owner', () => {
     const disposed: string[] = [];
     const { registration, created } = create(
       sourceOf(() => ({ id: 'x', label: 'X' }), {
@@ -451,7 +492,75 @@ describe('disposal', () => {
     registration.dispose();
 
     expect(created.view.disposed).toBe(true);
-    expect(disposed).toEqual(['source']);
+    // The port makes provider disposal the caller's responsibility, and the
+    // application owns the provider in the module scope. Disposing it here as
+    // well made every module-declared provider go twice.
+    expect(disposed).toEqual([]);
+  });
+
+  it('releases the change-event bridge once: the source subscription and the emitter', () => {
+    let subscriptionDisposals = 0;
+    const { registration, emitter } = create(
+      sourceOf(() => ({ id: 'x', label: 'X' }), {
+        onDidChangeTreeData: () => ({
+          dispose: () => {
+            subscriptionDisposals += 1;
+          },
+        }),
+      })
+    );
+    expect(emitter).toBeDefined();
+
+    registration.dispose();
+    // Idempotent: a second dispose must not release anything twice.
+    registration.dispose();
+
+    expect(subscriptionDisposals).toBe(1);
+    expect(emitter?.disposeCount).toBe(1);
+  });
+
+  it('stops forwarding source changes once disposed', () => {
+    let notify: ((element: Row | undefined) => void) | undefined;
+    const { registration, provider } = create(
+      sourceOf(() => ({ id: 'x', label: 'X' }), {
+        onDidChangeTreeData: (listener) => {
+          notify = listener;
+          // A source whose subscription does nothing on dispose, so what stops
+          // the forwarding has to be the emitter being released.
+          return { dispose: () => undefined };
+        },
+      })
+    );
+    const seen: (Row | undefined)[] = [];
+    provider.onDidChangeTreeData?.((element) => seen.push(element));
+
+    registration.dispose();
+    notify?.({ id: 'a' });
+
+    expect(seen).toEqual([]);
+  });
+
+  it('builds no emitter for a source without a change event', () => {
+    const { registration, emitter } = create(sourceOf(() => ({ id: 'x', label: 'X' })));
+
+    expect(emitter).toBeUndefined();
+    expect(() => registration.dispose()).not.toThrow();
+  });
+
+  it('releases the checkbox bridge together with the change bridge and the view', () => {
+    const { registration, created, emitter } = create(
+      sourceOf(() => ({ id: 'x', label: 'X' }), {
+        onDidChangeTreeData: () => ({ dispose: () => undefined }),
+        reportCheckboxChange: () => undefined,
+      })
+    );
+    expect(created.checkboxEmitter.listeners.size).toBe(1);
+
+    registration.dispose();
+
+    expect(created.checkboxEmitter.listeners.size).toBe(0);
+    expect(created.view.disposed).toBe(true);
+    expect(emitter?.disposeCount).toBe(1);
   });
 
   it('tolerates a source with no dispose', () => {

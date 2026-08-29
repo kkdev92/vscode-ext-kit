@@ -72,8 +72,11 @@ Rules the import-graph test holds:
   `src/testing/**`, and never name `vscode`.
 - `foundation -> capabilities` is allowed only from `application/application.ts`,
   `application/plan.ts` and `modules/definition.ts` — the three places that
-  aggregate capability registrations into a plan. A fourth is a design decision,
-  not a drive-by import.
+  aggregate capability registrations into a plan — plus a type-only import from
+  `operations/context.ts`, which names the services a handler finds on its
+  context. A fifth is a design decision, not a drive-by import; the allow-list
+  in `tests/import-graph.test.ts` is compared against the source in both
+  directions.
 - Only the `vscode` layer names `vscode`; the mock kit's two files may reference
   its _types_ only.
 

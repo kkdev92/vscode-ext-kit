@@ -24,6 +24,12 @@ import type {
  * `TreeItem` instance and a `TreeDataProvider` shape. This adapter is where
  * those two meet, and it is the only file in the tree stack that imports
  * `vscode`.
+ *
+ * Ownership: the registration returned by `create` releases everything this
+ * adapter built for a view — the native view, the checkbox listener and the
+ * change-event bridge — and nothing else. The source itself belongs to whoever
+ * resolved it; for a module-declared view that is the module scope, which owns
+ * the provider ahead of the view so the view unwinds first.
  */
 
 /** Rehydrates each supported plain icon variant as the native representation. */
@@ -83,8 +89,21 @@ function toTreeItem(row: TreeItemLike): vscode.TreeItem {
   return item;
 }
 
+/**
+ * A provider in VS Code's shape, plus the bridge it needed to get there.
+ *
+ * The bridge — the subscription taken on the source and the emitter the
+ * platform listens to — is adapter-owned: nothing above the port knows it
+ * exists, so nothing above the port can release it. It is handed back beside
+ * the provider and dies with the view registration.
+ */
+interface TreeDataProviderBridge<T> {
+  readonly provider: vscode.TreeDataProvider<T>;
+  dispose(): void;
+}
+
 /** Wraps a vscode-free source in the shape VS Code's tree view expects. */
-function toTreeDataProvider<T>(source: TreeDataSource<T>): vscode.TreeDataProvider<T> {
+function toTreeDataProvider<T>(source: TreeDataSource<T>): TreeDataProviderBridge<T> {
   const provider: vscode.TreeDataProvider<T> = {
     getTreeItem: (element) => toTreeItem(source.getTreeItem(element)),
     getChildren: (element) => source.getChildren(element),
@@ -93,17 +112,27 @@ function toTreeDataProvider<T>(source: TreeDataSource<T>): vscode.TreeDataProvid
       : { getParent: (element: T) => source.getParent?.(element) }),
   };
 
-  if (source.onDidChangeTreeData !== undefined) {
-    // Bridged through a VS Code emitter because the platform reads
-    // `onDidChangeTreeData` as its own Event, not as a plain subscribe function.
-    const emitter = new vscode.EventEmitter<T | undefined>();
-    source.onDidChangeTreeData((element) => {
-      emitter.fire(element);
-    });
-    provider.onDidChangeTreeData = emitter.event;
+  if (source.onDidChangeTreeData === undefined) {
+    return { provider, dispose: () => undefined };
   }
 
-  return provider;
+  // Bridged through a VS Code emitter because the platform reads
+  // `onDidChangeTreeData` as its own Event, not as a plain subscribe function.
+  const emitter = new vscode.EventEmitter<T | undefined>();
+  const subscription = source.onDidChangeTreeData((element) => {
+    emitter.fire(element);
+  });
+  provider.onDidChangeTreeData = emitter.event;
+
+  return {
+    provider,
+    dispose(): void {
+      // The subscription first, so nothing the source fires from here on
+      // reaches an emitter that is about to go; then the emitter itself.
+      subscription.dispose();
+      emitter.dispose();
+    },
+  };
 }
 
 /**
@@ -184,10 +213,10 @@ export function createVSCodeTreeViewCapability(): TreeViewCapability {
       options: TreeViewOptionsLike
     ): PlatformRegistration {
       const typed = source as TreeDataSource<{ id: string }>;
-      const treeDataProvider = toTreeDataProvider(typed);
+      const dataProvider = toTreeDataProvider(typed);
 
       const treeView = vscode.window.createTreeView(viewId, {
-        treeDataProvider,
+        treeDataProvider: dataProvider.provider,
         ...(options.showCollapseAll === undefined
           ? {}
           : { showCollapseAll: options.showCollapseAll }),
@@ -208,7 +237,7 @@ export function createVSCodeTreeViewCapability(): TreeViewCapability {
       // The checkbox event only exists on the native view, so the source cannot
       // observe it without this. A source that does not care simply omits the
       // hook and nothing is wired.
-      const bridge =
+      const checkboxBridge =
         typed.reportCheckboxChange === undefined
           ? undefined
           : treeView.onDidChangeCheckboxState((event) => {
@@ -220,11 +249,20 @@ export function createVSCodeTreeViewCapability(): TreeViewCapability {
               );
             });
 
+      // Everything this adapter created, and nothing it did not. The source is
+      // deliberately left alone: the port makes provider disposal the caller's
+      // responsibility, and the application already owns the provider in the
+      // module scope — disposing it here as well made every provider go twice.
+      let disposed = false;
       return {
         dispose(): void {
-          bridge?.dispose();
+          if (disposed) {
+            return;
+          }
+          disposed = true;
+          checkboxBridge?.dispose();
           treeView.dispose();
-          source.dispose?.();
+          dataProvider.dispose();
         },
       };
     },

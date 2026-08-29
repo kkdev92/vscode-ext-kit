@@ -83,6 +83,15 @@ const note = (ok, message) => {
 };
 
 try {
+  // 0. Zero runtime dependencies is a published claim -- README, SECURITY.md
+  // and the 4.0.0 changelog all make it -- so it is asserted rather than
+  // assumed: here on the manifest about to be packed, and again below on the
+  // copy a consumer actually installs.
+  note(
+    Object.keys(manifest.dependencies ?? {}).length === 0,
+    'package.json declares no runtime dependencies'
+  );
+
   // 1. Pack exactly what `npm publish` would send.
   // `prepack` cleans and rebuilds first, so the tarball cannot contain a stale
   // output. It did: `dist/capabilities/ui/index.js` shipped for one commit after
@@ -119,6 +128,14 @@ try {
 
   run(npm, ['install', '--no-audit', '--no-fund', tarball], consumer);
   note(existsSync(join(consumer, 'node_modules', ...packageName.split('/'))), 'tarball installs');
+
+  const installedManifest = JSON.parse(
+    readFileSync(join(consumer, 'node_modules', ...packageName.split('/'), 'package.json'), 'utf8')
+  );
+  note(
+    Object.keys(installedManifest.dependencies ?? {}).length === 0,
+    'the installed package.json declares no runtime dependencies'
+  );
 
   // The stub and the types go in *after* the install: npm prunes anything in
   // node_modules that no manifest declares, which silently removed the stub and

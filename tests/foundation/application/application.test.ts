@@ -14,6 +14,7 @@ import { userError } from '../../../src/foundation/operations/errors.js';
 import { serviceToken } from '../../../src/foundation/services/token.js';
 import { createFakeCommands } from '../../../src/testing/fakes/fake-commands.js';
 import { createFakeEnvironment } from '../../../src/testing/fakes/fake-environment.js';
+import { createFakeTreeViews } from '../../../src/testing/fakes/fake-treeview.js';
 import { createRecordingLogSink } from '../../../src/testing/fakes/recording-log-sink.js';
 import type { ModuleDefinition } from '../../../src/foundation/modules/definition.js';
 
@@ -380,5 +381,49 @@ describe('createApplication', () => {
 
       await expect(app.commands.execute(Validated, true)).resolves.toBe(1);
     });
+  });
+});
+
+describe('tree views', () => {
+  /**
+   * The application's half of the tree-view ownership contract: the module
+   * scope owns the provider, disposes it once, and only after the view that
+   * rendered it. The adapter's half — that the view registration releases its
+   * own bridges and leaves the source alone — is pinned by the adapter suite;
+   * this runs on the fake capability, so it cannot see what an adapter does.
+   */
+  it('disposes a declared provider exactly once, after the view that rendered it', async () => {
+    const treeViews = createFakeTreeViews();
+    const disposals: string[] = [];
+    const module = defineModule('views', (builder): undefined => {
+      builder.treeViews.add({
+        id: 'sample.tree',
+        resolveProvider: () => ({
+          getTreeItem: (element: { id: string }) => ({ id: element.id, label: element.id }),
+          getChildren: (): { id: string }[] => [],
+          dispose: () => {
+            // Recorded relative to the view: LIFO teardown must have removed
+            // the view before the provider it rendered goes.
+            disposals.push(treeViews.views[0]?.disposed === true ? 'after-view' : 'before-view');
+          },
+        }),
+      });
+      return undefined;
+    });
+    const app = createApplication({
+      plan: compileApplication({ name: 'sample', modules: [module] }),
+      capabilities: {
+        commands: createFakeCommands(),
+        environment: createFakeEnvironment({}),
+        treeViews,
+      },
+    });
+
+    await app.activate(subscriptions());
+    expect(treeViews.views.map((view) => view.id)).toEqual(['sample.tree']);
+
+    await app.deactivate();
+
+    expect(disposals).toEqual(['after-view']);
   });
 });

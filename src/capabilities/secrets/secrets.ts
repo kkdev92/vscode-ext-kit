@@ -177,8 +177,9 @@ export function createSecretStorage(capability: SecretsCapability, key: string):
 /**
  * A typed secret scoped to one key.
  *
- * The structured flavour of {@link SecretStorage}: values are JSON-serialized
- * and optionally schema-validated after deserialization.
+ * The structured flavour of {@link SecretStorage}: values are JSON-serialized,
+ * and when a schema is declared they are validated against it in both
+ * directions — before a write is serialized, and after a read is parsed.
  */
 export interface SecretAccessor<T> {
   /**
@@ -187,7 +188,9 @@ export interface SecretAccessor<T> {
    */
   read(): Promise<T | undefined>;
   /**
-   * Writes the value. Structured values are JSON-serialized first, so values
+   * Writes the value. With a schema, the value is validated first and an
+   * invalid one rejects with `SECRET_INVALID` before anything reaches the
+   * platform's store. Structured values are then JSON-serialized, so values
    * unsupported by JSON can throw before the asynchronous store call.
    */
   write(value: T): Promise<void>;
@@ -217,9 +220,13 @@ export interface CreateSecretAccessorOptions<T> {
  * one read failed to parse would be worse than surfacing the problem. Error
  * messages carry the key name only — never the value.
  *
- * Validation occurs on reads. Writes intentionally do not validate: callers
- * already hold `T`, while reads are the boundary where persisted/external data
- * re-enters the typed application.
+ * Validation runs in both directions. Reads are the boundary where persisted
+ * data re-enters the typed application; writes are checked too, because a
+ * write that skipped validation would succeed and then make every later read
+ * throw for the life of the stored value — a failure reported nowhere near its
+ * cause — and because an invalid value must never reach the keychain at all.
+ * Neither direction reports anything a schema produced: only the key, the
+ * vendor and an issue count.
  *
  * @example
  * ```ts
