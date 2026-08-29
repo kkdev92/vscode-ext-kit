@@ -22,6 +22,13 @@ declare module 'node:fs' {
   export function readdirSync(path: string, options: { withFileTypes: true }): Dirent[];
   export function readFileSync(path: string, encoding: 'utf8'): string;
   export function existsSync(path: string): boolean;
+  export function writeFileSync(path: string, data: string, encoding: 'utf8'): void;
+  export function mkdtempSync(prefix: string): string;
+  export function rmSync(path: string, options: { recursive: boolean; force: boolean }): void;
+}
+
+declare module 'node:os' {
+  export function tmpdir(): string;
 }
 
 declare module 'node:path' {

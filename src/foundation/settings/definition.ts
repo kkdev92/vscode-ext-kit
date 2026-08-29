@@ -295,6 +295,8 @@ export interface SettingsDefinition<TSpecs extends SettingSpecs> {
   readonly values: TSpecs;
   /** How invalid values are treated. Defaults to lenient. */
   readonly policy: SettingsValidationPolicy;
+  /** Whether this extension contributes the section in its manifest, or only reads it. */
+  readonly contributed: boolean;
   /** Token the accessor is registered under, so handlers can inject it. */
   readonly token: ServiceToken<SettingsAccessor<SettingsValues<TSpecs>>>;
 }
@@ -310,6 +312,7 @@ export interface SettingsRegistration {
   readonly section: string;
   readonly values: SettingSpecs;
   readonly policy: SettingsValidationPolicy;
+  readonly contributed: boolean;
   readonly token: ServiceToken<unknown>;
 }
 
@@ -321,6 +324,14 @@ export interface DefineSettingsOptions<TSpecs extends SettingSpecs> {
   readonly values: TSpecs;
   /** Invalid-value behavior. Defaults to {@link SettingsValidationPolicy.Lenient}. */
   readonly policy?: SettingsValidationPolicy | undefined;
+  /**
+   * Whether this extension contributes the section in `package.json`.
+   * Defaults to `true`. `false` declares a section the extension only reads —
+   * `editor`, `files`, another extension's — with the same typed accessor: the
+   * manifest check then does not ask for it, and `describePlan` reports it as
+   * read rather than owned.
+   */
+  readonly contributed?: boolean | undefined;
 }
 
 /**
@@ -352,6 +363,7 @@ export function defineSettings<TSpecs extends SettingSpecs>(
     // an opaque function and `default` may be any application value).
     values: frozenCopy(options.values),
     policy: options.policy ?? SettingsValidationPolicy.Lenient,
+    contributed: options.contributed ?? true,
     token: serviceToken<SettingsAccessor<SettingsValues<TSpecs>>>(`settings:${options.section}`),
   });
 }

@@ -18,8 +18,16 @@ import type { SettingSpec, SettingSpecs } from '../foundation/settings/definitio
  * anything from here.
  */
 export interface DeclaredContributions {
-  /** Settings groups, from `defineSettings`. */
-  readonly settings?: readonly { readonly section: string; readonly values: SettingSpecs }[];
+  /**
+   * Settings groups, from `defineSettings`. A group declared with
+   * `contributed: false` — a section the extension reads but does not own — is
+   * not asked of the manifest.
+   */
+  readonly settings?: readonly {
+    readonly section: string;
+    readonly values: SettingSpecs;
+    readonly contributed?: boolean | undefined;
+  }[];
   /** Command contracts, from `defineCommandContract`. */
   readonly commands?: readonly { readonly descriptor: CommandDescriptor }[];
   /** View ids the application registers, independent of manifest container. */
@@ -160,7 +168,8 @@ function checkSettings(manifest: Manifest, declared: DeclaredContributions): Man
     summary,
   });
 
-  for (const group of declared.settings) {
+  const contributed = declared.settings.filter((group) => group.contributed !== false);
+  for (const group of contributed) {
     for (const [name, spec] of Object.entries(group.values)) {
       const key = `${group.section}.${name}`;
       expected.add(key);
@@ -214,7 +223,7 @@ function checkSettings(manifest: Manifest, declared: DeclaredContributions): Man
     }
   }
 
-  const sections = declared.settings.map((group) => `${group.section}.`);
+  const sections = contributed.map((group) => `${group.section}.`);
   for (const key of Object.keys(properties)) {
     if (sections.some((prefix) => key.startsWith(prefix)) && !expected.has(key)) {
       mismatches.push({
