@@ -4,7 +4,8 @@
 
 | Version         | Supported | Notes                                           |
 | --------------- | --------- | ----------------------------------------------- |
-| `4.0.x`         | ✅        | `latest` on npm                                 |
+| `4.1.x`         | ✅        | `latest` on npm                                 |
+| `4.0.x`         | ✅        | same API; `4.1.x` only adds to it               |
 | `3.0.x`         | ✅        | same API as 4.0.x, VS Code floor `^1.125.0`     |
 | `2.1.x`         | ✅        | maintained on `v2-maintenance`; `^2.x` resolves here |
 | `2.0.x`         | ❌        | upgrade to `2.1.x`                              |

@@ -6,7 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 From 1.0.0 onward this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0 releases followed it in spirit; their breaking changes are marked **Breaking**.
 
-## [Unreleased]
+## [4.1.0] - 2026-08-30
+
+**A minor about seeing what the framework already knows.** Everything here is
+additive: the API `4.0.1` exposed is unchanged, the VS Code floor stays at
+`^1.134.0`, and the one behaviour change — `defineExtension` refusing a second
+activation after `deactivate` — is visible only to a test that activated one
+result twice. The theme is introspection and tooling: a compiled plan as JSON,
+a preflight failure as data, a shutdown timeout that names what held it, a
+command-line tool that reads a built extension's plan and checks its manifest,
+an API reference generated from the JSDoc, and a step-by-step migration guide
+from 2.x. Each piece was run against a real extension before it landed, and two
+of the entries below exist because that turned up something the framework could
+not yet say.
 
 ### Added
 
@@ -1160,7 +1172,8 @@ platform support, toolchain currency, and release supply chain.
 
 Initial public release.
 
-[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v4.0.1...HEAD
+[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v4.1.0...HEAD
+[4.1.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v4.0.1...v4.1.0
 [4.0.1]: https://github.com/kkdev92/vscode-ext-kit/compare/v4.0.0...v4.0.1
 [4.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0...v4.0.0
 [3.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0-alpha.3...v3.0.0
