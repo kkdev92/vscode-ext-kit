@@ -45,8 +45,9 @@ export function claimRejection(value: unknown): void {
 
 /**
  * Detects the minimal disposable shape the framework tracks. Whether a returned
- * thenable is awaited depends on the owner: ServiceContainer does, while
- * RegistrationScope and `ResourceScope.own` require synchronous disposal.
+ * thenable is awaited depends on the owner: ServiceContainer and
+ * `ResourceScope.own` await it during teardown, while `RegistrationScope.own`
+ * rejects it — that scope exists to close ingress synchronously.
  */
 export function isDisposable(value: unknown): value is { dispose(): unknown } {
   return (

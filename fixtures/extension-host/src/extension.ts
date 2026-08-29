@@ -19,6 +19,36 @@ const channels: {
   request(method: string, params: unknown, options?: unknown): Promise<unknown>;
 }[] = [];
 
+/**
+ * How many change-event subscriptions the tree source handed out, and how many
+ * came back. The framework takes one per view to bridge the plain event into a
+ * `vscode.Event`; whether it releases it again is what the driver checks.
+ *
+ * Deliberately not a `BaseTreeDataProvider`: that class clears every listener
+ * in its own `dispose()`, which would hide an adapter that forgot to
+ * unsubscribe. This source keeps its listeners, so only a released
+ * subscription counts.
+ */
+const treeSubscriptions = { taken: 0, released: 0 };
+
+const treeSource = {
+  getTreeItem: (element: { id: string }): { id: string; label: string } => ({
+    id: element.id,
+    label: element.id,
+  }),
+  getChildren: (): { id: string }[] => [{ id: 'row' }],
+  onDidChangeTreeData: (
+    _listener: (element: { id: string } | undefined) => void
+  ): { dispose(): void } => {
+    treeSubscriptions.taken += 1;
+    return {
+      dispose: (): void => {
+        treeSubscriptions.released += 1;
+      },
+    };
+  },
+};
+
 const fixtureModule = defineModule('fixture', (module): undefined => {
   module.commands.handle(Probe, (context) => {
     mark('command:invoked');
@@ -35,6 +65,13 @@ const fixtureModule = defineModule('fixture', (module): undefined => {
     stop: () => {
       mark('hosted:stop');
     },
+  });
+
+  // A tree view backed by a source that does its own listener bookkeeping, so
+  // the driver can tell whether the adapter released the subscription it took.
+  module.treeViews.add({
+    id: 'extKitFixture.tree',
+    resolveProvider: () => treeSource,
   });
 
   // The framework gives each resolve its own RPC channel and closes it when
@@ -98,6 +135,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 export async function deactivate(): Promise<void> {
   mark('deactivate:start');
   await app.deactivate();
+  // Measured after the stop pipeline settled: the view is gone, so the
+  // subscription the adapter took on the source must be gone with it.
+  mark(
+    `tree:subscription:${String(treeSubscriptions.taken)}:${String(treeSubscriptions.released)}`
+  );
   // A real await, so "deactivate is awaited" is actually being tested rather
   // than accidentally satisfied by a synchronous return.
   await new Promise<void>((resolve) => setTimeout(resolve, 50));

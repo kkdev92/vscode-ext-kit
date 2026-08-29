@@ -12,8 +12,9 @@ export const ServiceLifetime = {
   Singleton: 'singleton',
   /**
    * A new instance per resolution. If disposable, it is owned by the
-   * ResourceScope associated with that resolver. Its `dispose` method must be
-   * synchronous; `ResourceScope.own` does not await a returned promise.
+   * ResourceScope associated with that resolver, which awaits a
+   * promise-returning `dispose` in place during teardown (see
+   * `ResourceScope.own`), so ordering holds for async cleanup too.
    */
   Transient: 'transient',
 } as const;

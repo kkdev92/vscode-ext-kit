@@ -143,6 +143,28 @@ try {
     );
   }
 
+  // The tree view's change-event bridge. `createTreeView` reads the provider's
+  // `onDidChangeTreeData`, which the adapter serves from an emitter fed by a
+  // subscription on the source; both are adapter-owned and must go with the
+  // view. The fixture's source counts the subscriptions it hands out and the
+  // ones it gets back, so an adapter that forgets to unsubscribe shows up as
+  // `taken 1, released 0` — which is exactly what 4.0.0 did.
+  const tree = markers.find((entry) => entry.startsWith('tree:subscription:'));
+  if (tree === undefined) {
+    fail('the tree source never reported its change-event subscriptions', markers);
+  }
+  const [, , taken, released] = tree.split(':');
+  if (taken !== '1' || released !== '1') {
+    fail(
+      `tree change-event subscription: taken ${taken}, released ${released}; ` +
+        'the adapter must release exactly what it took',
+      markers
+    );
+  }
+  process.stdout.write(
+    'confirmed: the tree change-event subscription was released with the view\n'
+  );
+
   process.stdout.write(`extension host contract OK (VS Code ${version})\n`);
 } finally {
   rmSync(scratch, { recursive: true, force: true });

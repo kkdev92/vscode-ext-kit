@@ -897,8 +897,9 @@ export interface WebviewCapability {
 export interface TreeViewCapability {
   /**
    * Creates and registers a tree view. The returned registration owns the
-   * native view/controller, while provider disposal remains the caller's
-   * responsibility.
+   * native view/controller and every bridge the adapter built to connect the
+   * source to it (the change-event emitter, the checkbox listener); disposing
+   * the source itself remains the caller's responsibility.
    */
   create(
     viewId: string,

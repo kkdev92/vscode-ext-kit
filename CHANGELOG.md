@@ -6,6 +6,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 From 1.0.0 onward this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0 releases followed it in spirit; their breaking changes are marked **Breaking**.
 
+## [Unreleased]
+
+### Fixed
+
+- **The tree-view adapter now releases the change-event bridge it builds, and
+  no longer disposes the provider.** To serve `onDidChangeTreeData` in the
+  shape VS Code reads, the adapter subscribes to the source and fires a
+  `vscode.EventEmitter`; in 4.0.0 it kept neither the subscription nor the
+  emitter, so disposing the view released the native view and left both
+  behind. It also called the source's `dispose()` — while the module scope
+  already owned the provider, as the port and `TreeViewCollection` both said —
+  so every module-declared provider was disposed twice. The shipped
+  `BaseTreeDataProvider` clears its listeners and is idempotent, which is why
+  nothing noticed; a custom source need not be either. The registration now
+  releases exactly what the adapter created (view, checkbox listener,
+  subscription, emitter), once, and leaves the source to its owner. The adapter
+  suite pins each of those, the application suite pins "one provider disposal,
+  after the view", and the desktop fixture measures the subscription against a
+  real host: it reported `taken 1, released 0` on the 4.0.0 adapter.
+
+- **`createSecretAccessor`'s JSDoc said writes were not validated. They are**,
+  and the suite has pinned it (`failed validation on write`); the comment and
+  the code have disagreed since both arrived in 3.0.0. The interface comments
+  now say what the code does: validation in both directions, and nothing the
+  schema produced in any report.
+
+- **Two comments claimed `ResourceScope.own` does not await an asynchronous
+  `dispose`.** It does — that is the whole reason it is separate from
+  `RegistrationScope`, which is the one that rejects a thenable.
+  `descriptors.ts` and `thenable.ts` now agree with `resource-scope.ts`.
+
+- **The 4.0.0 entry below claims `verify:package` asserts zero runtime
+  dependencies. It did not.** The package had none — `dependencies` is simply
+  absent — but nothing checked, so the sentence was true by luck rather than
+  by test. The script now asserts it twice: on the manifest about to be packed
+  and on the copy the throwaway consumer installs.
+
+- CONTRIBUTING listed three `foundation -> capabilities` aggregation points;
+  the import-graph test allows four, the fourth being a type-only import from
+  `operations/context.ts`. The document now matches the test.
+
 ## [4.0.0] - 2026-08-29
 
 **A floor raise, essentially.** The public API is what `3.0.0` exposed — no

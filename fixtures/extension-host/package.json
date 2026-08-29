@@ -29,6 +29,10 @@
           "id": "extKitFixture.sidebar",
           "name": "Ext Kit Fixture",
           "type": "webview"
+        },
+        {
+          "id": "extKitFixture.tree",
+          "name": "Ext Kit Tree"
         }
       ]
     }
