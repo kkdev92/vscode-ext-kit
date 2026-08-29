@@ -74,6 +74,14 @@ Pre-1.0 releases followed it in spirit; their breaking changes are marked **Brea
   lives in `bin/` and is exercised by `verify:package` against the installed
   tarball, not just the repository's own layout.
 
+- **`diffManifest` returns what `assertManifestMatches` used to only throw.**
+  The assertion compared `package.json` with the declarations in `src` and
+  reported every disagreement as a sentence in one error. The comparison is now
+  its own function, returning each disagreement as data — which contribution
+  point, which side is missing it or whether both have it and disagree, the id
+  it concerns, and the JSON that would settle it when the fix is mechanical.
+  The assertion is unchanged and built on top of it.
+
 ### Changed
 
 - **`defineExtension` is single-use, like the extension host it serves.** A
