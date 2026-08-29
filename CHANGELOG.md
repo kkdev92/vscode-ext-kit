@@ -52,6 +52,17 @@ Pre-1.0 releases followed it in spirit; their breaking changes are marked **Brea
   3.0.0 and appeared in no guide; the guide now has a Diagnostics section
   listing the events and what they are useful for.
 
+- **A preflight failure now reports what it found as data.** `PreflightError`
+  carried its findings as a list of sentences; `problems` carries them as
+  `{ code, message, subject, moduleId, path }` — `COMMAND_HANDLER_CONFLICT`,
+  `SERVICE_CAPTIVE_DEPENDENCY`, `TRUST_REQUIRED` and the rest — so a test, a
+  CI step or an editor integration can branch on what went wrong instead of
+  matching prose. The service-graph validator and runtime preflight had these
+  codes all along and were dropping them at the throw. The sentence list stays
+  as `issues`, unchanged, and the error's message is the same text as before.
+  `PreflightError` is exported from the root, so the error can be recognised
+  with `instanceof` rather than by its name.
+
 ## [4.0.1] - 2026-08-29
 
 **A patch to the tree-view adapter, plus four corrections to what the project

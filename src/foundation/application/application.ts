@@ -488,7 +488,13 @@ export function createApplication(options: CreateApplicationOptions): Applicatio
 
       const errors = issues.filter((issue) => issue.severity === PreflightSeverity.Error);
       if (errors.length > 0) {
-        throw new PreflightError(errors.map((issue) => issue.message));
+        throw new PreflightError(
+          errors.map((issue) => ({
+            code: issue.code,
+            message: issue.message,
+            moduleId: issue.moduleId,
+          }))
+        );
       }
 
       // Settings accessors are registered by the framework, not by a module, so

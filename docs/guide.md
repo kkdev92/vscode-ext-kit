@@ -704,6 +704,59 @@ log, count or attach to a bug report — not an event bus. Delivery is
 best-effort by design: a listener that throws is ignored, and nothing waits for
 one.
 
+### When preflight says no
+
+Preflight is the other place the framework tells you something went wrong, and
+it does so by throwing: `defineExtension` at import time for a structural
+problem, `activate` for a host that does not meet a module's requirements. The
+error is a `PreflightError`, and it carries every problem it found rather than
+the first — each with a stable `code`, the `subject` it is about and, where a
+module declared it, the `moduleId`.
+
+<!-- sample: docs/samples/preflight.ts -->
+
+```ts
+import { PreflightError } from '@kkdev92/vscode-ext-kit';
+
+/**
+ * Turns a preflight failure into lines a person can act on.
+ *
+ * `defineExtension` throws before VS Code is touched, with every problem it
+ * found rather than the first. Each problem carries a stable `code` — for a
+ * script or a test to branch on — and a `message` that says the same thing to
+ * a person. Anything else is rethrown untouched.
+ */
+export function explainPreflight(error: unknown): readonly string[] {
+  if (!(error instanceof PreflightError)) {
+    throw error;
+  }
+  return error.problems.map((problem) =>
+    problem.moduleId === undefined
+      ? `${problem.code}: ${problem.message}`
+      : `${problem.code} in ${problem.moduleId}: ${problem.message}`
+  );
+}
+
+/**
+ * The one check a CI step usually wants: did the graph change shape?
+ *
+ * A captive dependency — a singleton holding a transient — is the kind of
+ * mistake that only shows up as a stale value weeks later. Preflight reports
+ * it at import time, and the code makes it a one-line gate.
+ */
+export function holdsATransientCaptive(error: unknown): boolean {
+  return (
+    error instanceof PreflightError &&
+    error.problems.some((problem) => problem.code === 'SERVICE_CAPTIVE_DEPENDENCY')
+  );
+}
+```
+
+The message still lists every problem as a sentence, so nothing changes for a
+reader of the console. The codes are for everything else: a test that asserts a
+plan is well-formed, a CI step, an editor integration. They are listed on
+`compileApplication` and on `RuntimeIssue`.
+
 `application.shutdownTimeout` deserves the special attention above because it is
 the one event that reports something the framework could not do. VS Code races
 every extension's deactivation against a few seconds and then exits; the

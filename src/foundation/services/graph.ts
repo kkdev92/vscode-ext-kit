@@ -43,7 +43,9 @@ export interface ServiceGraphIssue {
  * ```ts
  * const issues = validateServiceGraph(descriptors, { provided: frameworkTokens });
  * if (issues.length > 0) {
- *   throw new PreflightError(issues.map((issue) => issue.message));
+ *   throw new PreflightError(
+ *     issues.map(({ code, message, moduleId }) => ({ code, message, moduleId }))
+ *   );
  * }
  * ```
  */

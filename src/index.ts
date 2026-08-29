@@ -319,6 +319,11 @@ export {
   validationError,
 } from './foundation/operations/errors.js';
 export type { FrameworkErrorOptions } from './foundation/operations/errors.js';
+// Thrown by `defineExtension` at import time and by `activate` when the host
+// fails a requirement. Exported so it can be recognised with `instanceof` and
+// its `problems` read as data rather than parsed out of the message.
+export { PreflightError } from './foundation/internal/errors.js';
+export type { PreflightProblem } from './foundation/internal/errors.js';
 export { OperationCancelledError } from './foundation/operations/cancellation.js';
 export { RetryExhaustedError } from './capabilities/std/retry.js';
 export { TimeoutError } from './capabilities/std/timing.js';

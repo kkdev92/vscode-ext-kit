@@ -328,6 +328,74 @@ describe('compileApplication', () => {
     expect(issues).toHaveLength(2);
     expect(issues.join('\n')).toContain('only one handler per command id');
     expect(issues.join('\n')).toContain('core.clock');
+
+    // The same findings as data: a code to branch on, the id it is about, and
+    // the module that declared it.
+    const problems = (caught as PreflightError).problems;
+    expect(problems).toEqual([
+      expect.objectContaining({
+        code: 'COMMAND_HANDLER_CONFLICT',
+        subject: 'sample.refresh',
+        moduleId: 'b',
+      }),
+      expect.objectContaining({
+        code: 'DEPENDENCY_UNREGISTERED',
+        subject: 'core.clock',
+        moduleId: 'b',
+      }),
+    ]);
+    // `issues` is `problems` reduced to its messages, in the same order.
+    expect(issues).toEqual(problems.map((problem) => problem.message));
+  });
+
+  it('gives every kind of problem a stable code', () => {
+    // Two declarations of one key, the first of them asking to sync a
+    // workspace-scoped value; a hosted service with no lifecycle; a singleton
+    // holding a transient.
+    const Recent = defineStorage<string>({
+      key: 'recent',
+      scope: 'workspace',
+      syncable: true,
+      defaultValue: '',
+    });
+    const RecentAgain = defineStorage<string>({
+      key: 'recent',
+      scope: 'workspace',
+      defaultValue: '',
+    });
+    const module = defineModule('projects', (builder): undefined => {
+      builder.services.singleton(Repository, {
+        inject: { clock: Clock },
+        create: ({ clock }) => ({ clock }),
+      });
+      builder.services.transient(Clock, () => ({ now: () => 0 }));
+      builder.storage.add(Recent);
+      builder.storage.add(RecentAgain);
+      builder.hostedServices.add({ id: 'projects.empty' });
+      return undefined;
+    });
+
+    let caught: unknown;
+    try {
+      compileApplication({ name: 'sample', modules: [module] });
+    } catch (error) {
+      caught = error;
+    }
+
+    const problems = (caught as PreflightError).problems;
+    expect(problems.map((problem) => problem.code)).toEqual([
+      'STORAGE_SYNCABLE_WORKSPACE',
+      'STORAGE_KEY_DUPLICATE',
+      'HOSTED_SERVICE_EMPTY',
+      'SERVICE_CAPTIVE_DEPENDENCY',
+    ]);
+    // A graph problem keeps the path the validator walked, which is what tells
+    // the reader *where* in the graph the singleton meets the transient.
+    expect(problems[3]).toMatchObject({
+      subject: 'projects.repository',
+      moduleId: 'projects',
+      path: ['projects.repository', 'core.clock'],
+    });
   });
 
   it('rejects a duplicate module id', () => {
