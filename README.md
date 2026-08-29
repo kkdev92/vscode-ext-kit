@@ -43,7 +43,7 @@ has stopped being obvious._
 
 ## Features
 
-- **Declare, Then Run**: Commands, services, settings, storage, secrets, watchers and views are data; compiling them produces an immutable plan
+- **Declare, Then Run**: Commands, services, settings, storage, secrets, watchers and views are data; compiling them produces an immutable plan — `describePlan` hands you that plan as JSON, to diff in a review or feed to a tool
 - **Preflight Before VS Code**: Duplicate ids, a missing service, a dependency cycle, a captive dependency — all rejected at import time, before a single API call
 - **One Cleanup Owner**: `deactivate` is the only teardown path; `context.subscriptions` gets one synchronous failsafe and nothing else
 - **Every Unit of Work Is an Operation**: A command invocation or a watcher batch arrives with an id, a logger, a combined `AbortSignal`, a progress session and a resource scope

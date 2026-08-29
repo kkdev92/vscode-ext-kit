@@ -68,6 +68,24 @@ export type {
 export { ModuleCompatibility } from './foundation/modules/compatibility.js';
 export type { ModuleRequirements } from './foundation/modules/compatibility.js';
 export type { ApplicationPlan } from './foundation/application/plan.js';
+// A compiled plan as JSON: what the extension registers, for a review, a diff
+// or a tool. Nothing callable crosses the boundary.
+export { describePlan } from './foundation/application/describe.js';
+export type {
+  ApplicationPlanDescription,
+  CommandDescription,
+  FileWatcherDescription,
+  HostedServiceDescription,
+  LanguageStatusItemDescription,
+  ModuleDescription,
+  RegistrationDescription,
+  SecretDescription,
+  ServiceDescription,
+  SettingDescription,
+  SettingsSectionDescription,
+  StatusBarItemDescription,
+  StorageDescription,
+} from './foundation/application/describe.js';
 export type { HostDiagnostic } from './foundation/hosting/application-host.js';
 
 // --- Explicit dependency injection ----------------------------------------

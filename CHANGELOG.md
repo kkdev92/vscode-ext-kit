@@ -10,6 +10,19 @@ Pre-1.0 releases followed it in spirit; their breaking changes are marked **Brea
 
 ### Added
 
+- **`describePlan(plan)` turns a compiled plan into JSON.** The framework
+  already knows exactly what an extension registers — that is what compiling
+  declarations before running them is for — but an `ApplicationPlan` holds
+  factories, handlers and token objects, so the answer was locked inside it.
+  The description carries module ids, service tokens and the edges between
+  them, command ids and titles, settings keys and defaults, watcher globs and
+  view ids, and nothing callable.
+
+  It is deterministic and in declaration order, so the output is worth
+  committing: a diff means a declaration changed. That is the review question
+  `git diff` on a large module rarely answers directly, and it is the same
+  document a manifest cross-check or a dependency diagram wants.
+
 - **A shutdown that runs out of budget now says what was holding it.** The
   `application.shutdownTimeout` diagnostic carried a phase name and nothing
   else, which left the only question that matters unanswered: which hosted

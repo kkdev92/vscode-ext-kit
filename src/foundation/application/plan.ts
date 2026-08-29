@@ -99,6 +99,28 @@ export interface CompileApplicationOptions {
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 3_000;
 
 /**
+ * Tokens the Application registers itself rather than a module.
+ *
+ * Named once because two things need the same list: preflight, which must not
+ * report a module injecting one of these as depending on nothing, and
+ * `describePlan`, which reports what is injectable without being declared.
+ * Adding a framework service means adding it here.
+ */
+export const FRAMEWORK_SERVICES: readonly ServiceToken<unknown>[] = Object.freeze([
+  Notifications,
+  QuickInput,
+  Localization,
+  Editors,
+  Webviews,
+  Secrets,
+  StatusBar,
+  Commands,
+  FileWatchers,
+  Operations,
+  Log,
+]);
+
+/**
  * Compiles modules into an immutable plan, reporting every definition-time
  * problem it can find before a single platform registration happens.
  *
@@ -300,17 +322,7 @@ export function compileApplication(options: CompileApplicationOptions): Applicat
     ...secrets.map((registration) => registration.token),
     ...statusBarItems.map((item) => item.token),
     ...languageStatusItems.map((item) => item.token),
-    Notifications,
-    QuickInput,
-    Localization,
-    Editors,
-    Webviews,
-    Secrets,
-    StatusBar,
-    Commands,
-    FileWatchers,
-    Operations,
-    Log,
+    ...FRAMEWORK_SERVICES,
   ]);
 
   // The graph is checked against the same set. A service that injects a
