@@ -251,3 +251,34 @@ describe('createRegistrationScope', () => {
     });
   });
 });
+
+describe('inspect', () => {
+  it('names the scope, counts its entries and walks its attached children', () => {
+    const root = createRegistrationScope('extension');
+    root.own({ dispose: () => undefined });
+    const child = root.detachedChild('projects');
+    child.own({ dispose: () => undefined });
+    child.own({ dispose: () => undefined });
+
+    // Detached: the child is not part of the parent's picture until it commits.
+    expect(root.inspect()).toEqual({ name: 'extension', size: 1, children: [] });
+
+    root.attach(child);
+
+    expect(root.inspect()).toEqual({
+      name: 'extension',
+      // The attach itself is an entry, alongside the registration above.
+      size: 2,
+      children: [{ name: 'extension/projects', size: 2, children: [] }],
+    });
+  });
+
+  it('reports nothing once disposed', () => {
+    const root = createRegistrationScope('extension');
+    root.attach(root.detachedChild('projects'));
+
+    root.dispose();
+
+    expect(root.inspect()).toEqual({ name: 'extension', size: 0, children: [] });
+  });
+});

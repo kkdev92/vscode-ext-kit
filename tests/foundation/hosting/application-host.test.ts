@@ -18,6 +18,12 @@ const recorder = (): { events: string[]; onDiagnostic: (d: HostDiagnostic) => vo
   return { events, onDiagnostic: (diagnostic) => events.push(diagnostic.event) };
 };
 
+/** Keeps whole diagnostics, for the assertions that are about the details. */
+const detailed = (): { entries: HostDiagnostic[]; onDiagnostic: (d: HostDiagnostic) => void } => {
+  const entries: HostDiagnostic[] = [];
+  return { entries, onDiagnostic: (diagnostic) => entries.push(diagnostic) };
+};
+
 afterEach(() => {
   vi.useRealTimers();
 });
@@ -404,6 +410,93 @@ describe('createApplicationHost', () => {
 
       expect(events).toContain('application.shutdownTimeout');
       expect(host.state).toBe('stopped');
+    });
+
+    it('says which phase, how long it waited, and what was still held', async () => {
+      vi.useFakeTimers();
+      const { entries, onDiagnostic } = detailed();
+      const host = createApplicationHost({
+        name: 'app',
+        shutdownTimeoutMs: 1_000,
+        onDiagnostic,
+        // The Host owns scopes and a deadline; only the application can name a
+        // hosted service, so that half of the answer is supplied.
+        describeRemaining: () => ({ hostedServices: { stopping: 'projects.index' } }),
+        start: ({ resources }) => {
+          resources.attach(resources.detachedChild('projects'));
+        },
+        stop: () => new Promise<void>(() => undefined),
+      });
+      await host.start();
+
+      const stopping = host.stop('deactivate');
+      await vi.advanceTimersByTimeAsync(1_000);
+      await stopping;
+
+      const timeout = entries.find((entry) => entry.event === 'application.shutdownTimeout');
+      expect(timeout?.details).toMatchObject({
+        phase: 'stop-hook',
+        budgetMs: 1_000,
+        hostedServices: { stopping: 'projects.index' },
+        resources: { name: 'app#resources', children: [{ name: 'app#resources/projects' }] },
+      });
+      expect(timeout?.details?.['elapsedMs']).toBeGreaterThanOrEqual(1_000);
+    });
+
+    it('still stops when describeRemaining throws', async () => {
+      vi.useFakeTimers();
+      const { events, onDiagnostic } = recorder();
+      const host = createApplicationHost({
+        name: 'app',
+        shutdownTimeoutMs: 1_000,
+        onDiagnostic,
+        describeRemaining: () => {
+          throw new Error('describe failed');
+        },
+        stop: () => new Promise<void>(() => undefined),
+      });
+      await host.start();
+
+      const stopping = host.stop('deactivate');
+      await vi.advanceTimersByTimeAsync(1_000);
+      await stopping;
+
+      // The explanation failed; the stop pipeline it was explaining did not.
+      expect(events).toContain('application.shutdownTimeout');
+      expect(host.state).toBe('stopped');
+    });
+  });
+
+  describe('inspect', () => {
+    it('reports the scope tree, and nothing before start', async () => {
+      const host = createApplicationHost({
+        name: 'app',
+        start: ({ registrations }) => {
+          registrations.own({ dispose: () => undefined });
+          registrations.attach(registrations.detachedChild('projects'));
+        },
+      });
+
+      expect(host.inspect()).toEqual({
+        state: 'new',
+        registrations: undefined,
+        resources: undefined,
+      });
+
+      await host.start();
+
+      expect(host.inspect()).toMatchObject({
+        state: 'running',
+        registrations: {
+          name: 'app#registrations',
+          size: 2,
+          children: [{ name: 'app#registrations/projects', size: 0, children: [] }],
+        },
+      });
+
+      await host.stop('manual');
+
+      expect(host.inspect()).toMatchObject({ state: 'stopped', registrations: { size: 0 } });
     });
   });
 

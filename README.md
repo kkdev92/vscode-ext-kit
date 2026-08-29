@@ -278,7 +278,7 @@ Stated plainly, because a framework that is vague about its boundaries gets
 trusted for things it cannot do.
 
 - **Nothing unwinds on a crash**: If the extension host is killed, `deactivate` never runs — persist what matters when the operation that produced it completes, not during shutdown
-- **The shutdown budget is shared and hard**: VS Code races _every_ extension's deactivation against 5 seconds and then exits; the framework's own budget (3 s by default) sits inside that, and past it pending work is abandoned rather than awaited
+- **The shutdown budget is shared and hard**: VS Code races _every_ extension's deactivation against 5 seconds and then exits; the framework's own budget (3 s by default) sits inside that, and past it pending work is abandoned rather than awaited — the `application.shutdownTimeout` diagnostic names what was still holding on
 - **Rollback covers what the framework owns**: registrations, the services it created, resources placed in one of its scopes, started hosted services — it cannot un-write a file or un-send a request
 - **Leak detection has the same boundary**: it sees what the framework tracks, and nothing else
 - **Cancellation is cooperative**: aborting a signal asks a handler to stop; one that ignores its signal keeps running, and the framework cannot terminate it

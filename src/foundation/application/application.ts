@@ -29,7 +29,11 @@ import type {
 import { AsyncCallbackError, PreflightError, ScopeCleanupError } from '../internal/errors.js';
 import { claimRejection, isThenable } from '../internal/thenable.js';
 import { createApplicationHost } from '../hosting/application-host.js';
-import type { ApplicationHost, HostDiagnostic } from '../hosting/application-host.js';
+import type {
+  ApplicationHost,
+  HostDiagnostic,
+  HostInspection,
+} from '../hosting/application-host.js';
 import { StopReason } from '../hosting/host-state.js';
 import {
   CancellationReason,
@@ -178,6 +182,22 @@ export interface CreateApplicationOptions {
 }
 
 /**
+ * What an Application still owns, as plain data.
+ *
+ * Extends the Host's view — scopes and state — with the work only the
+ * Application knows about: which hosted services are up, and which operations
+ * have not settled. Names and counts only.
+ */
+export interface ApplicationInspection extends HostInspection {
+  /** Hosted services that started and have not stopped, in start order. */
+  readonly hostedServices: readonly string[];
+  /** Ids of operations that started and have not settled. */
+  readonly operations: readonly string[];
+  /** Background hosted-service loops still being tracked. */
+  readonly backgroundTasks: number;
+}
+
+/**
  * A compiled plan wired to platform capabilities, ready for Extension Host
  * activation.
  *
@@ -205,6 +225,11 @@ export interface Application {
    * rejects; cleanup failures are emitted as diagnostics.
    */
   deactivate(): Promise<void>;
+  /**
+   * What the framework still owns. Read by the Test Host's leak report, and by
+   * the Host itself when a shutdown runs out of budget.
+   */
+  inspect(): ApplicationInspection;
 }
 
 /**
@@ -234,11 +259,26 @@ export function createApplication(options: CreateApplicationOptions): Applicatio
       ? createNoopLogger()
       : createLogger(options.logSink, { application: plan.name });
 
+  /** Hosted services that have started and not yet stopped, in start order. */
   const startedServices: {
     readonly definition: HostedServiceDefinition;
     readonly injected: Readonly<Record<string, unknown>>;
   }[] = [];
   const backgroundTasks: Promise<void>[] = [];
+  /**
+   * Operations that started and have not settled, keyed by id.
+   *
+   * Bookkeeping on a stream that already exists rather than a second one: the
+   * executor stamps every `operation.*` diagnostic with its id, so the events
+   * flowing through this file are enough to answer "what is still running?"
+   * when a shutdown runs out of budget.
+   */
+  const inFlightOperations = new Map<
+    string,
+    { readonly name: string; readonly kind: string; readonly startedAt: number }
+  >();
+  /** The hosted service currently inside its `stop`, if any. */
+  let stoppingService: string | undefined;
 
   // Observability must never interfere: a throwing observer cannot be allowed
   // to fail activation, an operation, or cleanup.
@@ -250,12 +290,55 @@ export function createApplication(options: CreateApplicationOptions): Applicatio
     }
   };
 
+  /** Reads a diagnostic field that is `unknown` by contract. */
+  const text = (value: unknown): string => (typeof value === 'string' ? value : '');
+
   const emitOperationDiagnostic = (
     event: string,
     details: Readonly<Record<string, unknown>>
   ): void => {
+    const id: unknown = details['operationId'];
+    if (typeof id === 'string') {
+      if (event === 'operation.started') {
+        inFlightOperations.set(id, {
+          name: text(details['name']),
+          kind: text(details['kind']),
+          startedAt: Date.now(),
+        });
+      } else if (
+        event === 'operation.completed' ||
+        event === 'operation.cancelled' ||
+        event === 'operation.failed'
+      ) {
+        // The executor settles an operation with exactly one of these, before
+        // its `finally` reports any cleanup failure.
+        inFlightOperations.delete(id);
+      }
+    }
     emitDiagnostic({ event, details });
   };
+
+  /**
+   * Who is still holding the shutdown budget when it runs out.
+   *
+   * Ids, names and counts. Command arguments, webview payloads and secret
+   * values are deliberately absent: naming the owner is enough to act on, and
+   * a diagnostic that carried the work's own data would put it wherever the
+   * log goes.
+   */
+  const describeRemaining = (): Readonly<Record<string, unknown>> => ({
+    hostedServices: {
+      started: startedServices.map((started) => started.definition.id),
+      ...(stoppingService === undefined ? {} : { stopping: stoppingService }),
+    },
+    operations: [...inFlightOperations].map(([id, operation]) => ({
+      id,
+      name: operation.name,
+      kind: operation.kind,
+      elapsedMs: Date.now() - operation.startedAt,
+    })),
+    backgroundTasks: backgroundTasks.length,
+  });
 
   /**
    * Waits for tracked background loops to settle, never past the remaining
@@ -277,7 +360,12 @@ export function createApplication(options: CreateApplicationOptions): Applicatio
     });
     try {
       if ((await Promise.race([Promise.all(pending), timeout])) === 'timeout') {
-        emitDiagnostic({ event: 'application.shutdownTimeout', details: { phase: 'background' } });
+        emitDiagnostic({
+          event: 'application.shutdownTimeout',
+          // `pending` rather than the tracked list: this drain took ownership
+          // of those promises, so `describeRemaining` no longer counts them.
+          details: { phase: 'background', pending: pending.length, ...describeRemaining() },
+        });
       }
     } finally {
       if (timer !== undefined) {
@@ -340,6 +428,11 @@ export function createApplication(options: CreateApplicationOptions): Applicatio
   ): Promise<void> => {
     for (let index = startedServices.length - 1; index >= 0; index -= 1) {
       const started = startedServices[index];
+      // Truncated as the loop goes, so `startedServices` always names what is
+      // still up rather than everything that ever started -- which is what a
+      // shutdown-timeout diagnostic has to report. Safe while iterating
+      // backwards: only entries at or after the current index are removed.
+      startedServices.length = index;
       const stop = started?.definition.stop;
       if (started === undefined || stop === undefined) {
         continue;
@@ -348,6 +441,7 @@ export function createApplication(options: CreateApplicationOptions): Applicatio
       const logger = rootLogger.withFields({ hostedServiceId: definition.id });
       const context: HostedServiceStopContext = { signal, logger, remainingMs };
       emitDiagnostic({ event: 'hostedService.stopping', details: { id: definition.id } });
+      stoppingService = definition.id;
       try {
         await stop(context, injected);
         emitDiagnostic({ event: 'hostedService.stopped', details: { id: definition.id } });
@@ -357,14 +451,16 @@ export function createApplication(options: CreateApplicationOptions): Applicatio
           event: 'hostedService.failed',
           details: { id: definition.id, error },
         });
+      } finally {
+        stoppingService = undefined;
       }
     }
-    startedServices.length = 0;
   };
 
   const host = createApplicationHost({
     name: plan.name,
     shutdownTimeoutMs: plan.shutdown.timeoutMs,
+    describeRemaining,
     ...(options.onDiagnostic === undefined ? {} : { onDiagnostic: options.onDiagnostic }),
 
     async start({ registrations, resources, signal }) {
@@ -1037,6 +1133,15 @@ export function createApplication(options: CreateApplicationOptions): Applicatio
 
     deactivate(): Promise<void> {
       return host.stop(StopReason.Deactivate);
+    },
+
+    inspect(): ApplicationInspection {
+      return {
+        ...host.inspect(),
+        hostedServices: startedServices.map((started) => started.definition.id),
+        operations: [...inFlightOperations.keys()],
+        backgroundTasks: backgroundTasks.length,
+      };
     },
   };
 }

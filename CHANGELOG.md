@@ -6,6 +6,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 From 1.0.0 onward this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0 releases followed it in spirit; their breaking changes are marked **Breaking**.
 
+## [Unreleased]
+
+### Added
+
+- **A shutdown that runs out of budget now says what was holding it.** The
+  `application.shutdownTimeout` diagnostic carried a phase name and nothing
+  else, which left the only question that matters unanswered: which hosted
+  service, which operation, which scope. Its `details` now carry the phase, the
+  budget, how long it waited, the hosted service inside its own `stop`, the
+  services still up, the operations that never settled and the resource scope
+  tree — ids, names and counts, never an argument or a payload.
+
+- **`createTestHost().inspect()` says what a failed leak assertion could not.**
+  `leaks()` reports three counts; when one is not zero the next question is
+  which module or operation still holds something, and there was no way to ask.
+  `inspect()` answers it: the scope trees, the hosted services still up, the
+  operations that never settled.
+
+  `leaks()` itself is deliberately unchanged. Adding the fields there was the
+  obvious move and it broke the first extension it was tried on: the guide
+  tells you to assert on the whole object, `toEqual` sees a new field, and the
+  test fails for a reason that has nothing to do with the extension. A separate
+  method costs one call and breaks nobody.
+
+- **`RegistrationScope` and `ResourceScope` gained `inspect()`**, returning a
+  `ScopeInspection` — name, entry count, attached children. This is what both
+  of the above are built on, and it is safe to call at any point, including
+  during disposal.
+
+- **`onDiagnostic` is documented.** It has been part of `defineExtension` since
+  3.0.0 and appeared in no guide; the guide now has a Diagnostics section
+  listing the events and what they are useful for.
+
 ## [4.0.1] - 2026-08-29
 
 **A patch to the tree-view adapter, plus four corrections to what the project

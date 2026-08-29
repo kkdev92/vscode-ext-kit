@@ -11,6 +11,23 @@ export interface Registration {
 }
 
 /**
+ * What a scope is still holding, as plain data.
+ *
+ * Exists because a count on its own is not actionable. "Four registrations
+ * survived shutdown" starts an investigation; "`sample/projects` still holds
+ * four" ends one. Only names and counts cross this boundary — the entries
+ * themselves are opaque callbacks, and a diagnostic gets logged and shared.
+ */
+export interface ScopeInspection {
+  /** The scope's diagnostic name, including its parent path. */
+  readonly name: string;
+  /** Cleanup entries still held, including anonymous `defer` callbacks. */
+  readonly size: number;
+  /** Attached children, which is where module and operation names appear. */
+  readonly children: readonly ScopeInspection[];
+}
+
+/**
  * Owns registrations that must be released **synchronously**, so that stopping
  * the host closes ingress immediately: no new command invocation or event
  * callback can arrive after `dispose()` returns.
@@ -75,6 +92,14 @@ export interface RegistrationScope {
    * calls after the first are no-ops.
    */
   dispose(): void;
+
+  /**
+   * Reports what this scope and its attached children still hold.
+   *
+   * Read-only and safe at any point in the lifecycle, including after
+   * disposal, when it reports zero.
+   */
+  inspect(): ScopeInspection;
 }
 
 interface ScopeInternals {
@@ -117,6 +142,9 @@ function rejectAsyncDisposal(result: unknown, scopeName: string): void {
 
 export function createRegistrationScope(name: string): RegistrationScope {
   const cleanups: Array<() => void> = [];
+  // Tracked apart from `cleanups`, which holds opaque callbacks: a child is
+  // the one entry that can name itself, and naming is the point of `inspect`.
+  const children: RegistrationScope[] = [];
   let disposed = false;
 
   const scope: RegistrationScope = {
@@ -172,9 +200,18 @@ export function createRegistrationScope(name: string): RegistrationScope {
         return;
       }
       childInternals.attached = true;
+      children.push(child);
       cleanups.push(() => {
         child.dispose();
       });
+    },
+
+    inspect(): ScopeInspection {
+      return {
+        name,
+        size: cleanups.length,
+        children: children.map((child) => child.inspect()),
+      };
     },
 
     dispose(): void {
@@ -197,6 +234,7 @@ export function createRegistrationScope(name: string): RegistrationScope {
         }
       }
       cleanups.length = 0;
+      children.length = 0;
 
       if (errors.length > 0) {
         throw new ScopeCleanupError(name, errors);

@@ -67,7 +67,19 @@ describe('createTestHost', () => {
 
     await host.stop();
 
+    // Exactly these three fields: consumers assert on the whole object, and
+    // the guide tells them to, so the shape is part of the contract.
     expect(host.leaks()).toEqual({ registrations: 0, resources: 0, commands: [] });
+    // The same ownership, named. A zero count beside a non-empty scope would
+    // mean one of the two is reading something other than what it claims.
+    expect(host.inspect()).toMatchObject({
+      state: 'stopped',
+      registrations: { size: 0, children: [] },
+      resources: { size: 0, children: [] },
+      hostedServices: [],
+      operations: [],
+      backgroundTasks: 0,
+    });
   });
 
   it('replaces a singleton without touching the plan', async () => {
