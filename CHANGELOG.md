@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 From 1.0.0 onward this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0 releases followed it in spirit; their breaking changes are marked **Breaking**.
 
+## [Unreleased]
+
+### Changed
+
+- **The generated documentation is the whole set, not only the API.**
+  `npm run docs:api` now renders the guide, the migration guide, the changelog,
+  the contributing guide and the security policy alongside the API reference,
+  with the README as the front page and a sitemap. Links between them are
+  checked in the same run, which found three that only worked on GitHub and one
+  that worked nowhere; all four are fixed.
+
 ## [4.1.0] - 2026-08-30
 
 **A minor about seeing what the framework already knows.** Everything here is
@@ -272,17 +283,17 @@ install changes.
 
 ### What arrived across the alphas
 
-Read [3.0.0-alpha.1](#300-alpha1---2026-08-08) for the shape of the thing — an
+Read the 3.0.0-alpha.1 entry below for the shape of the thing — an
 immutable plan, compiled and validated before VS Code is touched, run by a host
 that owns one cleanup path. The two alphas after it were consumer-driven, and
 what they fixed says something about how this was built:
 
-- [3.0.0-alpha.2](#300-alpha2---2026-08-08) — a setting that means "unset", and
+- 3.0.0-alpha.2 — a setting that means "unset", and
   the other half of the workspace-trust API. The first found a real bug in the
   extension that motivated it on its first run: two settings the manifest
   declared as `"integer"` while the code had always accepted null and documented
   it as "no limit".
-- [3.0.0-alpha.3](#300-alpha3---2026-08-08) — declaring what `activate` resolves
+- 3.0.0-alpha.3 — declaring what `activate` resolves
   to, so an extension that publishes an API stops keeping a mutable module
   variable and hoping a hosted service filled it.
 
@@ -991,7 +1002,7 @@ harder to use than the source tree suggested.
 ## [1.0.0] - 2026-07-28
 
 A ground-up redesign for type safety, performance and testability.
-**Not backwards compatible with 0.x** — see [MIGRATION.md](MIGRATION.md) for a
+**Not backwards compatible with 0.x** — see [MIGRATION.md](https://github.com/kkdev92/vscode-ext-kit/blob/v1.0.0/MIGRATION.md) for a
 complete 0.x → 1.0 mapping. Requirements are unchanged (VS Code `^1.96.0`,
 zero runtime dependencies).
 
