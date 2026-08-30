@@ -37,7 +37,7 @@ has stopped being obvious._
 - [Troubleshooting](#troubleshooting)
 - [Security and Privacy](#security-and-privacy)
 - [Contributing](#contributing)
-- [Support & Maintenance Policy](#support--maintenance-policy)
+- [Support and Maintenance Policy](#support-and-maintenance-policy)
 - [License](#license)
 - [Acknowledgments](#acknowledgments)
 
@@ -451,7 +451,7 @@ has one is the change most likely to be turned down.
 
 ---
 
-## Support & Maintenance Policy
+## Support and Maintenance Policy
 
 This is a personal project maintained in spare time. It is active, but support
 is best-effort: I'll do my best to review issues and PRs, and releases may be a

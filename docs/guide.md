@@ -1,7 +1,7 @@
 # Guide
 
-Everything past the [quick start](../README.md#quick-start), one topic at a time.
-Every code block on this page is a file under [`samples/`](samples) that
+Everything past the [quick start](https://github.com/kkdev92/vscode-ext-kit#quick-start), one topic at a time.
+Every code block on this page is a file under [`samples/`](https://github.com/kkdev92/vscode-ext-kit/tree/main/docs/samples) that
 `npm run typecheck` compiles, so nothing here can go stale quietly.
 
 Where each piece sits, before the details:

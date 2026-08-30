@@ -12,9 +12,29 @@
   ],
   "tsconfig": "tsconfig.json",
   "out": "docs/api",
-  "readme": "none",
+  "readme": "README.md",
+  "projectDocuments": [
+    "docs/guide.md",
+    "docs/migration-from-2x.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md"
+  ],
+  "includeVersion": true,
+  "hostedBaseUrl": "https://vscode-ext-kit.kkdev92.dev/",
+  "navigationLinks": {
+    "GitHub": "https://github.com/kkdev92/vscode-ext-kit",
+    "npm": "https://www.npmjs.com/package/@kkdev92/vscode-ext-kit"
+  },
+  "ignoredHighlightLanguages": [
+    "mermaid"
+  ],
   "excludeInternal": true,
   "excludePrivate": true,
-  "validation": { "notExported": true, "invalidLink": true, "notDocumented": false },
+  "validation": {
+    "notExported": true,
+    "invalidLink": true,
+    "notDocumented": false
+  },
   "treatWarningsAsErrors": true
 }
