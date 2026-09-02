@@ -1,0 +1,79 @@
+name: Documentation site
+
+# Builds the documentation set (`npm run docs:api`) and publishes it to GitHub
+# Pages. Called from the release workflow after a successful publish, so the
+# site always shows the version that is `latest` on npm; runnable by hand on a
+# tag to republish the same version after a template or content fix.
+#
+# A `release` event cannot be used here: the release is created with the
+# workflow's own token, and events raised by that token do not start workflows.
+on:
+  workflow_call:
+  workflow_dispatch:
+
+# Nothing at workflow level, for the same reason as the release workflow: the
+# only job holding `id-token: write` runs no third-party code.
+permissions: {}
+
+# One deployment at a time; a queued one waits rather than cancelling, so a
+# republish never loses to the run that started first.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  # Everything that executes third-party code: the install and TypeDoc. It holds
+  # nothing beyond read access to its own checkout and hands the result over as
+  # an artifact.
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The same command CI runs, with warnings as errors: a page with a broken
+      # link or a type the package does not export never reaches the site.
+      - name: Build the documentation set
+        run: npm run docs:api
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: docs/api
+
+  # Only the deployment. `id-token: write` is what lets the action prove to
+  # Pages where the artifact came from, and this job runs nothing else.
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    # The environment carries the rules that survive this file being edited:
+    # its deployment policy admits `v*` tags only, so the site cannot be built
+    # from an unreleased commit.
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    permissions:
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

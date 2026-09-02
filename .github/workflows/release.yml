@@ -126,3 +126,14 @@ jobs:
         run: gh release create "$GITHUB_REF_NAME" --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
+
+  # The documentation site, from the tag that was just published, so the site
+  # and `latest` on npm always show the same version. The called workflow holds
+  # the two jobs; the permissions here are the most it may use.
+  pages:
+    needs: publish
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/pages.yml
