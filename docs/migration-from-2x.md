@@ -5,12 +5,12 @@ and 4.x are a framework: it owns activation and deactivation, and you hand it
 modules. Everything 2.x could do, 4.x can do — the shapes changed, because there
 is now one way in per ability rather than a standalone function _and_ a
 declaration. This page is the order to do the work in. The old-to-new table for
-every removed helper is in the [3.0.0-alpha.1 changelog](../CHANGELOG.md#300-alpha1---2026-08-08)
-and is not repeated here.
+every removed helper is in the [changelog](../CHANGELOG.md), under 3.0.0-alpha.1, and is
+not repeated here.
 
 Migrate straight to 4.x. The API is the one 3.0.0 exposed; 4.0.0 raised the
 VS Code floor and changed nothing else. Before you start, your extension needs
-what the [platform requirements](../README.md#platform-requirements) list:
+what the [platform requirements](https://github.com/kkdev92/vscode-ext-kit#platform-requirements) list:
 `engines.vscode` of `^1.134.0` or later, ESM, and `ESNext.Disposable` plus an
 `AbortSignal` lib in `tsconfig`. Typed storage keeps the 2.x envelope, so there
 is no data migration; values a 2.x build wrote are read as they are.
@@ -330,7 +330,7 @@ entry.
 Unit tests on fakes answer most questions. The ones they cannot — does the
 extension activate in a real host, does `deactivate` run inside VS Code's
 deadline, does a text editor command behave as the platform actually calls it —
-need the real thing. This repository's [fixtures](../fixtures/README.md) show
+need the real thing. This repository's [fixtures](https://github.com/kkdev92/vscode-ext-kit/tree/main/fixtures) show
 the two lanes, desktop and web, and how a case asserts an observable fact rather
 than what the API is believed to promise. A single case that activates the
 migrated extension and runs one command is enough to start with; the real
