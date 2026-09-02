@@ -8,14 +8,23 @@ Pre-1.0 releases followed it in spirit; their breaking changes are marked **Brea
 
 ## [Unreleased]
 
-### Changed
+## [4.1.1] - 2026-09-02
 
-- **The generated documentation is the whole set, not only the API.**
-  `npm run docs:api` now renders the guide, the migration guide, the changelog,
-  the contributing guide and the security policy alongside the API reference,
-  with the README as the front page and a sitemap. Links between them are
-  checked in the same run, which found three that only worked on GitHub and one
-  that worked nowhere; all four are fixed.
+**A patch about documentation only.** The published code is byte-for-byte what
+`4.1.0` exposed: no source file changed, the API is the same, and the `engines`
+floors are untouched. What changed is that four links in the documents no longer
+lead nowhere, and that the documents are now rendered as one set — the guide, the
+migration guide, the changelog, the contributing guide and the security policy
+alongside the API reference, with the README as the front page — so the links
+between them are checked whenever the reference is built.
+
+### Fixed
+
+- **Four documentation links that led nowhere.** The README's own table of
+  contents pointed at an anchor that did not match its heading, and three
+  cross-references between the guide, the migration guide and the reference
+  resolved only when the files were read on GitHub. All four now work wherever
+  the documents are read.
 
 ## [4.1.0] - 2026-08-30
 
@@ -1183,7 +1192,8 @@ platform support, toolchain currency, and release supply chain.
 
 Initial public release.
 
-[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v4.1.0...HEAD
+[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v4.1.1...HEAD
+[4.1.1]: https://github.com/kkdev92/vscode-ext-kit/compare/v4.1.0...v4.1.1
 [4.1.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v4.0.1...v4.1.0
 [4.0.1]: https://github.com/kkdev92/vscode-ext-kit/compare/v4.0.0...v4.0.1
 [4.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v3.0.0...v4.0.0
