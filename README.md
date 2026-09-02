@@ -12,8 +12,12 @@ runs it, and tears it down through exactly one path.
 _Built for extensions big enough that "what does this thing actually register?"
 has stopped being obvious._
 
-> **Status:** `4.1.0` — the current release. It adds introspection and tooling
-> to `4.0.1` — a plan as JSON, a preflight failure as data, a command-line
+**Documentation:** <https://vscode-ext-kit.kkdev92.dev/> — the API reference,
+the guide and the migration guide, rendered as one set from the version that is
+`latest` on npm.
+
+> **Status:** `4.1` is the current line. It adds introspection and tooling to
+> `4.0.1` — a plan as JSON, a preflight failure as data, a command-line
 > tool, an API reference, a migration guide — and changes nothing that existed;
 > the VS Code floor stays `^1.134.0`. 2.x was a utility library with a
 > different shape; it continues on `v2-maintenance` and anything pinned to
@@ -258,10 +262,11 @@ Values you pass around: `ok` `err` `unwrap` `mapResult` and the `s.*` schema
 builders; `FrameworkError` with `userError` / `validationError` / `classifyError`
 / `isCancellation`; `DisposableCollection` and `createScope`.
 
-Full signatures live in the `.d.ts` files and the JSDoc on each export.
-`npm run docs:api` renders that JSDoc into an API reference under `docs/api/`
-(TypeDoc); CI runs it with warnings as errors, so a broken link or a type a
-public signature names but the package does not export cannot ship.
+Full signatures live in the `.d.ts` files and the JSDoc on each export, and are
+published at <https://vscode-ext-kit.kkdev92.dev/> alongside the guide and the
+migration guide. `npm run docs:api` renders the same set locally under
+`docs/api/` (TypeDoc); CI runs it with warnings as errors, so a broken link or a
+type a public signature names but the package does not export cannot ship.
 
 ---
 
@@ -322,7 +327,6 @@ trusted for things it cannot do.
 - **The Test Host does not reproduce VS Code**: it renders no UI, interprets no contribution point, and does not substitute a direct `import "vscode"`
 - **No editor events yet**: `Editors` hands you the active editor and cross-file edits, but there is no `onDidChangeActive` / `onDidChangeSelection` / `onDidChangeDocument`; subscribing means reaching for `vscode` directly and disposing by hand, which is the one place the single-cleanup-owner rule leaks
 - **No log-level filtering, deliberately**: the framework writes to a `LogOutputChannel` and VS Code owns the level — per channel, persisted, in the Output panel. An extension cannot raise its own channel's level, so a `logLevel` setting of your own can only ever make the log quieter
-- **No hosted API reference yet** — it is generated from the JSDoc (`npm run docs:api`) but not published
 
 ---
 
@@ -457,10 +461,10 @@ This is a personal project maintained in spare time. It is active, but support
 is best-effort: I'll do my best to review issues and PRs, and releases may be a
 bit slow sometimes — thank you for your patience.
 
-`4.1.0` is the current release and holds `latest` on npm, so a fresh
-`npm install` gets the framework. `2.x` continues on `v2-maintenance` and still
-takes bug fixes; anything pinned to `^2.x` resolves there and is unaffected.
-Breaking changes are listed in the [CHANGELOG](CHANGELOG.md).
+The `4.x` line holds `latest` on npm, so a fresh `npm install` gets the
+framework. `2.x` continues on `v2-maintenance` and still takes bug fixes;
+anything pinned to `^2.x` resolves there and is unaffected. Breaking changes are
+listed in the [CHANGELOG](CHANGELOG.md).
 
 Helpful things when reporting bugs:
 

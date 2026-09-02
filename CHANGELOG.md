@@ -8,6 +8,15 @@ Pre-1.0 releases followed it in spirit; their breaking changes are marked **Brea
 
 ## [Unreleased]
 
+### Added
+
+- **The documentation is published at <https://vscode-ext-kit.kkdev92.dev/>.**
+  The API reference, the guide and the migration guide are rendered as one set
+  from the version that is `latest` on npm, so the site and the package never
+  disagree about what an export looks like. Nothing about the package changed;
+  the same set has always been buildable from the repository with
+  `npm run docs:api`.
+
 ## [4.1.1] - 2026-09-02
 
 **A patch about documentation only.** The published code is byte-for-byte what
