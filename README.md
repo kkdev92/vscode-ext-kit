@@ -398,15 +398,15 @@ Host, the manifest check and an Extension Host lane.
 
 |                  |                                                                                                                                       |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| VS Code          | `^1.134.0` — your extension declares the same `engines.vscode`; CI tests stable                                                       |
+| VS Code          | `^1.136.0` — your extension declares the same `engines.vscode`; CI tests stable                                                       |
 | Extension hosts  | desktop and web, both covered by CI                                                                                                   |
 | Node (to build)  | `>=22.12.0`                                                                                                                           |
 | Module format    | **ESM only** — `require()` of any subpath fails by design; bundle as extensions normally do                                           |
 | TypeScript `lib` | `ESNext.Disposable` (the public types name `Symbol.dispose`) and one of `DOM` / `WebWorker` / `@types/node` (they name `AbortSignal`) |
 | TypeScript       | 6.0.x is what this repo builds with; 7.x compiles the package in a non-blocking CI lane                                               |
 
-The floor is `1.134.0` because that is the newest `@types/vscode` there is, so it
-is the newest API this package can name at all. The two move together: `vsce`
+The floor tracks `@types/vscode`, which is the newest API this package can name
+at all, so the two move together as new types are published: `vsce`
 refuses to package an extension whose `@types/vscode` outruns its
 `engines.vscode`, and raising only the types would let code compile against an
 API the declared floor does not have. VS Code updates itself and CI tests stable,

@@ -38,9 +38,9 @@ describe('documented versions', () => {
   });
 
   it('names no VS Code version other than the declared floor', () => {
-    // `1.134.0` on its own is the same floor written without a range, which the
-    // paragraph under the requirements table does deliberately. Anything else
-    // is a version that moved without the prose moving with it.
+    // The floor written without a range is the same floor, which the paragraph
+    // under the requirements table does deliberately. Anything else is a version
+    // that moved without the prose moving with it.
     const floor = manifest.engines.vscode.replace(/^[^\d]*/, '');
     const found = pages.flatMap(({ page, text }) =>
       [...text.matchAll(/`\^?(1\.\d{2,3}\.\d+)`/g)].map((m) => ({ page, version: m[1] ?? '' }))

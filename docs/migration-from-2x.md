@@ -11,7 +11,7 @@ not repeated here.
 Migrate straight to 4.x. The API is the one 3.0.0 exposed; 4.0.0 raised the
 VS Code floor and changed nothing else. Before you start, your extension needs
 what the [platform requirements](https://github.com/kkdev92/vscode-ext-kit#platform-requirements) list:
-`engines.vscode` of `^1.134.0` or later, ESM, and `ESNext.Disposable` plus an
+`engines.vscode` of `^1.136.0` or later, ESM, and `ESNext.Disposable` plus an
 `AbortSignal` lib in `tsconfig`. Typed storage keeps the 2.x envelope, so there
 is no data migration; values a 2.x build wrote are read as they are.
 
