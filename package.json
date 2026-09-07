@@ -1,6 +1,6 @@
 {
   "name": "@kkdev92/vscode-ext-kit",
-  "version": "4.1.1",
+  "version": "5.0.0",
   "description": "A type-safe application framework for VS Code extension development",
   "author": {
     "name": "kkdev92",
@@ -78,13 +78,13 @@
     }
   },
   "engines": {
-    "vscode": "^1.134.0",
+    "vscode": "^1.136.0",
     "node": ">=22.12.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.1",
-    "@types/vscode": "~1.134.0",
+    "@types/vscode": "~1.136.0",
     "@vitest/coverage-v8": "^4.1.10",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/test-web": "^0.0.81",
