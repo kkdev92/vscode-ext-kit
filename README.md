@@ -398,7 +398,7 @@ Host, the manifest check and an Extension Host lane.
 
 |                  |                                                                                                                                       |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| VS Code          | `^1.136.0` — your extension declares the same `engines.vscode`; CI tests stable                                                       |
+| VS Code          | `^1.137.0` — your extension declares the same `engines.vscode`; CI tests stable                                                       |
 | Extension hosts  | desktop and web, both covered by CI                                                                                                   |
 | Node (to build)  | `>=22.12.0`                                                                                                                           |
 | Module format    | **ESM only** — `require()` of any subpath fails by design; bundle as extensions normally do                                           |
