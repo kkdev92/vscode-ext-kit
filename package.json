@@ -85,7 +85,7 @@
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.1",
     "@types/vscode": "~1.136.0",
-    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/coverage-v8": "^5.0.0",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/test-web": "^0.0.81",
     "esbuild": "^0.28.1",
@@ -99,7 +99,7 @@
     "typedoc": "^0.28.20",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.66.0",
-    "vitest": "^4.1.10"
+    "vitest": "^5.0.0"
   },
   "scripts": {
     "hooks": "husky",
