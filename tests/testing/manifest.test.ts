@@ -348,3 +348,112 @@ describe('diffManifest', () => {
     }
   });
 });
+
+/**
+ * Keybindings that bind a command nothing declares.
+ *
+ * VS Code checks the shape of a keybinding entry and not its command: one
+ * naming an id nothing registers is accepted, given a weight, and silent when
+ * the key is pressed. Renaming a command and missing the manifest is exactly
+ * that, and nothing else in this file would notice.
+ */
+describe('assertManifestMatches, keybindings', () => {
+  const declared = { commands: [Refresh, Clear], keybindings: {} };
+
+  function withKeybindings(entries: readonly unknown[]): unknown {
+    return {
+      contributes: {
+        commands: [
+          { command: 'sample.refresh', title: 'Refresh' },
+          { command: 'sample.clear', title: 'Clear' },
+        ],
+        keybindings: entries,
+      },
+    };
+  }
+
+  it('passes when every bound command is declared', () => {
+    expect(() => {
+      assertManifestMatches(
+        withKeybindings([
+          { command: 'sample.refresh', key: 'ctrl+r' },
+          { command: 'sample.clear', key: 'ctrl+k', when: 'editorTextFocus' },
+        ]),
+        declared
+      );
+    }).not.toThrow();
+  });
+
+  it('names a keybinding whose command nothing declares', () => {
+    expect(() => {
+      assertManifestMatches(
+        withKeybindings([{ command: 'sample.refrehs', key: 'ctrl+r' }]),
+        declared
+      );
+    }).toThrow(/keybinding "sample\.refrehs" is bound/u);
+  });
+
+  it('lets a built-in through only when it is allowed', () => {
+    const save = 'workbench.action.files.save';
+    // Putting a key on a built-in command is a supported use of the point.
+    expect(() => {
+      assertManifestMatches(withKeybindings([{ command: save, key: 'ctrl+s' }]), {
+        ...declared,
+        keybindings: { allow: [save] },
+      });
+    }).not.toThrow();
+    expect(() => {
+      assertManifestMatches(withKeybindings([{ command: save, key: 'ctrl+s' }]), declared);
+    }).toThrow(/keybinding "workbench\.action\.files\.save"/u);
+  });
+
+  it('reports once however many entries share the unresolved id', () => {
+    // Two entries on one command is how a keybinding carries a `when`.
+    const mismatches = diffManifest(
+      withKeybindings([
+        { command: 'sample.ghost', key: 'ctrl+g' },
+        { command: 'sample.ghost', key: 'ctrl+g', when: 'terminalFocus' },
+      ]),
+      declared
+    );
+
+    expect(mismatches.map((m) => m.id)).toEqual(['sample.ghost']);
+  });
+
+  it('checks no keybindings unless asked', () => {
+    expect(() => {
+      assertManifestMatches(withKeybindings([{ command: 'sample.ghost', key: 'ctrl+g' }]), {
+        commands: [Refresh, Clear],
+      });
+    }).not.toThrow();
+  });
+
+  it('runs after the other checks', () => {
+    const mismatches = diffManifest(
+      {
+        contributes: {
+          commands: [{ command: 'sample.refresh', title: 'Refresh' }],
+          keybindings: [{ command: 'sample.ghost', key: 'ctrl+g' }],
+        },
+      },
+      declared
+    );
+
+    expect(mismatches.map((m) => [m.kind, m.direction, m.id])).toEqual([
+      ['command', 'missing-in-manifest', 'sample.clear'],
+      ['keybinding', 'missing-in-src', 'sample.ghost'],
+    ]);
+  });
+
+  it('has nothing to paste, because the fix is a decision', () => {
+    const mismatches = diffManifest(
+      withKeybindings([{ command: 'sample.ghost', key: 'ctrl+g' }]),
+      declared
+    );
+
+    // Asserted before reading `paste`: an empty result would satisfy the
+    // undefined check while proving nothing.
+    expect(mismatches).toHaveLength(1);
+    expect(mismatches[0]?.paste).toBeUndefined();
+  });
+});

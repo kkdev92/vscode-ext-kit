@@ -8,6 +8,33 @@ Pre-1.0 releases followed it in spirit; their breaking changes are marked **Brea
 
 ## [Unreleased]
 
+### Added
+
+- `DeclaredContributions.keybindings` for `assertManifestMatches` and
+  `diffManifest`. Passing it checks that every entry in
+  `contributes.keybindings` binds a command the extension declares; its `allow`
+  list names the built-in command ids it may bind as well, which putting a key
+  on a built-in is a supported use of the contribution point.
+
+  VS Code validates the shape of a keybinding entry and not its command. One
+  naming an id nothing registers is accepted, given a weight, and does nothing
+  when the key is pressed — so renaming a command and missing the manifest
+  leaves a shortcut that fails in silence, with no warning anywhere. Both
+  extensions this package was trialled against contribute keybindings and had
+  each written a check of their own: one that every bound command is a declared
+  one, which is the comparison this now makes, and one pinning the order of two
+  entries, which this deliberately does not.
+
+  Of a keybinding it reads the command id and nothing else. The key, `when` and
+  `args` stay the manifest's, and so does the order of the entries — which is
+  what decides the winner when several share a key, so an extension that leans
+  on that order still needs an assertion of its own.
+
+  Omitting the field checks no keybindings, which is what every existing caller
+  does, so this changes nothing for them. `ManifestMismatch['kind']` gains
+  `'keybinding'`; a caller that switches exhaustively over it will need the new
+  case.
+
 ## [6.0.0] - 2026-09-14
 
 **A major for one reason: the VS Code floor.** `engines.vscode` moves from

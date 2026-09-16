@@ -32,6 +32,25 @@ export interface DeclaredContributions {
   readonly commands?: readonly { readonly descriptor: CommandDescriptor }[];
   /** View ids the application registers, independent of manifest container. */
   readonly views?: readonly string[];
+  /**
+   * Opts in to checking that every contributed keybinding binds a command this
+   * extension declares.
+   *
+   * VS Code validates only the shape of a keybinding entry, never that its
+   * command exists: one naming a command nothing registers is accepted, given a
+   * weight, and does nothing when the key is pressed. A renamed or deleted
+   * command therefore leaves a shortcut that fails in silence.
+   *
+   * Omitting this checks no keybindings at all.
+   */
+  readonly keybindings?: {
+    /**
+     * Command ids the manifest may bind without declaring them, for the
+     * supported case of putting a key on a built-in command such as
+     * `workbench.action.files.save`.
+     */
+    readonly allow?: readonly string[];
+  };
 }
 
 /**
@@ -45,7 +64,7 @@ export interface DeclaredContributions {
  * a container; a command needs a title).
  */
 export interface ManifestMismatch {
-  readonly kind: 'command' | 'setting' | 'view';
+  readonly kind: 'command' | 'setting' | 'view' | 'keybinding';
   readonly direction: 'missing-in-manifest' | 'missing-in-src' | 'drift';
   readonly id: string;
   readonly summary: string;
@@ -65,6 +84,7 @@ interface Manifest {
       readonly properties?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
     };
     readonly views?: Readonly<Record<string, readonly { readonly id?: unknown }[]>>;
+    readonly keybindings?: readonly { readonly command?: unknown }[];
   };
 }
 
@@ -119,6 +139,12 @@ function viewIds(manifest: Manifest): readonly string[] {
   return Object.values(manifest.contributes?.views ?? {})
     .flat()
     .map((entry) => entry.id)
+    .filter((id): id is string => typeof id === 'string');
+}
+
+function boundCommandIds(manifest: Manifest): readonly string[] {
+  return (manifest.contributes?.keybindings ?? [])
+    .map((entry) => entry.command)
     .filter((id): id is string => typeof id === 'string');
 }
 
@@ -265,9 +291,34 @@ function checkViews(manifest: Manifest, declared: DeclaredContributions): Manife
   ];
 }
 
+function checkKeybindings(manifest: Manifest, declared: DeclaredContributions): ManifestMismatch[] {
+  if (declared.keybindings === undefined) {
+    return [];
+  }
+  const bindable = new Set([
+    ...(declared.commands ?? []).map((contract) => contract.descriptor.id),
+    ...(declared.keybindings.allow ?? []),
+  ]);
+  // One report per unresolved id: binding the same command from several entries
+  // is how a keybinding carries a `when`, and a typo in it is still one mistake.
+  const unresolved = new Set(boundCommandIds(manifest).filter((id) => !bindable.has(id)));
+
+  return [...unresolved].map((id): ManifestMismatch => ({
+    kind: 'keybinding',
+    direction: 'missing-in-src',
+    id,
+    // No `paste`: the fix is a contract, a corrected id or an `allow` entry,
+    // and which one is a decision the manifest cannot settle.
+    summary:
+      `keybinding "${id}" is bound in contributes.keybindings but no contract ` +
+      `declares it and keybindings.allow does not list it`,
+  }));
+}
+
 /**
  * Every disagreement between `package.json` and the declarations in `src`, as
- * data, in the order the checks run: commands, then settings, then views.
+ * data, in the order the checks run: commands, then settings, then views, then
+ * keybindings.
  *
  * The same comparison {@link assertManifestMatches} makes, without the throw —
  * for a tool that wants to print, count or apply the mechanical part of the
@@ -290,6 +341,7 @@ export function diffManifest(
     ...checkCommands(parsed, declared),
     ...checkSettings(parsed, declared),
     ...checkViews(parsed, declared),
+    ...checkKeybindings(parsed, declared),
   ];
 }
 
@@ -311,6 +363,11 @@ export function diffManifest(
  * localization files or whether VS Code accepts the complete manifest; retain a
  * packaging/Extension Host lane for those concerns.
  *
+ * Of a keybinding it reads the command id and nothing else. The key, `when` and
+ * `args` stay the manifest's, as does the order of the entries — which is what
+ * decides the winner when several share a key, so an extension that depends on
+ * that order needs its own assertion for it.
+ *
  * @example
  * ```ts
  * it('the manifest agrees with what src declares', () => {
@@ -318,6 +375,7 @@ export function diffManifest(
  *     settings: [Settings, EditorSettings],
  *     commands: Object.values(Contracts),
  *     views: Object.values(VIEWS),
+ *     keybindings: { allow: ['workbench.action.files.save'] },
  *   });
  * });
  * ```

@@ -872,6 +872,11 @@ export function checkManifest(manifest: unknown): void {
     settings: [Settings],
     commands: Object.values(Contracts),
     views: ['sample.projects'],
+    // Opting in checks that every contributed keybinding binds a command
+    // declared above. VS Code accepts one naming a command nothing registers
+    // and then does nothing when the key is pressed; `allow` is for the
+    // built-ins an extension deliberately puts a key on.
+    keybindings: { allow: ['workbench.action.files.save'] },
   });
 }
 ```
@@ -886,6 +891,14 @@ The comparison is also available as data: `diffManifest` returns every
 disagreement with the contribution point it concerns, which side is missing it
 — or `drift`, when both have it and disagree — the id, and the JSON that would
 settle it when the fix is mechanical. The assertion above is built on it.
+
+Of a keybinding it reads the command id and nothing else. That much is worth
+checking because VS Code does not: an entry naming a command nothing registers
+passes validation, is given a weight, and does nothing at all when the key is
+pressed, so renaming a command and missing the manifest leaves a shortcut that
+fails in silence. The key, `when` and `args` remain the manifest's, and so does
+the order of the entries — which is what decides the winner when several share
+a key, so an extension that leans on that order needs an assertion of its own.
 
 ## The escape hatch
 
