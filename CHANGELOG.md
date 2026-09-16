@@ -8,6 +8,8 @@ Pre-1.0 releases followed it in spirit; their breaking changes are marked **Brea
 
 ## [Unreleased]
 
+## [6.1.0] - 2026-09-16
+
 ### Added
 
 - `DeclaredContributions.keybindings` for `assertManifestMatches` and
@@ -1266,7 +1268,8 @@ platform support, toolchain currency, and release supply chain.
 
 Initial public release.
 
-[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v6.0.0...HEAD
+[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v6.1.0...HEAD
+[6.1.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v6.0.0...v6.1.0
 [6.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v5.0.0...v6.0.0
 [5.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v4.1.1...v5.0.0
 [4.1.1]: https://github.com/kkdev92/vscode-ext-kit/compare/v4.1.0...v4.1.1

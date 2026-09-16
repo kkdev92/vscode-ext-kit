@@ -1,6 +1,6 @@
 {
   "name": "@kkdev92/vscode-ext-kit",
-  "version": "6.0.0",
+  "version": "6.1.0",
   "description": "A type-safe application framework for VS Code extension development",
   "author": {
     "name": "kkdev92",
