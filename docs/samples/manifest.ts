@@ -27,5 +27,10 @@ export function checkManifest(manifest: unknown): void {
     settings: [Settings],
     commands: Object.values(Contracts),
     views: ['sample.projects'],
+    // Opting in checks that every contributed keybinding binds a command
+    // declared above. VS Code accepts one naming a command nothing registers
+    // and then does nothing when the key is pressed; `allow` is for the
+    // built-ins an extension deliberately puts a key on.
+    keybindings: { allow: ['workbench.action.files.save'] },
   });
 }
