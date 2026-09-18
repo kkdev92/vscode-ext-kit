@@ -2,18 +2,20 @@
 
 ## Supported versions
 
-| Version         | Supported | Notes                                           |
-| --------------- | --------- | ----------------------------------------------- |
-| `4.1.x`         | ✅        | `latest` on npm                                 |
-| `4.0.x`         | ✅        | same API; `4.1.x` only adds to it               |
-| `3.0.x`         | ✅        | same API as 4.0.x, VS Code floor `^1.125.0`     |
-| `2.1.x`         | ✅        | maintained on `v2-maintenance`; `^2.x` resolves here |
-| `2.0.x`         | ❌        | upgrade to `2.1.x`                              |
-| `0.x`, `1.x`    | ❌        | unsupported                                     |
+| Version              | Supported | Notes                                                |
+| -------------------- | --------- | ---------------------------------------------------- |
+| The current major    | ✅        | whatever `latest` resolves to on npm                 |
+| Earlier majors       | ❌        | fixes land on the current major                      |
+| `2.1.x`              | ✅        | maintained on `v2-maintenance`; `^2.x` resolves here |
+| `2.0.x`, `1.x`, `0.x` | ❌        | upgrade to `2.1.x` or to the current major           |
 
-The 2.x and 3.x/4.x lines are different codebases. A fix for one is not automatically
-a fix for the other; a report should say which line it applies to, and "both" is a
-valid answer.
+Deliberately not a list of version numbers: one written here is correct on the day it
+is written and wrong on the day the next release goes out, and nothing fails in between.
+The npm badge in the readme renders the current version and cannot go stale.
+
+The 2.x line and the current line are different codebases. A fix for one is not
+automatically a fix for the other; a report should say which line it applies to, and
+"both" is a valid answer.
 
 ## Reporting a vulnerability
 

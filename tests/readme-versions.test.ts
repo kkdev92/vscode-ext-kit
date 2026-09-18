@@ -15,7 +15,12 @@ import { describe, expect, it } from 'vitest';
  * belongs to the npm badge, which is generated: the pages below should not say
  * it at all, and the last case asserts they do not.
  */
-const PAGES = ['README.md', join('docs', 'guide.md'), join('docs', 'migration-from-2x.md')];
+const PAGES = [
+  'README.md',
+  'SECURITY.md',
+  join('docs', 'guide.md'),
+  join('docs', 'migration-from-2x.md'),
+];
 
 const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as {
   engines: { vscode: string; node: string };
