@@ -30,7 +30,7 @@ framework hands it, rather than on what it hands back, it belongs here.
 
 ```bash
 npm run test:eh                    # from the repository root
-VSCODE_VERSION=1.137.0 npm run test:eh
+VSCODE_VERSION=1.138.0 npm run test:eh
 ```
 
 Launches a real VS Code (Electron), activates the fixture, invokes a command,

@@ -8,6 +8,25 @@ Pre-1.0 releases followed it in spirit; their breaking changes are marked **Brea
 
 ## [Unreleased]
 
+## [7.0.0] - 2026-09-18
+
+**A major for one reason: the VS Code floor.** `engines.vscode` moves from
+`^1.137.0` to `^1.138.0`, which every extension built on this package inherits —
+that is the whole of the breaking change. The API is byte-for-byte what `6.1.0`
+exposed: no export was added, removed or altered, and no behaviour changed.
+
+### Changed
+
+- **Breaking:** `engines.vscode` raised from `^1.137.0` to `^1.138.0`, in step
+  with `@types/vscode` moving to `~1.138.0`. The two have to move together —
+  `vsce` refuses to package an extension whose `@types/vscode` outruns its
+  `engines.vscode`, and raising only the types would let code compile against an
+  API the declared floor does not have. Extensions built on this package inherit
+  the floor and must declare at least `^1.138.0` themselves.
+
+  The contract lanes were run against the real hosts at this floor: the
+  Extension Host and web fixtures both report VS Code `1.138.0`.
+
 ## [6.1.0] - 2026-09-16
 
 ### Added
@@ -1268,7 +1287,8 @@ platform support, toolchain currency, and release supply chain.
 
 Initial public release.
 
-[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v6.1.0...HEAD
+[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v7.0.0...HEAD
+[7.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v6.1.0...v7.0.0
 [6.1.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v6.0.0...v6.1.0
 [6.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v5.0.0...v6.0.0
 [5.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v4.1.1...v5.0.0
