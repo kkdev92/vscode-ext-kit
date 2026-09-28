@@ -12,6 +12,10 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # The same approval gate the current line's release goes through. A 2.x
+    # patch is published by hand, rarely, and nothing else stands between the
+    # tag and the registry.
+    environment: npm-publish
 
     steps:
       - name: Checkout repository
@@ -45,10 +49,16 @@ jobs:
       # Auth comes from npm trusted publishing (OIDC) via id-token: write —
       # there is no NODE_AUTH_TOKEN. The registry-url above is still required
       # so npm targets registry.npmjs.org when exchanging the OIDC token.
+      #
+      # Published under its own dist-tag. Without --tag, npm moves `latest` to
+      # whatever was published last, so a 2.x patch would become what
+      # `npm install vscode-ext-kit` installs. The tag must not read as a semver
+      # range, so it does not start with a digit or `v`.
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --tag maintenance-2x
 
+      # Not marked "Latest": the current line's release keeps that label.
       - name: Create GitHub Release
-        run: gh release create "$GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" --generate-notes --latest=false
         env:
           GH_TOKEN: ${{ github.token }}
