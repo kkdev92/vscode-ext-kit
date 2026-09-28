@@ -5,11 +5,12 @@ not obvious from the code.
 
 ## Two branches, two codebases
 
-- **v3** (`main`, `feat/v3-foundation`) — the extension _application framework_.
+- **v3** (`main`) — the extension _application framework_: 3.0.0 and every major since.
   This is what you are looking at.
-- **v2** (`v2-maintenance`) — the shipped `2.x` utility library. Still `latest`
-  on npm and still takes bug fixes. It is not present on the v3 line; recover a
-  file with `git checkout v2-maintenance -- <path>`.
+- **v2** (`v2-maintenance`) — the `2.x` utility library. It still takes bug
+  fixes, published under the `maintenance-2x` dist-tag; npm's `latest` has been
+  the v3 line since 3.0.0. It is not present on the v3 line; recover a file with
+  `git checkout v2-maintenance -- <path>`.
 
 A change belongs on one line or the other. A v2 bug fix does not port to v3 by
 copying the file: v3's shape is different.
@@ -36,7 +37,7 @@ repo.
 
 ```bash
 npm run build           # tsc -b tsconfig.build.json (framework + mock kit)
-npm run typecheck       # build, then src+tests, then the README samples
+npm run typecheck       # build, then src+tests, the README samples and both fixtures
 npm test                # vitest run
 npm run test:coverage   # the same suite, with the coverage gate
 npm run lint            # type-aware ESLint over src + tests, --max-warnings 0
@@ -44,7 +45,7 @@ npm run format          # prettier
 npm run knip            # dead code
 npm run docs:api        # TypeDoc into docs/api; warnings are errors
 npm run verify:package  # pack, install into a throwaway consumer, import every subpath
-npm run quality         # typecheck + lint + test:coverage + knip + docs:api — the gate CI runs
+npm run quality         # format:check + typecheck + lint + test:coverage + knip + docs:api — the gate CI runs
 ```
 
 `tsc -b --noEmit` does not work (TS6310: project references need `composite`, and

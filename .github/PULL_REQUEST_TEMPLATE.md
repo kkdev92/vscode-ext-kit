@@ -23,9 +23,8 @@ Fixes #(issue number)
 - [ ] I have read the [CONTRIBUTING](../CONTRIBUTING.md) guidelines
 - [ ] My code follows the project's coding standards
 - [ ] I have added tests that prove my fix/feature works
-- [ ] All new and existing tests pass (`npm run test`)
-- [ ] Linting passes (`npm run lint`)
-- [ ] Type checking passes (`npm run typecheck`)
+- [ ] `npm run quality` passes (format, type check, lint, tests with the coverage gate, knip, API docs)
+- [ ] `npm run verify:package` passes, if the change can affect the packed package
 - [ ] I have updated documentation if needed
 
 ## Screenshots (if applicable)

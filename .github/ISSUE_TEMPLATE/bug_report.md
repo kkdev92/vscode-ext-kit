@@ -8,9 +8,9 @@ assignees: ''
 
 ## Environment
 
-- **Package Version**: (e.g., 0.2.0)
+- **Package Version**: (from `npm ls @kkdev92/vscode-ext-kit`)
 - **VS Code Version**: (e.g., 1.138.0)
-- **Node.js Version**: (e.g., 20.0.0)
+- **Node.js Version**: (from `node --version`)
 - **OS**: (e.g., Windows 11, macOS 14, Ubuntu 24.04)
 
 ## Description
