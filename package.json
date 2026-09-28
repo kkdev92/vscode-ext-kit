@@ -23,7 +23,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "vscode-ext-kit": "./bin/vscode-ext-kit.mjs"
+    "vscode-ext-kit": "bin/vscode-ext-kit.mjs"
   },
   "sideEffects": false,
   "exports": {
