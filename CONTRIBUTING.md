@@ -17,7 +17,7 @@ copying the file: v3's shape is different.
 
 ## Setup
 
-Node `>=22.12.0` (24 LTS is what CI publishes with), npm 10+, git.
+Node `>=22.12.0` (CI publishes with 26), npm 10+, git.
 
 ```bash
 git clone https://github.com/kkdev92/vscode-ext-kit.git
