@@ -183,9 +183,9 @@
       "lint-staged"
     ]
   },
-  "//allowScripts": "The host contract lanes need these two install scripts: esbuild fetches its platform binary, and @playwright/browser-chromium downloads the browser @vscode/test-web drives. Both are the package's own postinstall fetching its own artifact.",
+  "//allowScripts": "One install script runs: @playwright/browser-chromium downloads the browser @vscode/test-web drives, and its approval is pinned to the version the lockfile installs. esbuild's is denied: its platform binary arrives as an optional dependency, and the script only fetches one when that dependency is missing. tests/allow-scripts.test.ts fails when the lockfile moves past a pin or brings in an install script that is neither approved nor denied.",
   "allowScripts": {
-    "esbuild@0.28.2": true,
+    "esbuild": false,
     "@playwright/browser-chromium@1.63.0": true
   }
 }
