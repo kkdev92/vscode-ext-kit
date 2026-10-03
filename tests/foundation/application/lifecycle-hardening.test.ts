@@ -20,6 +20,7 @@ import { defineCommandContract } from '../../../src/foundation/commands/contract
 import { createApplicationHost } from '../../../src/foundation/hosting/application-host.js';
 import type { HostDiagnostic } from '../../../src/foundation/hosting/application-host.js';
 import { defineModule } from '../../../src/foundation/modules/definition.js';
+import { OperationCancelledError } from '../../../src/foundation/operations/cancellation.js';
 import { serviceToken } from '../../../src/foundation/services/token.js';
 import { createFakeCommands } from '../../../src/testing/fakes/fake-commands.js';
 import { createFakeEnvironment } from '../../../src/testing/fakes/fake-environment.js';
@@ -147,6 +148,158 @@ describe('activation failure with hosted services', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+/**
+ * Activation that does not complete for any reason other than a failing start.
+ *
+ * A failing `start` was already unwound in place. These are the two other ways
+ * activation can end after hosted services have started — a stop requested
+ * while they are starting, and an `exports` factory that throws — and each
+ * must leave nothing running: every service that started is stopped in
+ * reverse, and its background loop is told to end.
+ */
+describe('activation that ends after hosted services started', () => {
+  function recordingModule(timeline: string[], gate: Promise<void>) {
+    return defineModule('a', (builder): undefined => {
+      builder.hostedServices.add({
+        id: 'first',
+        start: (context) => {
+          timeline.push('first.start');
+          context.signal.addEventListener('abort', () => timeline.push('first.abort'));
+        },
+        stop: () => {
+          timeline.push('first.stop');
+        },
+      });
+      builder.hostedServices.add({
+        id: 'second',
+        start: async () => {
+          timeline.push('second.start');
+          await gate;
+          timeline.push('second.started');
+        },
+        stop: () => {
+          timeline.push('second.stop');
+        },
+      });
+      builder.hostedServices.add({
+        id: 'third',
+        start: (context) => {
+          timeline.push(`third.start (signal aborted: ${String(context.signal.aborted)})`);
+        },
+        stop: () => {
+          timeline.push('third.stop');
+        },
+      });
+      return undefined;
+    });
+  }
+
+  it('starts nothing more and stops what started when a stop arrives mid-start', async () => {
+    const timeline: string[] = [];
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const app = createApplication({
+      plan: compileApplication({ name: 'sample', modules: [recordingModule(timeline, gate)] }),
+      capabilities: { commands: createFakeCommands(), environment: createFakeEnvironment({}) },
+    });
+
+    const activating = app.activate({ subscriptions: [] });
+    const rejected = expect(activating).rejects.toBeInstanceOf(OperationCancelledError);
+    await vi.waitFor(() => {
+      expect(timeline).toContain('second.start');
+    });
+    const deactivating = app.deactivate();
+    timeline.push('deactivate');
+    release?.();
+    await rejected;
+    await deactivating;
+
+    // `third` never starts: it would get a signal that had already aborted, so
+    // anything it subscribed through that signal would never be released.
+    expect(timeline).toEqual([
+      'first.start',
+      'second.start',
+      'first.abort',
+      'deactivate',
+      'second.started',
+      'second.stop',
+      'first.stop',
+    ]);
+    expect(app.host.state).toBe('stopped');
+  });
+
+  it('aborts the signal of a start that throws, which gets no stop of its own', async () => {
+    const timeline: string[] = [];
+    const module = defineModule('a', (builder): undefined => {
+      builder.hostedServices.add({
+        id: 'service',
+        start: (context) => {
+          context.signal.addEventListener('abort', () => timeline.push('released'));
+          throw new Error('failed after subscribing');
+        },
+        stop: () => {
+          timeline.push('stop');
+        },
+      });
+      return undefined;
+    });
+    const app = createApplication({
+      plan: compileApplication({ name: 'sample', modules: [module] }),
+      capabilities: { commands: createFakeCommands(), environment: createFakeEnvironment({}) },
+    });
+
+    await expect(app.activate({ subscriptions: [] })).rejects.toThrow('failed after subscribing');
+
+    expect(timeline).toEqual(['released']);
+  });
+
+  it('stops what started, and ends its background loop, when exports cannot be built', async () => {
+    const timeline: string[] = [];
+    let loopEnded = false;
+    const module = defineModule('a', (builder): undefined => {
+      builder.hostedServices.add({
+        id: 'service',
+        start: () => {
+          timeline.push('service.start');
+        },
+        stop: () => {
+          timeline.push('service.stop');
+        },
+      });
+      builder.hostedServices.background({
+        id: 'loop',
+        run: async (context) => {
+          await new Promise<void>((resolve) => {
+            context.signal.addEventListener('abort', () => {
+              resolve();
+            });
+          });
+          loopEnded = true;
+        },
+      });
+      return undefined;
+    });
+    const app = createApplication({
+      plan: compileApplication({ name: 'sample', modules: [module] }),
+      capabilities: { commands: createFakeCommands(), environment: createFakeEnvironment({}) },
+      exports: {
+        inject: {},
+        create: () => {
+          throw new Error('exports failed');
+        },
+      },
+    });
+
+    await expect(app.activate({ subscriptions: [] })).rejects.toThrow('exports failed');
+
+    expect(timeline).toEqual(['service.start', 'service.stop']);
+    expect(loopEnded).toBe(true);
+    expect(app.host.state).toBe('failed');
   });
 });
 

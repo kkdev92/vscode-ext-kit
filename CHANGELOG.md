@@ -52,6 +52,19 @@ case.
   threshold that throws, or that is not one of the six levels, lets every entry
   through rather than hiding the log or failing the work that logged.
 
+### Fixed
+
+- **Hosted services that had started are stopped when activation ends early.**
+  A stop requested while hosted services were starting — `deactivate` during a
+  slow activation — left the ones already started running: their `stop` never
+  ran, and the services after them started anyway, on a signal that had
+  already aborted, so nothing they tied to it was ever released. An `exports`
+  factory that threw did the same to every hosted service and left their
+  background loops waiting on a signal that could no longer abort. Both now end
+  activation the way a failing `start` always did: no further service starts,
+  the started ones stop in reverse order, and their background loops are told
+  to end.
+
 ## [7.0.1] - 2026-10-03
 
 **A patch for the command-line tool.** `vscode-ext-kit plan` and
