@@ -36,16 +36,17 @@ repo.
 ## Commands
 
 ```bash
-npm run build           # tsc -b tsconfig.build.json (framework + mock kit)
-npm run typecheck       # build, then src+tests, the README samples and both fixtures
-npm test                # vitest run
-npm run test:coverage   # the same suite, with the coverage gate
-npm run lint            # type-aware ESLint over src + tests, --max-warnings 0
-npm run format          # prettier
-npm run knip            # dead code
-npm run docs:api        # TypeDoc into docs/api; warnings are errors
-npm run verify:package  # pack, install into a throwaway consumer, import every subpath
-npm run quality         # format:check + typecheck + lint + test:coverage + knip + docs:api — the gate CI runs
+npm run build             # tsc -b tsconfig.build.json (framework + mock kit)
+npm run typecheck         # build, then src+tests, the README samples and both fixtures
+npm test                  # vitest run
+npm run test:coverage     # the same suite, with the coverage gate
+npm run lint              # type-aware ESLint over src + tests, --max-warnings 0
+npm run format            # prettier
+npm run knip              # dead code
+npm run docs:api          # TypeDoc into docs/api; warnings are errors
+npm run verify:package    # pack, install into a throwaway consumer, import every subpath
+npm run check:vscode-api  # has the stable VS Code API moved past engines.vscode? (network)
+npm run quality           # format:check + typecheck + lint + test:coverage + knip + docs:api — the gate CI runs
 ```
 
 `tsc -b --noEmit` does not work (TS6310: project references need `composite`, and

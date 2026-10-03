@@ -398,19 +398,23 @@ Host, the manifest check and an Extension Host lane.
 
 |                  |                                                                                                                                       |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| VS Code          | `^1.138.0` — your extension declares the same `engines.vscode`; CI tests stable                                                       |
+| VS Code          | `^1.138.0` — your extension's `engines.vscode` must be at least this; CI tests stable                                                 |
 | Extension hosts  | desktop and web, both covered by CI                                                                                                   |
 | Node (to build)  | `>=22.12.0`                                                                                                                           |
 | Module format    | **ESM only** — `require()` of any subpath fails by design; bundle as extensions normally do                                           |
 | TypeScript `lib` | `ESNext.Disposable` (the public types name `Symbol.dispose`) and one of `DOM` / `WebWorker` / `@types/node` (they name `AbortSignal`) |
 | TypeScript       | 6.0.x is what this repo builds with; 7.x compiles the package in a non-blocking CI lane                                               |
 
-The floor tracks `@types/vscode`, which is the newest API this package can name
-at all, so the two move together as new types are published: `vsce`
-refuses to package an extension whose `@types/vscode` outruns its
-`engines.vscode`, and raising only the types would let code compile against an
-API the declared floor does not have. VS Code updates itself and CI tests stable,
-so treat the floor as a formality rather than a tested target.
+The floor and `@types/vscode` always name the same version: `vsce` refuses to
+package an extension whose `@types/vscode` outruns its `engines.vscode`, and
+raising only the types would let code compile against an API the declared floor
+does not have. The floor rises when this package starts using an API that older
+versions lack — not whenever new types are published, which often happens with
+the stable API unchanged. Such a raise ships in a minor release whose changelog
+entry opens with it; when you take it, raise your extension's `engines.vscode`
+and `@types/vscode` to at least the new floor. VS Code updates itself, and CI
+runs both extension hosts against the current stable on every change and once a
+week, so treat the floor as a declaration rather than a tested target.
 `scripts/verify-package.mjs` checks the `lib` requirements against the packed
 `.d.ts` files on every CI run, so that row is verified rather than remembered.
 

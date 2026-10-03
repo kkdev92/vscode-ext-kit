@@ -16,6 +16,12 @@ updates:
       - dependency-name: typescript
         update-types:
           - version-update:semver-major
+      # @types/vscode moves by hand, in the same change as engines.vscode: the
+      # types are the newest API the source may name, so they stay on the
+      # declared floor (tests/readme-versions.test.ts fails otherwise). The
+      # floor rises when this package starts using an API older versions lack,
+      # not whenever new types are published (README, Platform Requirements).
+      - dependency-name: "@types/vscode"
 
   - package-ecosystem: github-actions
     directory: /
