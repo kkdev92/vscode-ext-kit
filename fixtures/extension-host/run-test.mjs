@@ -5,7 +5,7 @@
 // context.subscriptions disposed) came from reading VS Code's source. This checks
 // it against the shipped product, on whichever version is under test.
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import process from 'node:process';
@@ -20,6 +20,8 @@ const scratch = mkdtempSync(join(tmpdir(), 'ext-kit-eh-'));
 const markerFile = join(scratch, 'markers.log');
 const workspace = join(scratch, 'workspace');
 writeFileSync(markerFile, '', 'utf8');
+// Created: VS Code opens no folder at all for a path that does not exist.
+mkdirSync(workspace);
 
 const version = process.env['VSCODE_VERSION'] ?? 'stable';
 
