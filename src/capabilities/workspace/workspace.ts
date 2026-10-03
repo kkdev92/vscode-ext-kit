@@ -18,6 +18,10 @@ import type { ServiceToken } from '../../foundation/services/token.js';
  * text the Explorer shows. Asking VS Code rather than comparing paths here is
  * what keeps a multi-root or remote workspace from being a special case.
  *
+ * Its shape is the workspace capability's, so `createFakeWorkspace` from
+ * `/testing` stands in for it in a unit test of a feature that takes the
+ * service, with no test host around it.
+ *
  * @example
  * ```ts
  * module.commands.handle(Export, {
@@ -35,8 +39,8 @@ import type { ServiceToken } from '../../foundation/services/token.js';
  * ```
  */
 export interface WorkspaceService {
-  /** The open folders, in the order VS Code lists them, read when asked. */
-  readonly folders: readonly WorkspaceFolderLike[];
+  /** The open folders, in the order VS Code lists them, read when called. */
+  folders(): readonly WorkspaceFolderLike[];
   /** The folder `uri` is in, the innermost when folders nest, or undefined. */
   folderOf(uri: ResourceUri): WorkspaceFolderLike | undefined;
   /**
@@ -46,17 +50,11 @@ export interface WorkspaceService {
    * itself is looked up from the directory it sits in, so it is named relative
    * to a folder around that directory, or comes back as its file system path
    * when there is none.
+   *
+   * @param includeFolderName - Start with the folder's name. When omitted, it
+   *   does exactly when more than one folder is open, as the Explorer does.
    */
-  relativePath(
-    uri: WatchedUri,
-    options?: {
-      /**
-       * Start with the folder's name. When omitted, it does exactly when more
-       * than one folder is open, as the Explorer does.
-       */
-      readonly includeFolderName?: boolean;
-    }
-  ): string;
+  relativePath(uri: WatchedUri, includeFolderName?: boolean): string;
   /**
    * Calls `listener` after folders are added, removed or changed.
    *
@@ -80,7 +78,7 @@ export const Workspace: ServiceToken<WorkspaceService> =
  * @example
  * ```ts
  * const workspace = createWorkspaceService(capability);
- * const names = workspace.folders.map((folder) => folder.name);
+ * const names = workspace.folders().map((folder) => folder.name);
  * ```
  */
 export function createWorkspaceService(
@@ -90,13 +88,11 @@ export function createWorkspaceService(
   let disposed = false;
 
   return {
-    get folders(): readonly WorkspaceFolderLike[] {
-      return capability.folders();
-    },
+    folders: () => capability.folders(),
 
     folderOf: (uri) => capability.folderOf(uri),
 
-    relativePath: (uri, options) => capability.relativePath(uri, options?.includeFolderName),
+    relativePath: (uri, includeFolderName) => capability.relativePath(uri, includeFolderName),
 
     onDidChangeFolders(listener: () => void): PlatformRegistration {
       if (disposed) {

@@ -14,6 +14,7 @@ import { defineModule } from '../../../src/foundation/modules/definition.js';
 import {
   Workspace,
   createWorkspaceService,
+  type WorkspaceService,
 } from '../../../src/capabilities/workspace/workspace.js';
 import { createFakeCommands } from '../../../src/testing/fakes/fake-commands.js';
 import { createFakeEnvironment } from '../../../src/testing/fakes/fake-environment.js';
@@ -116,14 +117,24 @@ describe('createFakeWorkspace', () => {
 });
 
 describe('createWorkspaceService', () => {
+  it('has the same shape as the fake, so a feature that takes it is tested with the fake alone', () => {
+    // A feature written against the service, as one that takes a bundle is.
+    // Passing the fake here is the compile-time half of the check.
+    const where = (workspace: WorkspaceService, path: string): string =>
+      `${workspace.folderOf(fakeUri(path))?.name ?? 'none'}:${workspace.relativePath(fakeUri(path), false)}`;
+
+    expect(where(createFakeWorkspace(['/repo']), '/repo/src/a.ts')).toBe('repo:src/a.ts');
+    expect(where(createFakeWorkspace([]), '/repo/src/a.ts')).toBe('none:/repo/src/a.ts');
+  });
+
   it('reads the folders when asked, not when built', () => {
     const capability = createFakeWorkspace(['/a']);
     const workspace = createWorkspaceService(capability);
 
     capability._setFolders(['/b', '/c']);
 
-    expect(workspace.folders.map((folder) => folder.name)).toEqual(['b', 'c']);
-    expect(workspace.relativePath(fakeUri('/c/x.ts'), { includeFolderName: false })).toBe('x.ts');
+    expect(workspace.folders().map((folder) => folder.name)).toEqual(['b', 'c']);
+    expect(workspace.relativePath(fakeUri('/c/x.ts'), false)).toBe('x.ts');
     expect(workspace.folderOf(fakeUri('/b/y.ts'))?.index).toBe(0);
   });
 

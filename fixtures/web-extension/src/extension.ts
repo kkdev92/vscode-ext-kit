@@ -66,15 +66,16 @@ const fixtureModule = defineModule('fixture', (module): undefined => {
   module.commands.handle(WorkspaceReport, {
     inject: { workspace: Workspace },
     execute: (_context, [uri], { workspace }) => {
-      const first = workspace.folders[0];
+      const folders = workspace.folders();
+      const first = folders[0];
       return JSON.stringify({
-        folders: workspace.folders.map(
+        folders: folders.map(
           (folder) => `${String(folder.index)}:${folder.name}:${folder.uri.toString()}`
         ),
         folderOf: workspace.folderOf(uri)?.name ?? null,
         relativePath: workspace.relativePath(uri),
-        withName: workspace.relativePath(uri, { includeFolderName: true }),
-        withoutName: workspace.relativePath(uri, { includeFolderName: false }),
+        withName: workspace.relativePath(uri, true),
+        withoutName: workspace.relativePath(uri, false),
         folderItself: first === undefined ? null : workspace.relativePath(first.uri),
       });
     },
