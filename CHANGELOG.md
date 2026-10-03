@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 From 1.0.0 onward this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0 releases followed it in spirit; their breaking changes are marked **Breaking**.
 
+A major release is one that code written against the previous release can break
+on: an export removed or renamed, a signature narrowed, or a behaviour changed
+that callers may rely on. After 7.0.0, raising the VS Code floor
+(`engines.vscode`) is not treated as one: it ships in a minor release whose entry
+opens with it, and the README's Platform Requirements says what an extension has
+to do then. A union this package returns can also gain a member in a minor
+release; the entry says so, because an exhaustive `switch` over it needs the new
+case.
+
 ## [Unreleased]
 
 ## [7.0.0] - 2026-09-18
