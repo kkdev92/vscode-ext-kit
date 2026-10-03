@@ -53,6 +53,30 @@ export async function run(): Promise<void> {
 
   mark(`view:report:${await vscode.commands.executeCommand<string>('extKitFixture.viewReport')}`);
 
+  // The Workspace service forwards to VS Code, so in a real host its answers
+  // have to be VS Code's own: the folder list, which folder a resource is in,
+  // and the relative path with and without the folder's name.
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  const firstFolder = folders[0];
+  assert.ok(firstFolder, 'the lane opens a workspace folder');
+  const inside = vscode.Uri.joinPath(firstFolder.uri, 'sub', 'file.txt');
+  const answered: unknown = JSON.parse(
+    (await vscode.commands.executeCommand<string>('extKitFixture.workspaceReport', inside)) ?? '{}'
+  );
+  assert.deepEqual(answered, {
+    folders: folders.map(
+      (folder) => `${String(folder.index)}:${folder.name}:${folder.uri.toString()}`
+    ),
+    folderOf: vscode.workspace.getWorkspaceFolder(inside)?.name ?? null,
+    relativePath: vscode.workspace.asRelativePath(inside),
+    withName: vscode.workspace.asRelativePath(inside, true),
+    withoutName: vscode.workspace.asRelativePath(inside, false),
+    folderItself: vscode.workspace.asRelativePath(firstFolder.uri),
+  });
+  // Equal to VS Code is the contract; this is what that means in this lane.
+  assert.equal((answered as { withoutName: string }).withoutName, 'sub/file.txt');
+  mark(`workspace:report:${JSON.stringify(answered)}`);
+
   // Answers S-1/S-2: what the runtime actually offers in this host.
   const globals = globalThis as {
     DisposableStack?: unknown;

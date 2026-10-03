@@ -1,7 +1,12 @@
 import type * as vscode from 'vscode';
 
-import { defineCommandContract, defineExtension, defineModule } from '../../../dist/index.js';
-import type { ManagedWebview } from '../../../dist/index.js';
+import {
+  Workspace,
+  defineCommandContract,
+  defineExtension,
+  defineModule,
+} from '../../../dist/index.js';
+import type { ManagedWebview, WatchedUri } from '../../../dist/index.js';
 import { mark } from './markers.js';
 
 const Probe = defineCommandContract<readonly [], string>({
@@ -12,6 +17,11 @@ const Probe = defineCommandContract<readonly [], string>({
 const ViewReport = defineCommandContract<readonly [], string>({
   id: 'extKitFixture.viewReport',
   title: 'View Report',
+});
+
+const WorkspaceReport = defineCommandContract<readonly [WatchedUri], string>({
+  id: 'extKitFixture.workspaceReport',
+  title: 'Workspace Report',
 });
 
 /** One entry per incarnation of the webview view, oldest first. */
@@ -111,6 +121,25 @@ const fixtureModule = defineModule('fixture', (module): undefined => {
       (error: unknown) => (error instanceof Error ? error.message : String(error))
     );
     return `${String(channels.length)}:${/disposed/iu.test(outcome) ? 'closed' : 'open'}`;
+  });
+
+  // What the Workspace service answers about a resource, for the driver to
+  // set beside what VS Code answers itself.
+  module.commands.handle(WorkspaceReport, {
+    inject: { workspace: Workspace },
+    execute: (_context, [uri], { workspace }) => {
+      const first = workspace.folders[0];
+      return JSON.stringify({
+        folders: workspace.folders.map(
+          (folder) => `${String(folder.index)}:${folder.name}:${folder.uri.toString()}`
+        ),
+        folderOf: workspace.folderOf(uri)?.name ?? null,
+        relativePath: workspace.relativePath(uri),
+        withName: workspace.relativePath(uri, { includeFolderName: true }),
+        withoutName: workspace.relativePath(uri, { includeFolderName: false }),
+        folderItself: first === undefined ? null : workspace.relativePath(first.uri),
+      });
+    },
   });
 
   return undefined;

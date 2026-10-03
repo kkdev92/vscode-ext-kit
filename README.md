@@ -248,6 +248,7 @@ Every ability is reached through a declaration or an injected token.
 | `Secrets`                   | secrets the _user_ names: `get` `set` `delete` `keys`                     |
 | `StatusBar`                 | `flash` — a short-lived message with no item of its own                   |
 | `FileWatchers`              | `watch`, for a glob known only at runtime                                 |
+| `Workspace`                 | the open folders, the one a resource is in, its path as Explorer shows it |
 | `Operations`                | `run`, for work that did not start in a handler                           |
 | `Log`                       | a logger for a service, which has no operation to borrow one from         |
 | a definition's own `.token` | the settings accessor, typed storage, secret or UI controller it declared |

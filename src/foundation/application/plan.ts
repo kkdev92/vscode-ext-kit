@@ -42,6 +42,7 @@ import { Notifications } from '../../capabilities/ui/notifications.js';
 import { QuickInput } from '../../capabilities/ui/quick-input-service.js';
 import { Commands } from '../../capabilities/commands/commands.js';
 import { FileWatchers } from '../../capabilities/workspace/watch-service.js';
+import { Workspace } from '../../capabilities/workspace/workspace.js';
 import { Operations } from '../operations/service.js';
 import { Log } from '../logging/token.js';
 import type { TreeViewDefinition } from '../../capabilities/views/definition.js';
@@ -140,6 +141,7 @@ export const FRAMEWORK_SERVICES: readonly ServiceToken<unknown>[] = Object.freez
   StatusBar,
   Commands,
   FileWatchers,
+  Workspace,
   Operations,
   Log,
 ]);

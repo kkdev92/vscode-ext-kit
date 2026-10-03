@@ -167,6 +167,16 @@ try {
     'confirmed: the tree change-event subscription was released with the view\n'
   );
 
+  // The in-host test compares the Workspace service's answers with VS Code's
+  // and throws on a difference; the marker is how this side knows it ran.
+  const workspaceReport = markers.find((entry) => entry.startsWith('workspace:report:'));
+  if (workspaceReport === undefined) {
+    fail('the Workspace service was never compared with VS Code', markers);
+  }
+  process.stdout.write(
+    `confirmed: the Workspace service answered as VS Code did ${workspaceReport.slice('workspace:report:'.length)}\n`
+  );
+
   process.stdout.write(`extension host contract OK (VS Code ${version})\n`);
 } finally {
   rmSync(scratch, { recursive: true, force: true });

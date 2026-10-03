@@ -365,6 +365,44 @@ export interface FileWatcherCapability {
   ): FileWatcherHandle;
 }
 
+/** One open workspace folder. A real `vscode.WorkspaceFolder` satisfies it. */
+export interface WorkspaceFolderLike {
+  readonly uri: WatchedUri;
+  /** The name VS Code shows for the folder. */
+  readonly name: string;
+  /** Its position among the open folders. */
+  readonly index: number;
+}
+
+/**
+ * The open workspace folders, read live.
+ *
+ * The real adapter forwards to `vscode.workspace`, so which folder a resource
+ * is in and how its relative path is written are VS Code's decisions. That is
+ * also why no contract suite compares it with the fake: the Extension Host lane
+ * checks it against VS Code itself.
+ */
+export interface WorkspaceCapability {
+  /** The open folders, in the order VS Code lists them. Empty when none is. */
+  folders(): readonly WorkspaceFolderLike[];
+  /** The folder `uri` is in, the innermost when folders nest, or undefined. */
+  folderOf(uri: ResourceUri): WorkspaceFolderLike | undefined;
+  /**
+   * `uri` relative to the folder it is in, with `/` between segments.
+   *
+   * A resource in no folder comes back as its file system path. A folder
+   * itself is looked up from the directory it sits in, so it is named relative
+   * to a folder around that directory, or comes back as its file system path
+   * when there is none.
+   *
+   * @param includeFolderName - Start with the folder's name. When omitted, it
+   *   does exactly when more than one folder is open.
+   */
+  relativePath(uri: WatchedUri, includeFolderName?: boolean): string;
+  /** Fires after folders are added, removed or changed. */
+  onDidChangeFolders(listener: () => void): PlatformRegistration;
+}
+
 /**
  * The structural subset of `vscode.Memento` the framework needs. A real
  * `globalState`/`workspaceState` satisfies it.

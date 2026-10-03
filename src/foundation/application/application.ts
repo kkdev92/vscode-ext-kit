@@ -63,6 +63,7 @@ import type {
   StatusBarCapability,
   StorageCapability,
   TreeViewCapability,
+  WorkspaceCapability,
 } from '../platform/ports.js';
 import { createServiceContainer, resolveInjected } from '../services/container.js';
 import type { ServiceContainer } from '../services/container.js';
@@ -92,6 +93,7 @@ import {
   FileWatchers,
   createFileWatcherService,
 } from '../../capabilities/workspace/watch-service.js';
+import { Workspace, createWorkspaceService } from '../../capabilities/workspace/workspace.js';
 import { PreflightSeverity, runtimePreflight } from './runtime-preflight.js';
 import type { ApplicationPlan } from './plan.js';
 
@@ -150,6 +152,8 @@ interface ApplicationCapabilities {
   readonly languageStatus?: LanguageStatusCapability | undefined;
   /** Required only when a module registers tree views. */
   readonly treeViews?: TreeViewCapability | undefined;
+  /** Required only when something injects the {@link Workspace} service. */
+  readonly workspace?: WorkspaceCapability | undefined;
 }
 
 /** Options for composing an {@link Application} from a validated plan. */
@@ -754,6 +758,25 @@ export function createApplication(options: CreateApplicationOptions): Applicatio
         moduleId: 'framework.fileWatchers',
       };
 
+      const workspaceDescriptor: ServiceDescriptor = {
+        token: Workspace,
+        lifetime: ServiceLifetime.Singleton,
+        dependencies: {},
+        create: () => {
+          const capability = options.capabilities.workspace;
+          if (capability === undefined) {
+            throw new Error(
+              'The Workspace service needs a workspace capability, ' +
+                'but none was supplied to createApplication.'
+            );
+          }
+          // Container-owned, so a folder subscription the application forgot
+          // to dispose still ends with the application.
+          return createWorkspaceService(capability);
+        },
+        moduleId: 'framework.workspace',
+      };
+
       const logDescriptor: ServiceDescriptor = {
         token: Log,
         lifetime: ServiceLifetime.Singleton,
@@ -839,6 +862,7 @@ export function createApplication(options: CreateApplicationOptions): Applicatio
           statusBarDescriptor,
           commandsDescriptor,
           fileWatchersDescriptor,
+          workspaceDescriptor,
           logDescriptor,
           operationsDescriptor,
           ...statusBarDescriptors,

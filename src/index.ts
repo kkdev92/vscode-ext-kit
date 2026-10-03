@@ -200,6 +200,9 @@ export type { FileWatcherService } from './capabilities/workspace/watch-service.
 // For a setting that names a folder inside the workspace.
 export { checkRelativePath } from './capabilities/workspace/relative-path.js';
 export type { RelativePathProblem } from './capabilities/workspace/relative-path.js';
+// The open folders, and where a resource sits among them.
+export { Workspace } from './capabilities/workspace/workspace.js';
+export type { WorkspaceService } from './capabilities/workspace/workspace.js';
 
 // --- UI services resolved through declared dependency tokens ---------------
 export { Notifications } from './capabilities/ui/notifications.js';
@@ -408,6 +411,7 @@ export type {
   TreeDataSource,
   TreeDragAndDrop,
   TreeItemLike,
+  WorkspaceFolderLike,
 } from './foundation/platform/ports.js';
 export type { DisposableLike } from './capabilities/core/disposable.js';
 // What `defineStatusBarItem` and `defineLanguageStatusItem` return.
