@@ -829,10 +829,12 @@ The same document is available without writing code: `npx vscode-ext-kit plan
 ./out/extension.js` prints it, `--format mermaid` or `--format dot` draws the
 modules, services and edges, and `--check` turns a preflight failure into an
 exit code and a list of problems — the shape a CI step wants.
-`npx vscode-ext-kit manifest ./out/extension.js` compares the same plan with
-`package.json` — the comparison `assertManifestMatches` makes, from the command
-line — and `--apply` adds the commands and settings the manifest is missing,
-with placeholders where a person has to write the words.
+`npx vscode-ext-kit manifest ./out/extension.js` compares the commands, settings
+and views of the same plan with `package.json` — the comparison
+`assertManifestMatches` makes, from the command line — and `--apply` adds the
+commands and settings the manifest is missing, with placeholders where a person
+has to write the words. The checks a test opts in to, such as keybindings, stay
+in the test.
 
 ## Keeping package.json honest
 
@@ -877,6 +879,10 @@ export function checkManifest(manifest: unknown): void {
     // and then does nothing when the key is pressed; `allow` is for the
     // built-ins an extension deliberately puts a key on.
     keybindings: { allow: ['workbench.action.files.save'] },
+    // Opting in checks that `engines.vscode` admits no VS Code older than this
+    // package runs on. Nothing else compares the two, so without it a range
+    // left behind after the package raises its floor goes unnoticed.
+    engines: true,
   });
 }
 ```
@@ -899,6 +905,15 @@ pressed, so renaming a command and missing the manifest leaves a shortcut that
 fails in silence. The key, `when` and `args` remain the manifest's, and so does
 the order of the entries — which is what decides the winner when several share
 a key, so an extension that leans on that order needs an assertion of its own.
+
+`engines: true` adds the one check whose authority is this package rather than
+`src`: that `engines.vscode` admits no VS Code older than this package runs on.
+npm reads only the `node` and `npm` engines of a dependency, and `vsce` compares
+`engines.vscode` with the extension's own `@types/vscode`, so nothing else
+notices an extension that kept its range when this package raised its floor —
+it goes on installing on a VS Code that lacks what this package calls. The range
+is read the way VS Code reads it, and a value VS Code would refuse to load, such
+as `*`, fails as well.
 
 ## The escape hatch
 

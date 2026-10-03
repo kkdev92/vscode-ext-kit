@@ -286,11 +286,12 @@ npx vscode-ext-kit manifest ./out/extension.js --apply        # add the commands
 ```
 
 `manifest` makes the comparison `assertManifestMatches` makes in a test, from
-the command line. `--apply` adds what the manifest is missing and the source
-can supply — commands and settings, with placeholder titles and descriptions
-marked `TODO` — and reports what a person has to decide: a view without a
-container, a default the two sides disagree on, an entry only the manifest
-has.
+the command line, over commands, settings and views; the checks a test opts in
+to, such as keybindings, stay in the test. `--apply` adds what the manifest is
+missing and the source can supply — commands and settings, with placeholder
+titles and descriptions marked `TODO` — and reports what a person has to
+decide: a view without a container, a default the two sides disagree on, an
+entry only the manifest has.
 
 The entry module is evaluated with a stand-in for `vscode`, which only exists
 inside an extension host. That works because nothing in this package touches
@@ -412,9 +413,12 @@ does not have. The floor rises when this package starts using an API that older
 versions lack — not whenever new types are published, which often happens with
 the stable API unchanged. Such a raise ships in a minor release whose changelog
 entry opens with it; when you take it, raise your extension's `engines.vscode`
-and `@types/vscode` to at least the new floor. VS Code updates itself, and CI
-runs both extension hosts against the current stable on every change and once a
-week, so treat the floor as a declaration rather than a tested target.
+and `@types/vscode` to at least the new floor. Nothing else compares your range
+with this one — npm reads only the `node` and `npm` engines of a dependency — so
+pass `engines: true` to `assertManifestMatches` and a test fails until you have
+raised it. VS Code updates itself, and CI runs both extension hosts against the
+current stable on every change and once a week, so treat the floor as a
+declaration rather than a tested target.
 `scripts/verify-package.mjs` checks the `lib` requirements against the packed
 `.d.ts` files on every CI run, so that row is verified rather than remembered.
 

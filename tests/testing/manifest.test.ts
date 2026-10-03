@@ -6,6 +6,8 @@
  * `DeclaredContributions` begins checking another machine-facing fact; do not
  * add assertions for human-facing manifest fields that source cannot own.
  */
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import { defineCommandContract } from '../../src/foundation/commands/contract.js';
@@ -453,6 +455,123 @@ describe('assertManifestMatches, keybindings', () => {
 
     // Asserted before reading `paste`: an empty result would satisfy the
     // undefined check while proving nothing.
+    expect(mismatches).toHaveLength(1);
+    expect(mismatches[0]?.paste).toBeUndefined();
+  });
+});
+
+/**
+ * The VS Code floor.
+ *
+ * npm reads only the `node` and `npm` engines of a dependency, and `vsce`
+ * compares an extension's `engines.vscode` with its own `@types/vscode` and
+ * nothing more. An extension that keeps an older range after this package
+ * raises its floor therefore installs where this package cannot run, and
+ * nothing says so. The ranges here are read the way VS Code's own validator
+ * reads them.
+ */
+describe('assertManifestMatches, engines', () => {
+  const declared = { engines: true };
+
+  // This package's own floor, read from its manifest rather than restated here:
+  // a raise that misses the copy in src has to fail these tests.
+  const own = (JSON.parse(readFileSync('package.json', 'utf8')) as { engines: { vscode: string } })
+    .engines.vscode;
+  const [major = 0, minor = 0] = own.replace(/^\D*/u, '').split('.').map(Number);
+  const floor = `${String(major)}.${String(minor)}`;
+  const before = `${String(major)}.${String(minor - 1)}`;
+
+  function withEngine(vscode: unknown): unknown {
+    return { engines: { vscode } };
+  }
+
+  function failing(values: readonly unknown[]): readonly unknown[] {
+    return values.filter((value) => diffManifest(withEngine(value), declared).length > 0);
+  }
+
+  it('passes the range this package declares for itself', () => {
+    expect(diffManifest(withEngine(own), declared)).toEqual([]);
+  });
+
+  it('names a range that admits an older VS Code, and the floor it needs', () => {
+    expect(() => {
+      assertManifestMatches(withEngine(`^${before}.0`), declared);
+    }).toThrow(
+      `engines.vscode "^${before}.0" admits VS Code ${before}.0, ` +
+        `and @kkdev92/vscode-ext-kit needs VS Code ${floor}.0 or later`
+    );
+  });
+
+  it('judges every form VS Code reads by the oldest version it admits', () => {
+    // `^` and `>=` open the range upward, a bare version admits only itself,
+    // `x` opens the part it stands in, and a dated suffix only narrows.
+    const admitNothingOlder = [
+      `^${floor}.0`,
+      `>=${floor}.0`,
+      `${floor}.0`,
+      `${floor}.x`,
+      `^${String(major)}.${String(minor + 1)}.0`,
+      `^${floor}.0-20991231`,
+      `  ^${floor}.0  `,
+    ];
+    const admitOlder = [
+      `^${before}.0`,
+      `>=${before}.9`,
+      `${before}.9`,
+      `^${String(major)}.x.x`,
+      '^0.10.0',
+    ];
+
+    expect(failing(admitNothingOlder)).toEqual([]);
+    expect(failing(admitOlder)).toEqual(admitOlder);
+  });
+
+  it('names a value VS Code would refuse to load at all', () => {
+    // `*` and an `x` major are refused as not specific enough; the rest do not
+    // parse. VS Code loads the extension on no version in either case.
+    const refused = ['*', 'x.x.x', '0.x.x', `~${floor}.0`, floor, 'latest', '', 138, null];
+
+    expect(
+      refused.map((value) => diffManifest(withEngine(value), declared).map((m) => m.summary))
+    ).toEqual(
+      refused.map((value) => [
+        `engines.vscode ${JSON.stringify(value)} is not a range VS Code accepts; ` +
+          `@kkdev92/vscode-ext-kit needs VS Code ${floor}.0 or later`,
+      ])
+    );
+  });
+
+  it('names a manifest without engines.vscode', () => {
+    for (const manifest of [{}, { engines: { node: '>=22.12.0' } }]) {
+      expect(diffManifest(manifest, declared).map((m) => [m.kind, m.direction, m.id])).toEqual([
+        ['engine', 'missing-in-manifest', 'vscode'],
+      ]);
+    }
+  });
+
+  it('checks no engines unless asked', () => {
+    expect(diffManifest(withEngine('*'), {})).toEqual([]);
+    expect(diffManifest(withEngine('*'), { engines: false })).toEqual([]);
+  });
+
+  it('runs after the other checks', () => {
+    const mismatches = diffManifest(
+      {
+        contributes: { keybindings: [{ command: 'sample.ghost', key: 'ctrl+g' }] },
+        engines: { vscode: `^${before}.0` },
+      },
+      { keybindings: {}, engines: true }
+    );
+
+    expect(mismatches.map((m) => [m.kind, m.direction, m.id])).toEqual([
+      ['keybinding', 'missing-in-src', 'sample.ghost'],
+      ['engine', 'drift', 'vscode'],
+    ]);
+  });
+
+  it('has nothing to paste, because engines is not part of contributes', () => {
+    const mismatches = diffManifest(withEngine(`^${before}.0`), declared);
+
     expect(mismatches).toHaveLength(1);
     expect(mismatches[0]?.paste).toBeUndefined();
   });
