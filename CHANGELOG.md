@@ -17,6 +17,19 @@ case.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`vscode-ext-kit plan` and `vscode-ext-kit manifest` can read a bundled
+  extension that touches `vscode` while its module is being defined.** One that
+  read a value such as `vscode.ViewColumn.Active` outside `activate` stopped the
+  command with `TypeError: Cannot read properties of undefined` and exit code 2.
+  A bundler compiles `import * as vscode` into a copy of the module's own
+  properties, and the stand-in the command loads in place of `vscode` had none
+  to copy. It now also answers through its prototype, which is where that copy
+  looks up anything it lacks. An unbundled ES module entry that reads a member
+  at module scope still fails: Node takes the named exports of the stand-in from
+  its source, and there are none to take.
+
 ## [7.0.0] - 2026-09-18
 
 **A major for one reason: the VS Code floor.** `engines.vscode` moves from
