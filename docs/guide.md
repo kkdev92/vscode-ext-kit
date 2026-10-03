@@ -205,6 +205,63 @@ non-language value. An invalid configured value is never silently replaced:
 `Strict` fails the read, `Lenient` falls back to the default **and** records a
 diagnostic.
 
+A log-level setting is a setting like any other, with one difference: VS Code
+filters the extension's log channel by the level the user picks, and the API
+gives an extension no way to change that level. A setting of the extension's
+own can only make the log quieter, and `filterLogger` applies it.
+
+<!-- sample: docs/samples/log-level.ts -->
+
+```ts
+import {
+  Log,
+  defineModule,
+  defineSettings,
+  filterLogger,
+  serviceToken,
+  setting,
+} from '@kkdev92/vscode-ext-kit';
+
+// VS Code filters the extension's log channel by the level the user picks with
+// `Developer: Set Log Level`, and the API gives the extension no way to change
+// it. A setting of the extension's own can therefore only make the log quieter
+// -- `silent` included -- and `filterLogger` is how it does.
+const LogSettings = defineSettings({
+  section: 'sample',
+  values: {
+    logLevel: setting.enum({
+      values: ['trace', 'debug', 'info', 'warn', 'error', 'silent'],
+      default: 'info',
+    }),
+  },
+});
+
+interface Indexer {
+  rebuild(): void;
+}
+const Indexer = serviceToken<Indexer>('sample.indexer');
+
+export const indexingModule = defineModule('indexing', (module): undefined => {
+  module.settings.add(LogSettings);
+
+  module.services.singleton(Indexer, {
+    inject: { log: Log, settings: LogSettings.token },
+    create: ({ log, settings }) => {
+      // A function rather than a value: it is read on every entry, so a service
+      // built once still follows the setting when the user changes it.
+      const logger = filterLogger(log, () => settings.read().values.logLevel);
+      return {
+        rebuild: () => {
+          logger.debug('rebuilding the index');
+        },
+      };
+    },
+  });
+
+  return undefined;
+});
+```
+
 ## Storage and secrets
 
 <!-- sample: docs/samples/storage-and-secrets.ts -->
