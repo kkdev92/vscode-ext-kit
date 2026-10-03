@@ -8,9 +8,11 @@
  * suite skips rather than failing on a missing file, and says so.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 
+import { build } from 'esbuild';
 import { describe, expect, it } from 'vitest';
 
 // Tests execute on Node, but the repo's tsconfig deliberately omits Node types
@@ -103,6 +105,35 @@ describe.skipIf(!built)('vscode-ext-kit plan', () => {
     expect(result.stdout.trim()).toBe(
       'plan ok: 1 module(s), 1 service(s), 1 command(s), 1 hosted service(s)'
     );
+  });
+
+  it('reads a bundle whose module reads a vscode value while it is being defined', async () => {
+    // Bundled the way an extension ships. esbuild turns `import * as vscode`
+    // into a copy of what `require('vscode')` exposes, and the module-scope
+    // read meets that copy rather than the stand-in itself.
+    const out = mkdtempSync(join(tmpdir(), 'ext-kit-cli-'));
+    try {
+      const bundle = join(out, 'extension.js');
+      await build({
+        entryPoints: [fixture('namespace-read.mjs')],
+        bundle: true,
+        platform: 'node',
+        format: 'cjs',
+        external: ['vscode'],
+        outfile: bundle,
+        logLevel: 'silent',
+      });
+
+      const result = run('plan', bundle, '--kit', kit, '--check');
+
+      expect(result.stderr).toBe('');
+      expect(result.code).toBe(0);
+      expect(result.stdout.trim()).toBe(
+        'plan ok: 1 module(s), 0 service(s), 0 command(s), 0 hosted service(s)'
+      );
+    } finally {
+      rmSync(out, { recursive: true, force: true });
+    }
   });
 
   it('explains what to export when the entry holds no plan', () => {

@@ -20,8 +20,10 @@
 // vscode-stub.cjs), because the real module only exists inside an extension
 // host. Nothing in this package touches VS Code before `activate`, so a
 // well-formed entry evaluates to its plan without noticing. Module-scope code
-// that reads a VS Code value would get a proxy instead; keep such reads inside
-// `activate` or a handler, which the framework asks for anyway.
+// that reads a VS Code value gets a proxy instead when the entry is a bundle;
+// an unbundled ES module entry sees no named exports on `vscode`, so the same
+// read fails there. Keep such reads inside `activate` or a handler, which the
+// framework asks for anyway.
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire, register } from 'node:module';
