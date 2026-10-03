@@ -175,23 +175,23 @@ export const settingsModule = defineModule('settings', (module): undefined => {
     },
   });
 
-  // A hosted service owns what it starts: `stop` runs in reverse declaration
-  // order, inside the shutdown budget, and is the only place this subscription
-  // is released.
-  let subscription: { dispose(): void } | undefined;
+  // A subscription a hosted service makes is released through its signal,
+  // which aborts when the application stops and when activation ends early.
+  // Releasing it in `stop` instead would need a variable that `start` and
+  // `stop` share, outside both -- and so shared by every application built
+  // from this module.
   module.hostedServices.add({
     id: 'settings.watcher',
     inject: { settings: ProjectSettings.token },
     start: (context, { settings }) => {
       // Fires only when *this* key's effective value actually changed — a
       // sibling key moving in the same section does not wake it.
-      subscription = settings.watch('enabled', undefined, (enabled) => {
+      const subscription = settings.watch('enabled', undefined, (enabled) => {
         context.logger.info('projects toggled', { enabled });
       });
-    },
-    stop: () => {
-      subscription?.dispose();
-      subscription = undefined;
+      context.signal.addEventListener('abort', () => {
+        subscription.dispose();
+      });
     },
   });
 
@@ -399,6 +399,16 @@ export const backgroundModule = defineModule('background', (module): undefined =
 `module.fileWatchers.add` is for a glob known when the code is written. For one
 the user just types, inject `FileWatchers` and call `watch` — same ability, one
 entry for each of the two moments you can know the pattern.
+
+A hosted service is for work that runs: an initialisation activation waits for,
+or a loop. A provider or an event subscription on the raw API has nothing to
+run. It only has to exist until deactivation, and `module.raw.register` owns it
+in the module's scope through `registrations.own` — see
+[the escape hatch](#the-escape-hatch). When a hosted service does subscribe to
+something in `start`, release it through `context.signal`, as the settings
+watcher above does, rather than in `stop`. The signal aborts when the
+application stops, when activation ends early, and when that `start` throws
+after subscribing, which gets no `stop` of its own.
 
 ## Text editor commands
 
