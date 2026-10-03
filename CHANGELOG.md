@@ -39,6 +39,19 @@ case.
   make this check. `ManifestMismatch['kind']` gains `'engine'`; a caller that
   switches exhaustively over it will need the new case.
 
+- `filterLogger(logger, threshold)` and the `LogThreshold` type, for an
+  extension's own log-level setting. The logger it returns passes on only the
+  entries at `threshold` or above, and none for `'silent'`; children from
+  `withFields` keep the threshold. VS Code filters a log channel by the level
+  the user picks and gives an extension no way to change it, so such a setting
+  can only make the log quieter, and extensions had been writing this wrapper
+  themselves.
+
+  `threshold` may be a function, read on every entry, so a logger made once —
+  by a service when it is constructed — follows the setting as it changes. A
+  threshold that throws, or that is not one of the six levels, lets every entry
+  through rather than hiding the log or failing the work that logged.
+
 ## [7.0.1] - 2026-10-03
 
 **A patch for the command-line tool.** `vscode-ext-kit plan` and

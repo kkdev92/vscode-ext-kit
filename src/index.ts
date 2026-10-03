@@ -121,9 +121,17 @@ export type {
   ProgressStep,
   StepsOutcome,
 } from './foundation/operations/progress.js';
-export type { LogEntry, LogFields, Logger, LogSink } from './foundation/logging/logger.js';
+export type {
+  LogEntry,
+  LogFields,
+  Logger,
+  LogSink,
+  LogThreshold,
+} from './foundation/logging/logger.js';
 // For a service, which has no operation to take `context.logger` from.
 export { Log } from './foundation/logging/token.js';
+// For an extension's own log-level setting, which can only quiet the channel.
+export { filterLogger } from './foundation/logging/logger.js';
 export type { ResourceScope } from './foundation/resources/resource-scope.js';
 export type {
   Registration,

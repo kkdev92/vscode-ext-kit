@@ -259,7 +259,8 @@ handler's `context` without being declared — they resolve the same tokens an
 
 Values you pass around: `ok` `err` `unwrap` `mapResult` and the `s.*` schema
 builders; `FrameworkError` with `userError` / `validationError` / `classifyError`
-/ `isCancellation`; `DisposableCollection` and `createScope`.
+/ `isCancellation`; `DisposableCollection` and `createScope`; `filterLogger`, for
+a log-level setting of the extension's own.
 
 Full signatures live in the `.d.ts` files and the JSDoc on each export, and are
 published at <https://vscode-ext-kit.kkdev92.dev/> alongside the guide and the

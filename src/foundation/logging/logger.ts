@@ -77,6 +77,95 @@ export function createLogger(sink: LogSink, fields: LogFields = {}): Logger {
 }
 
 /**
+ * How much a logger from {@link filterLogger} passes on: the entries at this
+ * level and above, or none at all for `silent`.
+ */
+export type LogThreshold = LogEntry['level'] | 'silent';
+
+const RANK: Readonly<Record<LogThreshold, number>> = {
+  trace: 0,
+  debug: 1,
+  info: 2,
+  warn: 3,
+  error: 4,
+  silent: 5,
+};
+
+/**
+ * A logger that passes on to `logger` only the entries at `threshold` or above,
+ * and none at all when it is `silent`.
+ *
+ * This is for an extension's own log-level setting. VS Code filters a log
+ * channel by the level the user picks, with `Developer: Set Log Level` or in
+ * the Output panel, and the API gives an extension no way to change that
+ * level. A setting of the extension's own can therefore only make the log
+ * quieter than the channel already is, and this is how it does.
+ *
+ * `threshold` may be a function, read on every entry, so that a logger made
+ * once — by a service when it is constructed, say — follows the setting as it
+ * changes. A threshold that throws, or that is not one of the six, lets every
+ * entry through: a broken filter must not hide the log, and logging must not
+ * fail the work that logged. Children from `withFields` keep the threshold.
+ *
+ * @example
+ * ```ts
+ * module.services.singleton(Renderer, {
+ *   inject: { log: Log, settings: Settings.token },
+ *   create: ({ log, settings }) =>
+ *     new Renderer(filterLogger(log, () => settings.read().values.logLevel)),
+ * });
+ * ```
+ */
+export function filterLogger(
+  logger: Logger,
+  threshold: LogThreshold | (() => LogThreshold)
+): Logger {
+  const read = typeof threshold === 'function' ? threshold : (): LogThreshold => threshold;
+  const passes = (level: LogEntry['level']): boolean => {
+    let floor: number | undefined;
+    try {
+      const current: unknown = read();
+      floor =
+        typeof current === 'string' && Object.hasOwn(RANK, current)
+          ? RANK[current as LogThreshold]
+          : undefined;
+    } catch {
+      return true;
+    }
+    return floor === undefined || RANK[level] >= floor;
+  };
+
+  return {
+    trace: (message, fields) => {
+      if (passes('trace')) {
+        logger.trace(message, fields);
+      }
+    },
+    debug: (message, fields) => {
+      if (passes('debug')) {
+        logger.debug(message, fields);
+      }
+    },
+    info: (message, fields) => {
+      if (passes('info')) {
+        logger.info(message, fields);
+      }
+    },
+    warn: (message, fields) => {
+      if (passes('warn')) {
+        logger.warn(message, fields);
+      }
+    },
+    error: (message, error, fields) => {
+      if (passes('error')) {
+        logger.error(message, error, fields);
+      }
+    },
+    withFields: (fields) => filterLogger(logger.withFields(fields), read),
+  };
+}
+
+/**
  * A logger that discards everything. The default when no sink is configured, so
  * the framework never needs a `console` fallback.
  *
