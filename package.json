@@ -117,6 +117,7 @@
     "knip": "knip",
     "docs:api": "typedoc",
     "verify:package": "node scripts/verify-package.mjs",
+    "check:vscode-api": "node scripts/check-vscode-api.mjs",
     "fixture:build": "node fixtures/extension-host/build.mjs",
     "fixture:build:web": "node fixtures/web-extension/build.mjs",
     "test:eh": "npm run build && npm run fixture:build && node fixtures/extension-host/run-test.mjs",
