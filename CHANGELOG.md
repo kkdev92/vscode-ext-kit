@@ -17,6 +17,17 @@ case.
 
 ## [Unreleased]
 
+## [7.1.0] - 2026-10-03
+
+**Checks and services extensions were writing by hand, and two fixes.**
+`engines.vscode` can now be held to this package's floor, a log-level setting
+has `filterLogger`, a folder setting has `checkRelativePath`, and the open
+workspace folders are a `Workspace` service. The command-line tool reads
+bundles that touch `vscode` while a module is being defined, and hosted
+services stop when activation ends early. Nothing was removed or narrowed; one
+returned union gains a member, noted below. The VS Code floor is unchanged at
+`^1.138.0`.
+
 ### Added
 
 - `DeclaredContributions.engines` for `assertManifestMatches` and
@@ -79,25 +90,14 @@ case.
   Like `FileWatchers`, it is injectable without being declared, and
   `describePlan` lists it among `frameworkServices`.
 
-### Fixed
+### Changed
 
-- **Hosted services that had started are stopped when activation ends early.**
-  A stop requested while hosted services were starting — `deactivate` during a
-  slow activation — left the ones already started running: their `stop` never
-  ran, and the services after them started anyway, on a signal that had
-  already aborted, so nothing they tied to it was ever released. An `exports`
-  factory that threw did the same to every hosted service and left their
-  background loops waiting on a signal that could no longer abort. Both now end
-  activation the way a failing `start` always did: no further service starts,
-  the started ones stop in reverse order, and their background loops are told
-  to end.
-
-## [7.0.1] - 2026-10-03
-
-**A patch for the command-line tool.** `vscode-ext-kit plan` and
-`vscode-ext-kit manifest` can now read a bundled extension that touches `vscode`
-while its module is being defined. The library itself is byte-for-byte what
-`7.0.0` shipped: `dist/` and `src/` are unchanged.
+- **How the VS Code floor moves.** It now rises when this package starts using
+  an API that older versions lack, rather than whenever new `@types/vscode` are
+  published, and such a raise ships in a minor release whose entry opens with
+  it; Platform Requirements in the README says what an extension does then. The
+  preamble above now says what a major release is. The floor itself is
+  unchanged at `^1.138.0`.
 
 ### Fixed
 
@@ -112,14 +112,16 @@ while its module is being defined. The library itself is byte-for-byte what
   at module scope still fails: Node takes the named exports of the stand-in from
   its source, and there are none to take.
 
-### Changed
-
-- **How the VS Code floor moves.** It now rises when this package starts using
-  an API that older versions lack, rather than whenever new `@types/vscode` are
-  published, and such a raise ships in a minor release whose entry opens with
-  it; Platform Requirements in the README says what an extension does then. The
-  preamble above now says what a major release is. The floor itself is
-  unchanged at `^1.138.0`.
+- **Hosted services that had started are stopped when activation ends early.**
+  A stop requested while hosted services were starting — `deactivate` during a
+  slow activation — left the ones already started running: their `stop` never
+  ran, and the services after them started anyway, on a signal that had
+  already aborted, so nothing they tied to it was ever released. An `exports`
+  factory that threw did the same to every hosted service and left their
+  background loops waiting on a signal that could no longer abort. Both now end
+  activation the way a failing `start` always did: no further service starts,
+  the started ones stop in reverse order, and their background loops are told
+  to end.
 
 ## [7.0.0] - 2026-09-18
 
@@ -1400,8 +1402,8 @@ platform support, toolchain currency, and release supply chain.
 
 Initial public release.
 
-[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v7.0.1...HEAD
-[7.0.1]: https://github.com/kkdev92/vscode-ext-kit/compare/v7.0.0...v7.0.1
+[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v7.1.0...HEAD
+[7.1.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v7.0.0...v7.1.0
 [7.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v6.1.0...v7.0.0
 [6.1.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v6.0.0...v6.1.0
 [6.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v5.0.0...v6.0.0
