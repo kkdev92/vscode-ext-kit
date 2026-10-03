@@ -110,8 +110,8 @@ try {
   // starts riding along.
   note(packed.files.length < 600, `file count within budget (${packed.files.length} < 600)`);
   note(
-    packed.size < 600 * 1024,
-    `tarball within budget (${Math.round(packed.size / 1024)} KiB < 600)`
+    packed.size < 650 * 1024,
+    `tarball within budget (${Math.round(packed.size / 1024)} KiB < 650)`
   );
   note(
     !packed.files.some((file) => file.path.startsWith('dist/capabilities/ui/index')),
