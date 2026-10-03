@@ -1083,30 +1083,43 @@ export function createApplication(options: CreateApplicationOptions): Applicatio
         hostedSignal.dispose();
       });
 
-      for (const definition of plan.hostedServices) {
-        try {
+      // Once a hosted service has started, activation can still end three
+      // ways short of running: a later start fails, a stop is requested while
+      // services are starting, or the exports cannot be built. The host rolls
+      // back registrations and resources in every case, but it runs no stop
+      // hook for an application that never ran — so each of them unwinds here,
+      // under one absolute deadline, mirroring a normal shutdown: abort the
+      // started services, stop them in reverse, then drain their background
+      // loops, and only then fail activation.
+      const stopRequested = (): OperationCancelledError =>
+        new OperationCancelledError(CancellationReason.ApplicationStopping);
+      try {
+        for (const definition of plan.hostedServices) {
+          // A stop that arrived during an earlier start: starting another
+          // service would hand it a signal that has already aborted, so a
+          // subscription it ties to that signal would never be released.
+          if (signal.aborted) {
+            throw stopRequested();
+          }
           await startHostedService(definition, activeContainer, hostedSignal.signal);
-        } catch (error) {
-          // Unwind under one absolute deadline, mirroring a normal shutdown:
-          // abort the already-started services, stop them in reverse, then
-          // drain their background loops — and only then fail activation.
-          activationController.abort(
-            new OperationCancelledError(CancellationReason.ApplicationStopping)
-          );
-          const deadlineAt = Date.now() + plan.shutdown.timeoutMs;
-          const remaining = (): number => Math.max(0, deadlineAt - Date.now());
-          await stopHostedServices(remaining, abortedSignal());
-          await drainBackgroundTasks(remaining);
-          throw error;
         }
-      }
+        if (signal.aborted) {
+          throw stopRequested();
+        }
 
-      // Last, so everything it is built from has started. A failure here fails
-      // activation like any other and unwinds through the same path.
-      if (options.exports !== undefined) {
-        resolvedExports = options.exports.create(
-          resolveInjected(options.exports.inject, activeContainer)
-        );
+        // Last, so everything it is built from has started.
+        if (options.exports !== undefined) {
+          resolvedExports = options.exports.create(
+            resolveInjected(options.exports.inject, activeContainer)
+          );
+        }
+      } catch (error) {
+        activationController.abort(stopRequested());
+        const deadlineAt = Date.now() + plan.shutdown.timeoutMs;
+        const remaining = (): number => Math.max(0, deadlineAt - Date.now());
+        await stopHostedServices(remaining, abortedSignal());
+        await drainBackgroundTasks(remaining);
+        throw error;
       }
     },
 

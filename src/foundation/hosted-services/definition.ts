@@ -3,7 +3,14 @@ import type { ServiceMap } from '../services/token.js';
 
 /** Context for starting or running a hosted service during the Application lifetime. */
 export interface HostedServiceContext {
-  /** Aborts when the application begins stopping. */
+  /**
+   * Aborts when the application begins stopping, and when activation ends
+   * without completing after this service started.
+   *
+   * A subscription made in `start` can be released here rather than in `stop`.
+   * The signal also covers the case `stop` cannot: a `start` that throws after
+   * subscribing, which is never followed by its own `stop`.
+   */
   readonly signal: AbortSignal;
   /** Logger scoped to this hosted service. */
   readonly logger: Logger;
@@ -42,7 +49,9 @@ export interface HostedServiceDefinition {
   readonly dependencies: ServiceMap;
   /**
    * Brings the service to readiness. Awaited during activation, so a failure
-   * fails activation and already-started services stop in reverse order.
+   * fails activation and already-started services stop in reverse order. A
+   * stop requested while services are starting ends activation the same way:
+   * no further service starts.
    */
   readonly start?: (
     context: HostedServiceContext,
