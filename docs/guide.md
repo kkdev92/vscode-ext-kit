@@ -464,7 +464,7 @@ export const foldersModule = defineModule('folders', (module): undefined => {
     inject: { workspace: Workspace },
     start: (context, { workspace }) => {
       const subscription = workspace.onDidChangeFolders(() => {
-        context.logger.info('folders changed', { count: workspace.folders.length });
+        context.logger.info('folders changed', { count: workspace.folders().length });
       });
       context.signal.addEventListener('abort', () => {
         subscription.dispose();

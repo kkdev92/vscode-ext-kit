@@ -62,8 +62,8 @@ case.
   and only a segment that is exactly `..` climbs out. Extensions had each
   written this check, and had decided those cases differently.
 
-- `Workspace`, a framework service for the open workspace folders: `folders`,
-  read when asked; `folderOf(uri)`, the folder a resource is in;
+- `Workspace`, a framework service for the open workspace folders:
+  `folders()`, read when called; `folderOf(uri)`, the folder a resource is in;
   `relativePath(uri)`, its path as the Explorer shows it, relative to its folder
   and starting with the folder's name when more than one is open; and
   `onDidChangeFolders`. Which folder a resource belongs to is VS Code's answer
@@ -72,7 +72,9 @@ case.
   not a special case. A subscription still open when the application stops is
   released with it. Extensions had been reaching for `vscode.workspace`
   directly for this, which no test could arrange; `createFakeWorkspace` and the
-  test host's `workspace` now can, starting with one folder at `/workspace`.
+  test host's `workspace` now can, starting with one folder at `/workspace`. The
+  service has the fake's shape, so a feature that takes it can be unit-tested
+  with the fake alone.
 
   Like `FileWatchers`, it is injectable without being declared, and
   `describePlan` lists it among `frameworkServices`.
