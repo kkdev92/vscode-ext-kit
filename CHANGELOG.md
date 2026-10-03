@@ -17,6 +17,28 @@ case.
 
 ## [Unreleased]
 
+### Added
+
+- `DeclaredContributions.engines` for `assertManifestMatches` and
+  `diffManifest`. Passing `true` checks that the manifest's `engines.vscode`
+  admits no VS Code older than the oldest this package runs on, reading the
+  range the way VS Code does: `^`, `>=` or a bare version, with `x` allowed in
+  any part. A value VS Code would refuse to load fails it too — a missing one,
+  `*`, or a range in a form VS Code does not read, such as one starting with
+  `~`.
+
+  Nothing else compares the two. npm reads only the `node` and `npm` engines of
+  a dependency, and `vsce` compares an extension's `engines.vscode` with its own
+  `@types/vscode` and nothing more. Now that a raise of the floor ships in a
+  minor release, an extension can take that release while keeping the older
+  range, and install on a VS Code that lacks what this package calls; with this
+  set, that is a failing test instead.
+
+  Omitting the field checks no engines, which is what every existing caller
+  does, so this changes nothing for them. `vscode-ext-kit manifest` does not
+  make this check. `ManifestMismatch['kind']` gains `'engine'`; a caller that
+  switches exhaustively over it will need the new case.
+
 ## [7.0.1] - 2026-10-03
 
 **A patch for the command-line tool.** `vscode-ext-kit plan` and

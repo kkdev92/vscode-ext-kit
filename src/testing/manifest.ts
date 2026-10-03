@@ -51,20 +51,38 @@ export interface DeclaredContributions {
      */
     readonly allow?: readonly string[];
   };
+  /**
+   * Opts in to checking that `engines.vscode` admits no VS Code older than the
+   * oldest this package runs on.
+   *
+   * Nothing else compares the two. npm reads only the `node` and `npm` engines
+   * of a dependency, and `vsce` checks an extension's `engines.vscode` against
+   * its own `@types/vscode` and nothing more. So when this package raises its
+   * floor, an extension can go on declaring the older range and installing on
+   * a VS Code that lacks what this package calls; with this set, that is a
+   * failing test instead.
+   *
+   * A value VS Code would refuse to load fails it too: a missing one, `*`, or a
+   * range in a form VS Code does not read, such as one starting with `~`.
+   *
+   * Omitting this checks no engines at all.
+   */
+  readonly engines?: boolean;
 }
 
 /**
  * One disagreement between `package.json` and what `src` declares.
  *
- * `kind` says which contribution point, `direction` which side is missing
- * something — or `drift`, when both have the entry and disagree about it — and
- * `id` the command, setting key or view it concerns. `summary` says the same
- * thing to a person; `paste` is the JSON that would settle it, present when the
- * fix is mechanical and absent when only a person can supply it (a view needs
- * a container; a command needs a title).
+ * `kind` says which contribution point, or `engine` for `engines.vscode`;
+ * `direction` which side is missing something — or `drift`, when both have the
+ * entry and disagree about it — and `id` the command, setting key or view it
+ * concerns, or `vscode` for the engine. `summary` says the same thing to a
+ * person; `paste` is the JSON that would settle it, present when the fix is
+ * mechanical and absent when only a person can supply it (a view needs a
+ * container; a command needs a title).
  */
 export interface ManifestMismatch {
-  readonly kind: 'command' | 'setting' | 'view' | 'keybinding';
+  readonly kind: 'command' | 'setting' | 'view' | 'keybinding' | 'engine';
   readonly direction: 'missing-in-manifest' | 'missing-in-src' | 'drift';
   readonly id: string;
   readonly summary: string;
@@ -86,10 +104,26 @@ interface Manifest {
     readonly views?: Readonly<Record<string, readonly { readonly id?: unknown }[]>>;
     readonly keybindings?: readonly { readonly command?: unknown }[];
   };
+  readonly engines?: { readonly vscode?: unknown };
 }
 
 /** Normalize omitted scope before comparing; source declarations are explicit. */
 const DEFAULT_MANIFEST_SCOPE = 'window';
+
+type Version = readonly [major: number, minor: number, patch: number];
+
+/**
+ * The oldest VS Code this package runs on: its own `engines.vscode`, which a
+ * test holds this to.
+ */
+const VSCODE_FLOOR: Version = [1, 138, 0];
+
+/**
+ * An `engines.vscode` value as VS Code reads one: an optional `^` or `>=`, then
+ * `major.minor.patch` with `x` allowed in any part, then an optional suffix
+ * after `-`. VS Code refuses to parse anything else.
+ */
+const ENGINE_RANGE = /^(\^|>=)?(\d+|x)\.(\d+|x)\.(\d+|x)(-.*)?$/u;
 
 function equalJson(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
@@ -316,9 +350,86 @@ function checkKeybindings(manifest: Manifest, declared: DeclaredContributions): 
 }
 
 /**
+ * The oldest VS Code an `engines.vscode` value admits, or `undefined` when VS
+ * Code would not load an extension that declares it.
+ *
+ * Whatever the form, VS Code admits nothing older than the version written —
+ * `^` and `>=` open the range upward, an `x` opens the part it stands in, and a
+ * suffix can only narrow it — so that version, with `x` read as 0, is the
+ * answer. VS Code refuses a value whose major is `x` as not specific enough,
+ * and below 1.0.0 one whose minor is `x` as well; `*` is refused the same way.
+ */
+function oldestAdmitted(value: string): Version | undefined {
+  const match = ENGINE_RANGE.exec(value.trim());
+  if (match === null) {
+    return undefined;
+  }
+  const [major, minor, patch] = [match[2], match[3], match[4]].map((part) =>
+    part === undefined || part === 'x' ? undefined : Number(part)
+  );
+  if (major === undefined || (major === 0 && minor === undefined)) {
+    return undefined;
+  }
+  return [major, minor ?? 0, patch ?? 0];
+}
+
+function olderThan(version: Version, than: Version): boolean {
+  const [major, minor, patch] = version;
+  if (major !== than[0]) {
+    return major < than[0];
+  }
+  if (minor !== than[1]) {
+    return minor < than[1];
+  }
+  return patch < than[2];
+}
+
+function checkEngines(manifest: Manifest, declared: DeclaredContributions): ManifestMismatch[] {
+  if (declared.engines !== true) {
+    return [];
+  }
+  const needs = `@kkdev92/vscode-ext-kit needs VS Code ${VSCODE_FLOOR.join('.')} or later`;
+  // No `paste`: `engines` is not part of `contributes`, and the summary already
+  // names the version to declare.
+  const value = manifest.engines?.vscode;
+  if (value === undefined) {
+    return [
+      {
+        kind: 'engine',
+        direction: 'missing-in-manifest',
+        id: 'vscode',
+        summary: `engines.vscode is missing, and VS Code loads no extension without it; ${needs}`,
+      },
+    ];
+  }
+  const oldest = typeof value === 'string' ? oldestAdmitted(value) : undefined;
+  if (oldest === undefined) {
+    return [
+      {
+        kind: 'engine',
+        direction: 'drift',
+        id: 'vscode',
+        summary: `engines.vscode ${JSON.stringify(value)} is not a range VS Code accepts; ${needs}`,
+      },
+    ];
+  }
+  if (olderThan(oldest, VSCODE_FLOOR)) {
+    return [
+      {
+        kind: 'engine',
+        direction: 'drift',
+        id: 'vscode',
+        summary: `engines.vscode ${JSON.stringify(value)} admits VS Code ${oldest.join('.')}, and ${needs}`,
+      },
+    ];
+  }
+  return [];
+}
+
+/**
  * Every disagreement between `package.json` and the declarations in `src`, as
  * data, in the order the checks run: commands, then settings, then views, then
- * keybindings.
+ * keybindings, then the engine.
  *
  * The same comparison {@link assertManifestMatches} makes, without the throw —
  * for a tool that wants to print, count or apply the mechanical part of the
@@ -342,6 +453,7 @@ export function diffManifest(
     ...checkSettings(parsed, declared),
     ...checkViews(parsed, declared),
     ...checkKeybindings(parsed, declared),
+    ...checkEngines(parsed, declared),
   ];
 }
 
@@ -368,6 +480,10 @@ export function diffManifest(
  * decides the winner when several share a key, so an extension that depends on
  * that order needs its own assertion for it.
  *
+ * Of `engines` it reads `vscode`, and asks only that the range admit no VS Code
+ * older than this package runs on. How far above that the range starts is the
+ * extension's to decide.
+ *
  * @example
  * ```ts
  * it('the manifest agrees with what src declares', () => {
@@ -376,6 +492,7 @@ export function diffManifest(
  *     commands: Object.values(Contracts),
  *     views: Object.values(VIEWS),
  *     keybindings: { allow: ['workbench.action.files.save'] },
+ *     engines: true,
  *   });
  * });
  * ```

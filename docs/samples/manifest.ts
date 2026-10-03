@@ -32,5 +32,9 @@ export function checkManifest(manifest: unknown): void {
     // and then does nothing when the key is pressed; `allow` is for the
     // built-ins an extension deliberately puts a key on.
     keybindings: { allow: ['workbench.action.files.save'] },
+    // Opting in checks that `engines.vscode` admits no VS Code older than this
+    // package runs on. Nothing else compares the two, so without it a range
+    // left behind after the package raises its floor goes unnoticed.
+    engines: true,
   });
 }
