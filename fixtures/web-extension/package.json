@@ -16,6 +16,11 @@
         "command": "extKitWebFixture.probe",
         "title": "Probe",
         "category": "Ext Kit Web Fixture"
+      },
+      {
+        "command": "extKitWebFixture.workspaceReport",
+        "title": "Workspace Report",
+        "category": "Ext Kit Web Fixture"
       }
     ]
   }

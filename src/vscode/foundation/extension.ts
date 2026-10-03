@@ -31,6 +31,7 @@ import { createVSCodeCommandCapability } from './commands.js';
 import { createVSCodeEnvironmentCapability } from './environment.js';
 import { createVSCodeEditorCapability } from '../capabilities/editor.js';
 import { createVSCodeFileWatcherCapability } from '../capabilities/filewatcher.js';
+import { createVSCodeWorkspaceCapability } from '../capabilities/workspace.js';
 import { createVSCodeLanguageStatusCapability } from '../capabilities/language-status.js';
 import { createVSCodeLocalizationCapability } from '../capabilities/l10n.js';
 import { createVSCodeNotificationCapability } from '../capabilities/notifications.js';
@@ -226,6 +227,7 @@ export function defineExtension(
           storage: createVSCodeStorageCapability(context),
           secrets: createVSCodeSecretsCapability(context),
           fileWatchers: createVSCodeFileWatcherCapability(),
+          workspace: createVSCodeWorkspaceCapability(),
           notifications: createVSCodeNotificationCapability(),
           progress: createVSCodeProgressCapability(),
           statusBar: createVSCodeStatusBarCapability(),

@@ -5,7 +5,7 @@
 // context.subscriptions disposed) came from reading VS Code's source. This checks
 // it against the shipped product, on whichever version is under test.
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import process from 'node:process';
@@ -20,6 +20,8 @@ const scratch = mkdtempSync(join(tmpdir(), 'ext-kit-eh-'));
 const markerFile = join(scratch, 'markers.log');
 const workspace = join(scratch, 'workspace');
 writeFileSync(markerFile, '', 'utf8');
+// Created: VS Code opens no folder at all for a path that does not exist.
+mkdirSync(workspace);
 
 const version = process.env['VSCODE_VERSION'] ?? 'stable';
 
@@ -163,6 +165,16 @@ try {
   }
   process.stdout.write(
     'confirmed: the tree change-event subscription was released with the view\n'
+  );
+
+  // The in-host test compares the Workspace service's answers with VS Code's
+  // and throws on a difference; the marker is how this side knows it ran.
+  const workspaceReport = markers.find((entry) => entry.startsWith('workspace:report:'));
+  if (workspaceReport === undefined) {
+    fail('the Workspace service was never compared with VS Code', markers);
+  }
+  process.stdout.write(
+    `confirmed: the Workspace service answered as VS Code did ${workspaceReport.slice('workspace:report:'.length)}\n`
   );
 
   process.stdout.write(`extension host contract OK (VS Code ${version})\n`);

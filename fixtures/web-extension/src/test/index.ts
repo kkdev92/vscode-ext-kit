@@ -43,6 +43,28 @@ export async function run(): Promise<void> {
   // Settings resolved through the real VS Code configuration service, in a worker.
   check(trace.includes('command:true'), `settings default was not read: ${trace.join(', ')}`);
 
+  // The Workspace service forwards to VS Code, so its answers here have to be
+  // VS Code's own, on whatever file system the browser host mounted the folder.
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  const firstFolder = folders[0];
+  check(firstFolder !== undefined, 'the lane opens a workspace folder');
+  const inside = vscode.Uri.joinPath(firstFolder.uri, 'sub', 'file.txt');
+  const answered =
+    (await vscode.commands.executeCommand<string>('extKitWebFixture.workspaceReport', inside)) ??
+    '';
+  const expected = JSON.stringify({
+    folders: folders.map(
+      (folder) => `${String(folder.index)}:${folder.name}:${folder.uri.toString()}`
+    ),
+    folderOf: vscode.workspace.getWorkspaceFolder(inside)?.name ?? null,
+    relativePath: vscode.workspace.asRelativePath(inside),
+    withName: vscode.workspace.asRelativePath(inside, true),
+    withoutName: vscode.workspace.asRelativePath(inside, false),
+    folderItself: vscode.workspace.asRelativePath(firstFolder.uri),
+  });
+  check(answered === expected, `Workspace answered ${answered}, VS Code ${expected}`);
+  console.log(`EXT_KIT_WEB_WORKSPACE ${answered}`);
+
   const globals = globalThis as {
     DisposableStack?: unknown;
     AsyncDisposableStack?: unknown;

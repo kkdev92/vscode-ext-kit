@@ -41,6 +41,8 @@ import type { FakeLocalization } from './fakes/fake-localization.js';
 import { createFakeTreeViews } from './fakes/fake-treeview.js';
 import { createFakeWebviews } from './fakes/fake-webview.js';
 import type { FakeWebviews } from './fakes/fake-webview.js';
+import { createFakeWorkspace } from './fakes/fake-workspace.js';
+import type { FakeWorkspace } from './fakes/fake-workspace.js';
 import type { FakeTreeViews } from './fakes/fake-treeview.js';
 import {
   createFakeLanguageStatus,
@@ -125,6 +127,8 @@ export interface TestHost {
   readonly editors: FakeEditor;
   /** The fake webview host the plan's panels and views run on. */
   readonly webviews: FakeWebviews;
+  /** The fake workspace folders behind the Workspace service, one at `/workspace`. */
+  readonly workspace: FakeWorkspace;
   /** Everything the application logged. */
   readonly logs: RecordingLogSink;
   /** Lifecycle and operation diagnostics, in order. */
@@ -210,6 +214,7 @@ export function createTestHost(options: CreateTestHostOptions): TestHost {
   const localization = createFakeLocalization();
   const editors = createFakeEditor();
   const webviews = createFakeWebviews();
+  const workspace = createFakeWorkspace();
   const logs = createRecordingLogSink();
   const diagnostics: HostDiagnostic[] = [];
 
@@ -257,6 +262,7 @@ export function createTestHost(options: CreateTestHostOptions): TestHost {
       localization,
       editors,
       webviews,
+      workspace,
     },
     logSink: logs.sink,
     onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
@@ -284,6 +290,7 @@ export function createTestHost(options: CreateTestHostOptions): TestHost {
     localization,
     editors,
     webviews,
+    workspace,
     logs,
     get diagnostics(): readonly HostDiagnostic[] {
       return diagnostics;

@@ -32,6 +32,7 @@ same code runs in a test and in the editor.
 - [Settings](#settings)
 - [Storage and secrets](#storage-and-secrets)
 - [Hosted services and file watchers](#hosted-services-and-file-watchers)
+- [Workspace folders](#workspace-folders)
 - [Text editor commands](#text-editor-commands)
 - [UI](#ui)
 - [Views: trees and webviews](#views-trees-and-webviews)
@@ -418,6 +419,65 @@ something in `start`, release it through `context.signal`, as the settings
 watcher above does, rather than in `stop`. The signal aborts when the
 application stops, when activation ends early, and when that `start` throws
 after subscribing, which gets no `stop` of its own.
+
+## Workspace folders
+
+`Workspace` reads the open folders when asked, says which one a resource is in,
+and writes a resource's path the way the Explorer shows it: relative to its
+folder, starting with the folder's name when more than one is open. Which folder
+a resource belongs to is VS Code's answer rather than a comparison of paths —
+with folders nested the innermost wins, and letter case is compared the way the
+resource's file system compares it — so a multi-root or remote workspace is not
+a special case.
+
+<!-- sample: docs/samples/workspace-folders.ts -->
+
+```ts
+import {
+  Workspace,
+  defineCommandContract,
+  defineModule,
+  type WatchedUri,
+} from '@kkdev92/vscode-ext-kit';
+
+export const Reveal = defineCommandContract<readonly [WatchedUri], void>({ id: 'sample.reveal' });
+
+export const foldersModule = defineModule('folders', (module): undefined => {
+  module.commands.handle(Reveal, {
+    inject: { workspace: Workspace },
+    execute: async (context, [target], { workspace }) => {
+      // In no folder: say so, rather than show a path the user cannot place.
+      if (workspace.folderOf(target) === undefined) {
+        await context.notify.warn(context.l10n.t('{0} is outside the workspace.', target.fsPath));
+        return;
+      }
+      // The text the Explorer shows: relative to the folder, and starting with
+      // the folder's name when more than one is open.
+      await context.notify.info(context.l10n.t('Revealed {0}', workspace.relativePath(target)));
+    },
+  });
+
+  // Folders come and go while the extension runs. The subscription is tied to
+  // the hosted service's signal like any other.
+  module.hostedServices.add({
+    id: 'sample.folders',
+    inject: { workspace: Workspace },
+    start: (context, { workspace }) => {
+      const subscription = workspace.onDidChangeFolders(() => {
+        context.logger.info('folders changed', { count: workspace.folders.length });
+      });
+      context.signal.addEventListener('abort', () => {
+        subscription.dispose();
+      });
+    },
+  });
+
+  return undefined;
+});
+```
+
+A test arranges folders with `host.workspace._setFolders([...])`, which also
+fires `onDidChangeFolders`. The test host starts with one folder, `/workspace`.
 
 ## Text editor commands
 

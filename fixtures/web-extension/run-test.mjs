@@ -9,7 +9,7 @@
 // Driven directly rather than through @vscode/test-cli: its web configuration is
 // marked incomplete in its own source, and this path is the more mature one.
 
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import process from 'node:process';
@@ -18,6 +18,9 @@ import { runTests } from '@vscode/test-web';
 
 const here = import.meta.dirname;
 const scratch = mkdtempSync(join(tmpdir(), 'ext-kit-web-'));
+// Created, so the browser host has a real folder to mount.
+const workspace = join(scratch, 'workspace');
+mkdirSync(workspace);
 
 try {
   await runTests({
@@ -25,7 +28,7 @@ try {
     headless: true,
     extensionDevelopmentPath: resolve(here),
     extensionTestsPath: resolve(here, 'out/test/index.js'),
-    folderPath: join(scratch, 'workspace'),
+    folderPath: workspace,
     quality: 'stable',
     printServerLog: false,
   });

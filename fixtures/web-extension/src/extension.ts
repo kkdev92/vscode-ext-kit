@@ -1,16 +1,23 @@
 import type * as vscode from 'vscode';
 
 import {
+  Workspace,
   defineCommandContract,
   defineExtension,
   defineModule,
   defineSettings,
   setting,
 } from '../../../dist/index.js';
+import type { WatchedUri } from '../../../dist/index.js';
 
 const Probe = defineCommandContract<readonly [], string>({
   id: 'extKitWebFixture.probe',
   title: 'Probe',
+});
+
+const WorkspaceReport = defineCommandContract<readonly [WatchedUri], string>({
+  id: 'extKitWebFixture.workspaceReport',
+  title: 'Workspace Report',
 });
 
 const WebSettings = defineSettings({
@@ -51,6 +58,25 @@ const fixtureModule = defineModule('fixture', (module): undefined => {
     },
     stop: () => {
       trace.push('hosted:stop');
+    },
+  });
+
+  // What the Workspace service answers about a resource, for the test to set
+  // beside what VS Code answers itself.
+  module.commands.handle(WorkspaceReport, {
+    inject: { workspace: Workspace },
+    execute: (_context, [uri], { workspace }) => {
+      const first = workspace.folders[0];
+      return JSON.stringify({
+        folders: workspace.folders.map(
+          (folder) => `${String(folder.index)}:${folder.name}:${folder.uri.toString()}`
+        ),
+        folderOf: workspace.folderOf(uri)?.name ?? null,
+        relativePath: workspace.relativePath(uri),
+        withName: workspace.relativePath(uri, { includeFolderName: true }),
+        withoutName: workspace.relativePath(uri, { includeFolderName: false }),
+        folderItself: first === undefined ? null : workspace.relativePath(first.uri),
+      });
     },
   });
 

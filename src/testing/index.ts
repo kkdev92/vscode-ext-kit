@@ -58,6 +58,9 @@ export type { FakeMemento, FakeSecrets, FakeStorage } from './fakes/fake-storage
 export { createFakeFileWatchers, fakeUri } from './fakes/fake-filewatcher.js';
 export type { FakeFileWatchers } from './fakes/fake-filewatcher.js';
 
+export { createFakeWorkspace } from './fakes/fake-workspace.js';
+export type { FakeWorkspace, FakeWorkspaceFolder } from './fakes/fake-workspace.js';
+
 export { createFakeTreeViews } from './fakes/fake-treeview.js';
 export type { FakeTreeView, FakeTreeViews } from './fakes/fake-treeview.js';
 
