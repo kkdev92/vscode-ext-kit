@@ -52,6 +52,16 @@ case.
   threshold that throws, or that is not one of the six levels, lets every entry
   through rather than hiding the log or failing the work that logged.
 
+- `checkRelativePath(value)` and the `RelativePathProblem` type, for a setting
+  that names a folder inside the workspace. It returns `'empty'`, `'absolute'`
+  or `'parent'` when the value would not stay inside the folder it is resolved
+  against, and `undefined` when it would. The text is judged the same way on
+  every platform, because Settings Sync carries one value to all of them: `\`
+  is a separator as well as `/`, a drive letter is absolute even without a
+  separator after it (`C:images` is relative to that drive, not to the folder),
+  and only a segment that is exactly `..` climbs out. Extensions had each
+  written this check, and had decided those cases differently.
+
 ### Fixed
 
 - **Hosted services that had started are stopped when activation ends early.**

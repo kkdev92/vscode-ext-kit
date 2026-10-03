@@ -197,6 +197,9 @@ export type {
 // belong in `module.fileWatchers.add`.
 export { FileWatchers } from './capabilities/workspace/watch-service.js';
 export type { FileWatcherService } from './capabilities/workspace/watch-service.js';
+// For a setting that names a folder inside the workspace.
+export { checkRelativePath } from './capabilities/workspace/relative-path.js';
+export type { RelativePathProblem } from './capabilities/workspace/relative-path.js';
 
 // --- UI services resolved through declared dependency tokens ---------------
 export { Notifications } from './capabilities/ui/notifications.js';
