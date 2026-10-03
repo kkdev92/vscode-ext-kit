@@ -205,6 +205,15 @@ non-language value. An invalid configured value is never silently replaced:
 `Strict` fails the read, `Lenient` falls back to the default **and** records a
 diagnostic.
 
+A setting that names a folder inside the workspace — where to save images,
+where to export to — is a string, and the check that it stays inside is
+`checkRelativePath`. It returns `'empty'`, `'absolute'` or `'parent'`, or
+`undefined` when the value stays inside, and it judges the text the same way on
+every platform, because Settings Sync carries one value to all of them: `\` is a
+separator as well as `/`, and `C:images` is absolute even without a separator.
+What to say about a problem, and which characters to refuse besides, stay the
+extension's.
+
 A log-level setting is a setting like any other, with one difference: VS Code
 filters the extension's log channel by the level the user picks, and the API
 gives an extension no way to change that level. A setting of the extension's
