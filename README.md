@@ -329,7 +329,7 @@ trusted for things it cannot do.
 - **Cancellation is cooperative**: aborting a signal asks a handler to stop; one that ignores its signal keeps running, and the framework cannot terminate it
 - **The Test Host does not reproduce VS Code**: it renders no UI, interprets no contribution point, and does not substitute a direct `import "vscode"`
 - **No editor events yet**: `Editors` hands you the active editor and cross-file edits, but there is no `onDidChangeActive` / `onDidChangeSelection` / `onDidChangeDocument`; subscribing means reaching for `vscode` directly and disposing by hand, which is the one place the single-cleanup-owner rule leaks
-- **No log-level filtering, deliberately**: the framework writes to a `LogOutputChannel` and VS Code owns the level — per channel, persisted, in the Output panel. An extension cannot raise its own channel's level, so a `logLevel` setting of your own can only ever make the log quieter
+- **No log-level filtering, deliberately**: the framework writes to a `LogOutputChannel` and VS Code owns the level — per channel, persisted, in the Output panel. An extension cannot raise its own channel's level, so a `logLevel` setting of your own can only ever make the log quieter; `filterLogger` applies one to the loggers you hand out
 
 ---
 
