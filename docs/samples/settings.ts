@@ -52,23 +52,23 @@ export const settingsModule = defineModule('settings', (module): undefined => {
     },
   });
 
-  // A hosted service owns what it starts: `stop` runs in reverse declaration
-  // order, inside the shutdown budget, and is the only place this subscription
-  // is released.
-  let subscription: { dispose(): void } | undefined;
+  // A subscription a hosted service makes is released through its signal,
+  // which aborts when the application stops and when activation ends early.
+  // Releasing it in `stop` instead would need a variable that `start` and
+  // `stop` share, outside both -- and so shared by every application built
+  // from this module.
   module.hostedServices.add({
     id: 'settings.watcher',
     inject: { settings: ProjectSettings.token },
     start: (context, { settings }) => {
       // Fires only when *this* key's effective value actually changed — a
       // sibling key moving in the same section does not wake it.
-      subscription = settings.watch('enabled', undefined, (enabled) => {
+      const subscription = settings.watch('enabled', undefined, (enabled) => {
         context.logger.info('projects toggled', { enabled });
       });
-    },
-    stop: () => {
-      subscription?.dispose();
-      subscription = undefined;
+      context.signal.addEventListener('abort', () => {
+        subscription.dispose();
+      });
     },
   });
 
