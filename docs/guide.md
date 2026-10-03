@@ -533,6 +533,74 @@ Declared UI (status bar, language status, tree views) is created eagerly at
 activation, so it is visible without anything having to inject it first, and the
 view is disposed before the provider it renders.
 
+A `when` clause in `package.json` decides whether a menu entry, a keybinding or
+a view shows. It can read a setting directly, as `config.` followed by the
+setting's id, so a context key that only mirrors a setting is not needed. For
+anything else an extension sets a key of its own with the built-in `setContext`
+command, and `Commands` runs it like any other command:
+
+<!-- sample: docs/samples/context-keys.ts -->
+
+```ts
+import { Commands, defineExtension, defineModule, serviceToken } from '@kkdev92/vscode-ext-kit';
+import { createTestHost } from '@kkdev92/vscode-ext-kit/testing';
+
+interface Projects {
+  count(): number;
+  onDidChange(listener: () => void): { dispose(): void };
+}
+const Projects = serviceToken<Projects>('sample.projects');
+
+// A `when` clause in package.json -- on a menu entry, a keybinding, a view --
+// reads context keys, and an extension sets its own with the built-in
+// `setContext` command. `Commands` runs it: as `context.commands` in a handler,
+// or injected, as here, into a hosted service that keeps a key in step with the
+// application's state.
+export const contextModule = defineModule('context', (module): undefined => {
+  module.services.singleton(Projects, () => ({
+    count: () => 0,
+    onDidChange: () => ({ dispose: () => undefined }),
+  }));
+
+  module.hostedServices.add({
+    id: 'sample.hasProjects',
+    inject: { commands: Commands, projects: Projects },
+    start: async (context, { commands, projects }) => {
+      const publish = (): Promise<void> =>
+        commands.execute('setContext', 'sample.hasProjects', projects.count() > 0);
+      // Awaited, so the key is in place before activation reports done.
+      await publish();
+      const subscription = projects.onDidChange(() => {
+        publish().catch((error: unknown) => {
+          context.logger.warn('could not set sample.hasProjects', { error: String(error) });
+        });
+      });
+      context.signal.addEventListener('abort', () => {
+        subscription.dispose();
+      });
+    },
+  });
+
+  return undefined;
+});
+
+export const app = defineExtension({ name: 'Sample', modules: [contextModule] });
+
+// The fake command capability knows only the commands registered on it, and
+// `setContext` is the platform's. A test registers a stand-in for it before
+// start, and reads back what the application set.
+export async function readsTheKey(): Promise<unknown> {
+  const host = createTestHost({ plan: app.plan });
+  const keys = new Map<string, unknown>();
+  host.commands.register('setContext', (key, value) => {
+    keys.set(String(key), value);
+  });
+  await host.start();
+  await host.stop();
+  return keys.get('sample.hasProjects');
+}
+```
+
 ## Views: trees and webviews
 
 <!-- sample: docs/samples/views.ts -->
