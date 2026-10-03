@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # The floor does not follow every VS Code release, so a weekly run is what
+  # puts each new stable through both contract lanes even in a week with no
+  # pull request. Manual runs are for checking a release the day it ships.
+  schedule:
+    - cron: "0 3 * * 4"
+  workflow_dispatch:
 
 permissions:
   contents: read
