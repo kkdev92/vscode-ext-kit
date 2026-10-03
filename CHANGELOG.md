@@ -17,6 +17,13 @@ case.
 
 ## [Unreleased]
 
+## [7.0.1] - 2026-10-03
+
+**A patch for the command-line tool.** `vscode-ext-kit plan` and
+`vscode-ext-kit manifest` can now read a bundled extension that touches `vscode`
+while its module is being defined. The library itself is byte-for-byte what
+`7.0.0` shipped: `dist/` and `src/` are unchanged.
+
 ### Fixed
 
 - **`vscode-ext-kit plan` and `vscode-ext-kit manifest` can read a bundled
@@ -29,6 +36,15 @@ case.
   looks up anything it lacks. An unbundled ES module entry that reads a member
   at module scope still fails: Node takes the named exports of the stand-in from
   its source, and there are none to take.
+
+### Changed
+
+- **How the VS Code floor moves.** It now rises when this package starts using
+  an API that older versions lack, rather than whenever new `@types/vscode` are
+  published, and such a raise ships in a minor release whose entry opens with
+  it; Platform Requirements in the README says what an extension does then. The
+  preamble above now says what a major release is. The floor itself is
+  unchanged at `^1.138.0`.
 
 ## [7.0.0] - 2026-09-18
 
@@ -1309,7 +1325,8 @@ platform support, toolchain currency, and release supply chain.
 
 Initial public release.
 
-[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v7.0.0...HEAD
+[Unreleased]: https://github.com/kkdev92/vscode-ext-kit/compare/v7.0.1...HEAD
+[7.0.1]: https://github.com/kkdev92/vscode-ext-kit/compare/v7.0.0...v7.0.1
 [7.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v6.1.0...v7.0.0
 [6.1.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v6.0.0...v6.1.0
 [6.0.0]: https://github.com/kkdev92/vscode-ext-kit/compare/v5.0.0...v6.0.0
